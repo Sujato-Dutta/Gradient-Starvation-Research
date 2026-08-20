@@ -1,0 +1,31 @@
+experiment:
+  name: smoke_e1
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 8
+  n_samples: 64
+  rho_values: [1, 2]
+  lag_separations: [0, 2]
+  regimes: [positive, negative]
+  cue_noise: 0.05
+  background_noise: 0.0
+  beta: 0.02
+  phase_delay: 0.2
+model:
+  kind: low_rank_linear
+  width: 12
+  bulk_gain: 0.6
+  rank: 2
+training:
+  steps: 8
+  learning_rate: 0.02
+  full_batch: true
+  log_every: 1
+  seeds: [0]
+  weight_decay: 0.0
+mitigation:
+  method: erm
+  coefficient: 0.0
+  mode: proxy
+

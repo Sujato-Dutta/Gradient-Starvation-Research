@@ -1,0 +1,33 @@
+experiment:
+  name: e1_causal_phase
+  output_root: results
+  device: auto
+task:
+  sequence_length: 20
+  n_samples: 4096
+  rho_values: [1, 2, 4, 8]
+  lag_separations: [0, 2, 4, 8]
+  regimes: [positive, negative]
+  negative_control_points:
+    - {rho: 8, lag_separation: 4}
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 0.5
+  phase_delay: 1.0
+  theory_boundary_file: null
+model:
+  kind: low_rank_linear
+  width: 512
+  bulk_gain: 0.8
+  rank: 2
+training:
+  steps: 1000
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 10
+  seeds: [0, 1, 2, 3, 4]
+  weight_decay: 0.0
+mitigation:
+  method: erm
+  coefficient: 0.0
+  mode: proxy

@@ -1,0 +1,32 @@
+experiment:
+  name: e3_mitigation
+  output_root: results
+  device: auto
+task:
+  sequence_length: 20
+  n_samples: 4096
+  rho_values: [4, 8]
+  lag_separations: [4, 8]
+  regimes: [positive]
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 0.5
+  phase_delay: 1.0
+model:
+  kinds: [low_rank_linear, tanh, gru]
+  width: 512
+  bulk_gain: 0.8
+  rank: 2
+training:
+  steps: 1000
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 10
+  seeds: [0, 1, 2, 3, 4]
+  weight_decay: 0.0
+mitigation:
+  methods: [erm, spectral_decoupling, interaction]
+  coefficient: 0.01
+  spectral_coefficient: 0.01
+  mode: proxy
+

@@ -1,0 +1,23 @@
+experiment:
+  name: waterbirds_transfer
+  output_root: results
+  device: auto
+data:
+  root: data
+  download: false
+  batch_size: 64
+  num_workers: 4
+model:
+  architecture: resnet18
+  pretrained: true
+training:
+  epochs: 30
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  seeds: [0, 1, 2]
+mitigation:
+  methods: [erm, spectral_decoupling, interaction]
+  coefficient: 0.01
+  spectral_coefficient: 0.01
+  mode: proxy
+
