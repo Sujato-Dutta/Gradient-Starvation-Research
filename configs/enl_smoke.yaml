@@ -1,0 +1,28 @@
+experiment:
+  name: smoke_enl
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 5
+  n_samples: 12
+  rho_values: [2]
+  lag_separations: [2]
+  regimes: [positive]
+  cue_noise: 0.0
+  background_noise: 0.0
+  beta: -1000000.0
+  phase_delay: 1.0
+model:
+  kinds: [tanh, gru]
+  width: 6
+  bulk_gain: 0.3
+training:
+  steps: 2
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 1
+  seeds: [0]
+  weight_decay: 0.0
+  # E-NL is the only consumer of the lockstep trainer.  The default elsewhere
+  # remains `sequential`, so no existing experiment changes behaviour.
+  paired_mode: lockstep

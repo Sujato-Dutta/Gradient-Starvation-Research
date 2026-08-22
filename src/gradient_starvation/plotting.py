@@ -138,3 +138,50 @@ def plot_e3(summary: pd.DataFrame, run_dir: Path) -> None:
             legend.remove()
     fig.tight_layout()
     _save_all(fig, run_dir / "e3_mitigation")
+
+
+def plot_enl(trajectories: pd.DataFrame, summary: pd.DataFrame, run_dir: Path) -> None:
+    """Plot the competing crossover terms per architecture.
+
+    Left: the two competing contributions ``T_geom`` and ``S_CE`` against
+    optimization time.  Right: their difference ``d_w`` with the zero line and the
+    measured drift-level crossing.  A series that never crosses is annotated as
+    such rather than being left to look like a crossing just outside the axis.
+    """
+    if trajectories.empty or summary.empty:
+        return
+    both = trajectories[trajectories["condition"] == "both"]
+    if both.empty or "d_w" not in both:
+        return
+    kinds = sorted(both["model_kind"].unique())
+    fig, axes = plt.subplots(
+        len(kinds), 2, figsize=(11.5, 3.6 * len(kinds)), squeeze=False, constrained_layout=True
+    )
+    for row, kind in enumerate(kinds):
+        subset = both[both["model_kind"] == kind]
+        averaged = subset.groupby("tau", as_index=False)[["t_geom", "s_ce", "d_w"]].mean()
+        left, right = axes[row][0], axes[row][1]
+        left.plot(averaged.tau, averaged.t_geom, label=r"$T_{geom}$ (transfer)")
+        left.plot(averaged.tau, averaged.s_ce, label=r"$S_{CE}$ (suppression)")
+        left.set(xlabel="Optimization time", ylabel="Drift contribution",
+                 title=f"{kind}: competing terms")
+        left.legend(fontsize=8)
+
+        right.axhline(0.0, color="0.5", linewidth=1.0, linestyle="--")
+        right.plot(averaged.tau, averaged.d_w, color="C3", label=r"$d_w = T_{geom} - S_{CE}$")
+        crossings = summary[summary["model_kind"] == kind]["tau_star_drift"].to_numpy(dtype=float)
+        finite = crossings[np.isfinite(crossings)]
+        if len(finite):
+            right.axvline(
+                float(finite.mean()), color="C0", linewidth=1.5,
+                label=rf"mean $\tau^*$ = {finite.mean():.3g}",
+            )
+        else:
+            right.text(
+                0.5, 0.08, "no sign change observed", transform=right.transAxes,
+                ha="center", fontsize=9, color="0.3",
+            )
+        right.set(xlabel="Optimization time", ylabel="Causal weak-drift difference",
+                  title=f"{kind}: transfer above zero, starvation below")
+        right.legend(fontsize=8)
+    _save_all(fig, run_dir / "enl_crossover")

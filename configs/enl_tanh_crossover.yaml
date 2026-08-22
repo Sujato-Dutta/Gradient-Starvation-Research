@@ -1,0 +1,40 @@
+# E-NL: mechanistic measurement of the transfer-to-starvation crossover.
+#
+# Regime chosen to match the long-horizon tanh scan that first revealed the
+# crossover (rho=4, lag 2, ~1000 steps), so the mechanistic columns are measured
+# where the phenomenon is known to occur.
+#
+# Seeds 20-27 are disjoint from every seed already spent on tanh CDC work:
+# frozen validation used 6-13 and the width-robustness check used 14-17.  This
+# keeps the crossover measurement independent of the mitigation results.
+#
+# The GRU arm is a mechanistic architecture contrast, not a failed experiment.
+# The long-horizon GRU scan showed transfer rather than starvation; the question
+# here is whether its geometry term stays large enough that S_CE never overtakes
+# T_geom.  A "no sign change observed" outcome is a reportable result.
+experiment:
+  name: enl_tanh_crossover
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 20
+  n_samples: 256
+  rho_values: [4]
+  lag_separations: [2]
+  regimes: [positive]
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 0.5
+  phase_delay: 0.25
+model:
+  kinds: [tanh, gru]
+  width: 32
+  bulk_gain: 0.8
+training:
+  steps: 1000
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 10
+  seeds: [20, 21, 22, 23, 24, 25, 26, 27]
+  weight_decay: 0.0
+  paired_mode: lockstep

@@ -11,8 +11,13 @@ import pandas as pd
 import torch
 
 from .data.synthetic import SyntheticTaskSpec, make_paired_task
-from .metrics import causal_metrics, mean_confidence_interval
-from .plotting import plot_e1, plot_e2, plot_e3
+from .metrics import (
+    causal_metrics,
+    mean_confidence_interval,
+    n_sign_changes,
+    sign_crossing_time,
+)
+from .plotting import plot_e1, plot_e2, plot_e3, plot_enl
 from .models.recurrent import DenseLinearRNN
 from .theory import exact_dense_linear_geometry, gradient_gram, integrate_projected_flow
 from .training import train_paired
@@ -140,6 +145,192 @@ def run_e1(config: dict[str, Any]) -> Path:
     boundary_path = task.get('theory_boundary_file')
     boundary = pd.read_csv(boundary_path) if boundary_path else None
     plot_e1(summary, run_dir, boundary)
+    return run_dir
+
+
+def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[str, Any]:
+    """Summarize one paired lockstep run at the level of the crossover mechanism.
+
+    Two crossing times are reported and they are *not* the same quantity.
+
+    ``tau_star_drift``
+        First ``+ -> -`` sign change of the causal weak-drift difference ``d_w``.
+        This is the drift-level crossover: the optimization time at which the
+        strong feature stops helping the weak mode and begins suppressing it.
+
+    ``tau_star_response``
+        First ``+ -> -`` sign change of ``m_w(both) - m_w(weak-only)``.  This is
+        the outcome-level crossover: when the both-feature weak *response*
+        actually falls behind its counterfactual.  Because the drift is the
+        derivative of the response gap, the drift crossing necessarily precedes
+        the response crossing, and the lead time is reported.
+
+    On ``tau_star_decomposition_check`` and ``abs_tau_star_error``: the note
+    proposes predicting the crossover from ``T_geom = S_CE``.  Under the exact
+    decomposition that is *degenerate*, because ``d_w = t_geom - s_ce`` is an
+    identity, so ``t_geom = s_ce`` holds exactly when ``d_w = 0``.  The two
+    crossing times therefore agree by construction.  They are still emitted, but
+    strictly as a numerical self-consistency check on the logged columns -- not as
+    evidence for Corollary A.  A genuinely independent predicted crossover time
+    requires the DMFT solution, which is blocked; see
+    ``research_scope/e2_theorem.md`` obligations 1 and 2.
+    """
+    both = frame[frame.condition == "both"].sort_values("tau")
+    weak = frame[frame.condition == "weak_only"].sort_values("tau")
+    if not np.allclose(both.tau.to_numpy(), weak.tau.to_numpy()):
+        raise RuntimeError("Paired trajectories do not share the same optimization-time grid.")
+    if "d_w" not in both:
+        raise RuntimeError(
+            "E-NL requires the crossover columns; run with training.paired_mode: lockstep."
+        )
+
+    tau = both.tau.to_numpy()
+    d_w = both.d_w.to_numpy()
+    decomposition = both.t_geom.to_numpy() - both.s_ce.to_numpy()
+    response_gap = both.m_w.to_numpy() - weak.m_w.to_numpy()
+
+    tau_star_drift = sign_crossing_time(tau, d_w)
+    tau_star_check = sign_crossing_time(tau, decomposition)
+    tau_star_response = sign_crossing_time(tau, response_gap)
+    identity_gap = (
+        abs(tau_star_drift - tau_star_check)
+        if math.isfinite(tau_star_drift) and math.isfinite(tau_star_check)
+        else (0.0 if tau_star_drift == tau_star_check else float("nan"))
+    )
+    lead = (
+        tau_star_response - tau_star_drift
+        if math.isfinite(tau_star_drift) and math.isfinite(tau_star_response)
+        else float("nan")
+    )
+
+    causal = causal_metrics(tau, both.m_w.to_numpy(), weak.m_w.to_numpy(), beta)
+    return {
+        **causal.__dict__,
+        "tau_star_drift": tau_star_drift,
+        "tau_star_decomposition_check": tau_star_check,
+        "abs_tau_star_error": identity_gap,
+        "tau_star_response": tau_star_response,
+        "drift_leads_response_by": lead,
+        "drift_crossed": bool(math.isfinite(tau_star_drift)),
+        "response_crossed": bool(math.isfinite(tau_star_response)),
+        "n_sign_changes_d_w": n_sign_changes(d_w),
+        "max_decomposition_reconstruction_error": float(
+            both.decomposition_reconstruction_error.abs().max()
+        ),
+        "initial_d_w": float(d_w[0]),
+        "final_d_w": float(d_w[-1]),
+        "mean_t_geom": float(both.t_geom.mean()),
+        "mean_s_ce": float(both.s_ce.mean()),
+        "final_both_m_s": float(both.iloc[-1].m_s),
+        "final_both_m_w": float(both.iloc[-1].m_w),
+        "final_weak_m_w": float(weak.iloc[-1].m_w),
+        "final_accuracy": float(both.iloc[-1].accuracy),
+        "final_gsi5": float(both.iloc[-1].gsi5),
+        "phase": (
+            "transfer_then_starvation"
+            if math.isfinite(tau_star_drift)
+            else ("transfer_throughout" if d_w[-1] > 0 else "starvation_throughout")
+        ),
+    }
+
+
+def _write_enl_crossover_report(summary: pd.DataFrame, run_dir: Path) -> None:
+    """Report crossing counts alongside means so 'never crossed' stays visible.
+
+    ``mean_confidence_interval`` drops non-finite values, so a configuration in
+    which some seeds never cross would otherwise be summarized by the mean of the
+    seeds that did.  The counts make that explicit.
+    """
+    rows: list[dict[str, Any]] = []
+    group_columns = ["model_kind", "rho", "lag_separation", "regime"]
+    for keys, group in summary.groupby(group_columns, dropna=False):
+        key_values = keys if isinstance(keys, tuple) else (keys,)
+        row = dict(zip(group_columns, key_values))
+        row["n_seeds"] = int(group.seed.nunique())
+        for label, column in (("drift", "tau_star_drift"), ("response", "tau_star_response")):
+            values = group[column].to_numpy(dtype=float)
+            row[f"n_{label}_crossed"] = int(np.isfinite(values).sum())
+            row[f"n_{label}_never_crossed"] = int(np.isinf(values).sum())
+            row[f"n_{label}_undecidable"] = int(np.isnan(values).sum())
+            mean, low, high = mean_confidence_interval(values)
+            row[f"tau_star_{label}_mean"] = mean
+            row[f"tau_star_{label}_ci95_low"] = low
+            row[f"tau_star_{label}_ci95_high"] = high
+        row["max_abs_tau_star_identity_gap"] = float(
+            np.nanmax(group.abs_tau_star_error.to_numpy(dtype=float))
+        )
+        row["max_reconstruction_error"] = float(
+            group.max_decomposition_reconstruction_error.max()
+        )
+        row["phases"] = "|".join(sorted(set(group.phase)))
+        rows.append(row)
+    pd.DataFrame(rows).to_csv(run_dir / "crossover.csv", index=False)
+
+
+def run_enl(config: dict[str, Any]) -> Path:
+    """E-NL: measure the transfer-to-starvation crossover mechanism.
+
+    Requires the lockstep paired trainer, which is the only path that can form the
+    matched crossover decomposition at every logged step.  Produces empirical
+    support for Corollary A; it does not prove the corollary's sufficient
+    conditions, which remain open.
+    """
+    run_dir = create_run_directory(config)
+    device = resolve_device(str(config.get("experiment", {}).get("device", "auto")))
+    task, training, model_config = config["task"], config["training"], config["model"]
+    requested_mode = str(training.get("paired_mode", "lockstep"))
+    if requested_mode != "lockstep":
+        raise ValueError(
+            "E-NL requires training.paired_mode: lockstep; the sequential trainer "
+            f"cannot form the paired crossover decomposition (received {requested_mode!r})."
+        )
+    training = {**training, "paired_mode": "lockstep"}
+    kinds = model_config.get("kinds", [model_config.get("kind", "tanh")])
+    trajectories: list[dict[str, Any]] = []
+    summaries: list[dict[str, Any]] = []
+    for kind in kinds:
+        for rho in task.get("rho_values", [4]):
+            for lag in task.get("lag_separations", [2]):
+                for regime in task.get("regimes", ["positive"]):
+                    spec = _task_spec(task, float(rho), int(lag), str(regime))
+                    for seed in training.get("seeds", [0, 1]):
+                        both, weak = (
+                            batch.to(device) for batch in make_paired_task(spec, int(seed))
+                        )
+                        history, _ = train_paired(
+                            model_config, both, weak, training, {"method": "erm"},
+                            seed=int(seed), kind=str(kind),
+                        )
+                        metadata = {
+                            "model_kind": kind, "rho": float(rho),
+                            "lag_separation": int(lag), "regime": regime, "seed": int(seed),
+                        }
+                        annotated = _annotate(history, **metadata)
+                        trajectories.extend(annotated)
+                        summaries.append({
+                            **metadata,
+                            **_enl_summary(
+                                pd.DataFrame(annotated),
+                                beta=float(task.get("beta", 0.5)),
+                                phase_delay=float(task.get("phase_delay", 1.0)),
+                            ),
+                        })
+                        pd.DataFrame(trajectories).to_csv(
+                            run_dir / "trajectories.csv", index=False
+                        )
+                        pd.DataFrame(summaries).to_csv(run_dir / "summary.csv", index=False)
+    summary = pd.DataFrame(summaries)
+    _write_aggregate(
+        summary, ["model_kind", "rho", "lag_separation", "regime"],
+        [
+            "tau_star_drift", "tau_star_response", "drift_leads_response_by",
+            "weak_auc_gap", "final_both_m_s", "final_both_m_w", "final_weak_m_w",
+            "final_accuracy", "final_gsi5",
+        ],
+        run_dir / "aggregate.csv",
+    )
+    _write_enl_crossover_report(summary, run_dir)
+    plot_enl(pd.DataFrame(trajectories), summary, run_dir)
     return run_dir
 
 
