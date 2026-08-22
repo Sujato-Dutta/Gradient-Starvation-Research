@@ -20,6 +20,21 @@ from .theory import (
 from .utils import seed_everything
 
 
+def _snapshot_state(model: torch.nn.Module) -> dict[str, torch.Tensor]:
+    """Return a detached, independent copy of the model parameters.
+
+    ``clone()`` is required, not optional.  On CPU ``tensor.detach().cpu()``
+    returns a tensor that *shares storage* with the live parameter, so a snapshot
+    without the clone is silently invalidated by any later in-place mutation --
+    including ``load_state_dict``.  The sequential paired trainer resets the model
+    between conditions, so an aliased both-feature snapshot ended up holding the
+    weak-only parameters instead.
+    """
+    return {
+        name: value.detach().cpu().clone() for name, value in model.state_dict().items()
+    }
+
+
 def _diagnostic_row(
     model: RecurrentBinaryClassifier,
     batch: SyntheticBatch,
@@ -125,8 +140,7 @@ def train_single(
         if gradient_clip is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), float(gradient_clip))
         optimizer.step()
-    state = {name: value.detach().cpu() for name, value in model.state_dict().items()}
-    return history, state
+    return history, _snapshot_state(model)
 
 
 def train_paired(
@@ -276,8 +290,5 @@ def _train_paired_counterfactual_drift(
         weak_loss.backward()
         weak_optimizer.step()
 
-    states = {
-        "both": {name: value.detach().cpu() for name, value in both_model.state_dict().items()},
-        "weak_only": {name: value.detach().cpu() for name, value in weak_model.state_dict().items()},
-    }
+    states = {"both": _snapshot_state(both_model), "weak_only": _snapshot_state(weak_model)}
     return history, states

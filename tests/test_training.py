@@ -2,7 +2,8 @@ import pytest
 import torch
 
 from gradient_starvation.data.synthetic import SyntheticTaskSpec, make_paired_task
-from gradient_starvation.training import train_paired
+from gradient_starvation.models.recurrent import build_model
+from gradient_starvation.training import _snapshot_state, train_paired
 
 
 def test_small_paired_run_logs_complete_diagnostics():
@@ -115,3 +116,44 @@ def test_counterfactual_drift_rejects_guarantee_breaking_optimizers():
             model, both, weak, {**base, "gradient_clip": 1.0},
             {"method": "counterfactual_drift"}, seed=14,
         )
+
+
+def test_sequential_paired_states_are_not_aliased_between_conditions():
+    """Regression test for a state-snapshot aliasing bug.
+
+    ``tensor.detach().cpu()`` shares storage with the live parameter on CPU.  The
+    sequential paired trainer trains the both-feature condition, resets the model
+    with ``load_state_dict``, then trains weak-only in the same module.  Without a
+    ``clone()`` in the snapshot, the returned both-feature state was silently
+    overwritten and ended up bitwise equal to the weak-only state.
+
+    No published result was affected -- every ``experiments.py`` call site discards
+    the returned states -- but the snapshot was wrong and would have corrupted any
+    future consumer.
+    """
+    spec = SyntheticTaskSpec(sequence_length=6, n_samples=48, rho=3, lag_separation=2)
+    both, weak = make_paired_task(spec, seed=21)
+    _, states = train_paired(
+        {"kind": "dense_linear", "width": 10, "bulk_gain": 0.4},
+        both,
+        weak,
+        {"steps": 8, "learning_rate": 0.05, "log_every": 4, "full_batch": True},
+        {"method": "erm"},
+        seed=31,
+    )
+    # After a genuine training run the two conditions must have diverged.
+    assert not torch.equal(states["both"]["readout"], states["weak_only"]["readout"]), (
+        "both-feature and weak-only snapshots are identical after training, which "
+        "means the both-feature snapshot was aliased and overwritten"
+    )
+
+
+def test_snapshot_state_is_independent_of_later_mutation():
+    """A snapshot must survive in-place mutation of the source model."""
+    model = build_model({"kind": "dense_linear", "width": 5, "bulk_gain": 0.3})
+    snapshot = _snapshot_state(model)
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.add_(1.0)
+    for name, value in snapshot.items():
+        assert not torch.equal(value, model.state_dict()[name]), name
