@@ -13,7 +13,9 @@ from .losses import training_objective
 from .metrics import gsi5
 from .models.recurrent import RecurrentBinaryClassifier, build_model, synthetic_logits
 from .theory import (
+    ProjectedStatistics,
     counterfactual_drift_correction,
+    crossover_decomposition,
     fixed_geometry_susceptibility,
     projected_statistics,
 )
@@ -46,6 +48,22 @@ def _diagnostic_row(
     stats = projected_statistics(
         model, batch, compute_direct_drift=compute_direct_drift, create_graph=False
     )
+    return _row_from_statistics(stats, model, batch, step, learning_rate)
+
+
+def _row_from_statistics(
+    stats: ProjectedStatistics,
+    model: RecurrentBinaryClassifier,
+    batch: SyntheticBatch,
+    step: int,
+    learning_rate: float,
+) -> dict[str, Any]:
+    """Render one diagnostic row from already-computed projected statistics.
+
+    Split out of :func:`_diagnostic_row` so that callers needing the statistics
+    themselves -- the lockstep trainer, which also forms the paired crossover
+    decomposition -- do not have to recompute them.
+    """
     margins = stats.margins.detach().cpu().numpy()
     weights = stats.sigmoid_weights.detach().cpu().numpy()
     geometry = stats.geometry.detach().cpu().numpy()
@@ -164,6 +182,17 @@ def train_paired(
             seed=seed,
             kind=kind,
         )
+    if str(training.get("paired_mode", "sequential")) == "lockstep":
+        return train_paired_lockstep(
+            model_config,
+            both,
+            weak,
+            training,
+            mitigation,
+            seed=seed,
+            kind=kind,
+            identity_steps=identity_steps,
+        )
 
     seed_everything(seed)
     device = both.x.device
@@ -177,6 +206,124 @@ def train_paired(
         model, weak, training, mitigation, identity_steps=identity_steps
     )
     return both_history + weak_history, {"both": both_state, "weak_only": weak_state}
+
+
+def train_paired_lockstep(
+    model_config: Mapping[str, object],
+    both: SyntheticBatch,
+    weak: SyntheticBatch,
+    training: Mapping[str, object],
+    mitigation: Mapping[str, object],
+    *,
+    seed: int,
+    kind: str | None = None,
+    identity_steps: int = 0,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, torch.Tensor]]]:
+    """Advance the both-feature and weak-only models together.
+
+    Functionally equivalent to :func:`train_paired` in ``sequential`` mode -- both
+    conditions get independent updates from a shared initialization -- but because
+    the two models exist simultaneously, the paired crossover decomposition can be
+    evaluated at every logged step.  The sequential path cannot do this: it
+    finishes the both-feature run before the weak-only model exists.
+
+    The equivalence is asserted by
+    ``tests/test_training.py::test_lockstep_reproduces_sequential_erm_trajectories``.
+    If that test ever fails, the divergence is a finding to investigate, not a
+    tolerance to loosen.
+
+    RNG note: this builds two models where the sequential path builds one, so it
+    consumes an extra initialization draw.  That is harmless because the second
+    draw is immediately overwritten by the shared initial state and no randomness
+    is consumed during full-batch training.  The order matters, though -- the
+    both-feature model must be constructed first so it receives exactly the draw
+    the sequential path would have given it.
+    """
+    method = str(mitigation.get("method", "erm"))
+    if method == "counterfactual_drift":
+        raise ValueError(
+            "counterfactual_drift already trains in lockstep; call train_paired "
+            "without paired_mode: lockstep."
+        )
+    if not bool(training.get("full_batch", True)):
+        raise NotImplementedError("Controlled synthetic experiments require full_batch: true.")
+
+    seed_everything(seed)
+    device = both.x.device
+    both_model = build_model(model_config, kind=kind).to(device)
+    shared_initial = copy.deepcopy(both_model.state_dict())
+    weak_model = build_model(model_config, kind=kind).to(device)
+    weak_model.load_state_dict(copy.deepcopy(shared_initial))
+
+    steps = int(training.get("steps", 1000))
+    learning_rate = float(training.get("learning_rate", 0.01))
+    log_every = int(training.get("log_every", 10))
+    weight_decay = float(training.get("weight_decay", 0.0))
+    gradient_clip = training.get("gradient_clip")
+    both_optimizer = torch.optim.SGD(
+        both_model.parameters(), learning_rate, weight_decay=weight_decay
+    )
+    weak_optimizer = torch.optim.SGD(
+        weak_model.parameters(), learning_rate, weight_decay=weight_decay
+    )
+
+    both_history: list[dict[str, Any]] = []
+    weak_history: list[dict[str, Any]] = []
+    started = time.perf_counter()
+
+    for step in range(steps + 1):
+        should_log = step % log_every == 0 or step == steps
+        if should_log:
+            elapsed = time.perf_counter() - started
+            direct = step <= identity_steps
+            both_stats = projected_statistics(
+                both_model, both, compute_direct_drift=direct, create_graph=False
+            )
+            weak_stats = projected_statistics(
+                weak_model, weak, compute_direct_drift=direct, create_graph=False
+            )
+            both_row = _row_from_statistics(
+                both_stats, both_model, both, step, learning_rate
+            )
+            weak_row = _row_from_statistics(
+                weak_stats, weak_model, weak, step, learning_rate
+            )
+            crossover = crossover_decomposition(both_stats, weak_stats, both.z_w)
+            both_row.update(
+                {
+                    "wall_seconds": elapsed,
+                    "d_w": float(crossover.d_w.detach()),
+                    "t_geom": float(crossover.t_geom.detach()),
+                    "s_ce": float(crossover.s_ce.detach()),
+                    "t_geom_self": float(crossover.geometry_self_term.detach()),
+                    "t_geom_cross": float(crossover.cross_transport_term.detach()),
+                    "decomposition_reconstruction_error": float(
+                        crossover.reconstruction_error.detach()
+                    ),
+                    "matched_weak_only_m_w": float(weak_stats.mode[1].detach()),
+                }
+            )
+            weak_row["wall_seconds"] = elapsed
+            both_history.append(both_row)
+            weak_history.append(weak_row)
+        if step == steps:
+            break
+
+        for model, batch, optimizer in (
+            (both_model, both, both_optimizer),
+            (weak_model, weak, weak_optimizer),
+        ):
+            optimizer.zero_grad(set_to_none=True)
+            loss, _ = training_objective(model, batch, mitigation)
+            loss.backward()
+            if gradient_clip is not None:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), float(gradient_clip))
+            optimizer.step()
+
+    states = {"both": _snapshot_state(both_model), "weak_only": _snapshot_state(weak_model)}
+    # Concatenated in the same order the sequential path returns, so the two are
+    # drop-in interchangeable for every downstream consumer.
+    return both_history + weak_history, states
 
 
 def _train_paired_counterfactual_drift(

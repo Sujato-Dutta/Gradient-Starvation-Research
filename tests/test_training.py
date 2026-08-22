@@ -3,7 +3,11 @@ import torch
 
 from gradient_starvation.data.synthetic import SyntheticTaskSpec, make_paired_task
 from gradient_starvation.models.recurrent import build_model
-from gradient_starvation.training import _snapshot_state, train_paired
+from gradient_starvation.training import (
+    _snapshot_state,
+    train_paired,
+    train_paired_lockstep,
+)
 
 
 def test_small_paired_run_logs_complete_diagnostics():
@@ -115,6 +119,148 @@ def test_counterfactual_drift_rejects_guarantee_breaking_optimizers():
         train_paired(
             model, both, weak, {**base, "gradient_clip": 1.0},
             {"method": "counterfactual_drift"}, seed=14,
+        )
+
+
+def _trajectory_by_condition(history):
+    """Group logged rows by condition, ordered by step."""
+    grouped: dict[str, list[dict]] = {}
+    for row in history:
+        grouped.setdefault(row["condition"], []).append(row)
+    return {key: sorted(rows, key=lambda row: row["step"]) for key, rows in grouped.items()}
+
+
+@pytest.mark.parametrize(
+    "model_config",
+    [
+        {"kind": "dense_linear", "width": 10, "bulk_gain": 0.4},
+        {"kind": "low_rank_linear", "width": 10, "bulk_gain": 0.4, "rank": 2},
+        {"kind": "tanh", "width": 10},
+    ],
+    ids=["dense_linear", "low_rank_linear", "tanh"],
+)
+def test_lockstep_reproduces_sequential_erm_trajectories(model_config):
+    """Lockstep must be a pure restructuring of sequential ERM, not a new method.
+
+    This is a stop condition for the crossover instrumentation work: if the two
+    paths disagree, the mechanistic columns logged by the lockstep trainer are not
+    measuring the same experiment the published E1/E3 results came from.  The
+    tolerance is deliberately tight.  Do not loosen it to force a pass.
+    """
+    spec = SyntheticTaskSpec(sequence_length=6, n_samples=48, rho=3, lag_separation=2)
+    both, weak = make_paired_task(spec, seed=21)
+    training = {
+        "steps": 12,
+        "learning_rate": 0.05,
+        "log_every": 3,
+        "full_batch": True,
+        "weight_decay": 0.0,
+    }
+
+    sequential, sequential_states = train_paired(
+        model_config, both, weak, training, {"method": "erm"}, seed=31, identity_steps=2
+    )
+    lockstep, lockstep_states = train_paired(
+        model_config,
+        both,
+        weak,
+        {**training, "paired_mode": "lockstep"},
+        {"method": "erm"},
+        seed=31,
+        identity_steps=2,
+    )
+
+    sequential_rows = _trajectory_by_condition(sequential)
+    lockstep_rows = _trajectory_by_condition(lockstep)
+    assert set(sequential_rows) == set(lockstep_rows) == {"both", "weak_only"}
+
+    compared = ["m_s", "m_w", "loss", "accuracy", "drift_s", "drift_w",
+                "G_ss", "G_sw", "G_ww", "g_s", "g_w", "margin_mean", "gsi5"]
+    for condition in ("both", "weak_only"):
+        left, right = sequential_rows[condition], lockstep_rows[condition]
+        assert len(left) == len(right), condition
+        for a, b in zip(left, right):
+            assert a["step"] == b["step"]
+            for column in compared:
+                assert a[column] == pytest.approx(b[column], rel=1e-9, abs=1e-11), (
+                    f"{condition}/{column} diverged at step {a['step']}: "
+                    f"sequential={a[column]!r} lockstep={b[column]!r}"
+                )
+
+    # Final parameters must match too, not just the logged scalars.
+    for condition in ("both", "weak_only"):
+        assert sequential_states[condition].keys() == lockstep_states[condition].keys()
+        for name in sequential_states[condition]:
+            torch.testing.assert_close(
+                sequential_states[condition][name],
+                lockstep_states[condition][name],
+                rtol=0,
+                atol=0,
+                msg=f"{condition}/{name} parameters diverged",
+            )
+
+
+def test_lockstep_shares_the_initialization_between_conditions():
+    """Both models must start from bitwise-identical parameters."""
+    spec = SyntheticTaskSpec(sequence_length=5, n_samples=16, rho=2, lag_separation=1)
+    both, weak = make_paired_task(spec, seed=23)
+    _, states = train_paired(
+        {"kind": "dense_linear", "width": 6, "bulk_gain": 0.3},
+        both,
+        weak,
+        {"steps": 0, "learning_rate": 0.01, "log_every": 1, "full_batch": True,
+         "paired_mode": "lockstep"},
+        {"method": "erm"},
+        seed=24,
+    )
+    for name in states["both"]:
+        assert torch.equal(states["both"][name], states["weak_only"][name]), name
+
+
+def test_lockstep_logs_exact_crossover_columns():
+    """The crossover reparameterization must reconstruct at every logged step."""
+    spec = SyntheticTaskSpec(sequence_length=6, n_samples=48, rho=4, lag_separation=2)
+    both, weak = make_paired_task(spec, seed=25)
+    history, _ = train_paired(
+        {"kind": "dense_linear", "width": 10, "bulk_gain": 0.4},
+        both,
+        weak,
+        {"steps": 6, "learning_rate": 0.05, "log_every": 1, "full_batch": True,
+         "paired_mode": "lockstep"},
+        {"method": "erm"},
+        seed=26,
+    )
+    both_rows = [row for row in history if row["condition"] == "both"]
+    weak_rows = [row for row in history if row["condition"] == "weak_only"]
+    assert len(both_rows) == len(weak_rows) == 7
+
+    for row in both_rows:
+        assert row["t_geom"] - row["s_ce"] == pytest.approx(row["d_w"], rel=2e-5, abs=2e-6)
+        # float32 arithmetic: the two channels are summed in float32 inside the
+        # decomposition, then widened to Python floats independently, so the
+        # tolerance must be float32-scale rather than float64-scale.
+        assert row["t_geom_self"] + row["t_geom_cross"] == pytest.approx(
+            row["t_geom"], rel=1e-6, abs=1e-9
+        )
+        assert abs(row["decomposition_reconstruction_error"]) < 2e-6
+
+    # The weak-only rows carry no crossover columns; the decomposition is a
+    # property of the pair and is attached to the both-feature row only.
+    assert all("d_w" not in row for row in weak_rows)
+
+
+def test_lockstep_rejects_counterfactual_drift():
+    """CDC has its own lockstep path; asking for both would be ambiguous."""
+    spec = SyntheticTaskSpec(sequence_length=5, n_samples=16, rho=2, lag_separation=1)
+    both, weak = make_paired_task(spec, seed=27)
+    with pytest.raises(ValueError, match="already trains in lockstep"):
+        train_paired_lockstep(
+            {"kind": "dense_linear", "width": 6, "bulk_gain": 0.3},
+            both,
+            weak,
+            {"steps": 1, "learning_rate": 0.01, "log_every": 1, "full_batch": True},
+            {"method": "counterfactual_drift"},
+            seed=28,
         )
 
 

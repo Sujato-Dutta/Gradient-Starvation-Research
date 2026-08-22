@@ -43,6 +43,29 @@ class CausalDriftDecomposition:
 
 
 @dataclass
+class CrossoverDecomposition:
+    """Transfer-versus-suppression reparameterization of the drift deficit.
+
+    This is an exact sign relabelling of :class:`CausalDriftDecomposition`, not a
+    second derivation.  It expresses the same identity in the form used to state
+    the transfer-to-starvation crossover::
+
+        d_w = t_geom - s_ce
+
+    where ``d_w > 0`` means the strong feature *helps* weak learning at this
+    optimization time (transfer) and ``d_w < 0`` means it causally suppresses it
+    (starvation).  The crossover time ``tau*`` is a zero of ``d_w``.
+    """
+
+    d_w: torch.Tensor
+    t_geom: torch.Tensor
+    s_ce: torch.Tensor
+    geometry_self_term: torch.Tensor
+    cross_transport_term: torch.Tensor
+    reconstruction_error: torch.Tensor
+
+
+@dataclass
 class CounterfactualDriftCorrection:
     """Minimum-norm correction that protects weak drift and strong progress."""
 
@@ -171,6 +194,18 @@ def matched_weak_drift_decomposition(
           = G_ww^B [g_w(0,m_w) - g_w(m_s,m_w)]
           + (G_ww^W - G_ww^B) g_w(0,m_w)
           - G_ws^B g_s(m_s,m_w).
+
+    Matching convention
+    -------------------
+    This function uses the **m_w-matched-field** convention: the weak-only CE
+    field is recomputed at the both-feature weak response ``both.mode[1]``, while
+    the weak-only *geometry* is taken at whatever parameter state
+    ``weak_only`` was measured in.  The alternative -- comparing the two
+    conditions at equal optimization time ``tau`` and using the weak-only field
+    at its own ``m_w`` -- is a different quantity and yields different numbers.
+    The project standardizes on the convention implemented here because it is
+    the one this identity is exact for; see
+    ``tests/test_theory.py::test_matching_conventions_are_distinct``.
     """
     matched_margin = both.mode[1] * z_w
     matched_weights = torch.sigmoid(-matched_margin)
@@ -191,6 +226,54 @@ def matched_weak_drift_decomposition(
         geometry_shift=geometry_shift,
         cross_transport=cross_transport,
         reconstruction_error=reconstructed - causal_deficit,
+    )
+
+
+def crossover_decomposition(
+    both: ProjectedStatistics,
+    weak_only: ProjectedStatistics,
+    z_w: torch.Tensor,
+) -> CrossoverDecomposition:
+    """Re-express the matched drift deficit as transfer minus CE suppression.
+
+    Given the exact identity proved by :func:`matched_weak_drift_decomposition`,
+
+        F_w^W - F_w^B = ce_gating + geometry_shift + cross_transport,
+
+    define the *causal weak drift difference* with the opposite sign so that a
+    positive value means the strong feature helps::
+
+        d_w    = F_w^B - F_w^W = -(F_w^W - F_w^B)
+        s_ce   =  ce_gating
+        t_geom = -geometry_shift - cross_transport
+
+    which gives ``d_w = t_geom - s_ce`` identically.  ``t_geom`` collects the two
+    geometry-mediated channels -- the change in the weak self-geometry and
+    transport through the strong/weak cross term -- while ``s_ce`` isolates the
+    cross-entropy margin gate produced by the strong feature raising the margin.
+
+    This is a relabelling, not an independent derivation: it delegates entirely
+    to :func:`matched_weak_drift_decomposition` so the two can never disagree.
+    It inherits that function's m_w-matched-field convention.
+
+    A sign change of ``d_w`` over optimization time is the transfer-to-starvation
+    crossover.  The predicted crossover time solves ``t_geom = s_ce``.  Producing
+    *sufficient conditions* for that sign change is open theory work; this
+    function only measures the two competing terms.
+    """
+    parts = matched_weak_drift_decomposition(both, weak_only, z_w)
+    s_ce = parts.ce_gating
+    geometry_self_term = -parts.geometry_shift
+    cross_transport_term = -parts.cross_transport
+    t_geom = geometry_self_term + cross_transport_term
+    d_w = -parts.causal_deficit
+    return CrossoverDecomposition(
+        d_w=d_w,
+        t_geom=t_geom,
+        s_ce=s_ce,
+        geometry_self_term=geometry_self_term,
+        cross_transport_term=cross_transport_term,
+        reconstruction_error=(t_geom - s_ce) - d_w,
     )
 
 
