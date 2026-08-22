@@ -15,6 +15,12 @@ Baseline at time of writing: `pytest -q` → `46 passed`, Python 3.12.4,
 > Phase 1 lockstep/sequential divergence is a stop condition; Phase 4 is not
 > started; Phase 7 is skipped. See §0.4 for the full scoping record and the
 > blocked-surface policy.
+>
+> **Further author decisions, same date:** the lockstep trainer stays opt-in with
+> `sequential` as the default, and E-NL is its only consumer; no derivation
+> skeleton is created (§3a); the parameter-snapshot aliasing correction found
+> during Phase 1 is recorded as its own commit rather than folded into the
+> baseline commit.
 
 ---
 
@@ -122,8 +128,10 @@ override any broader ambition stated later in this document:
 Any function whose correctness depends on the undelivered closure derivation
 must:
 
-1. raise `NotImplementedError` naming the specific unmet proof obligation from
-   `research_scope/e2_theorem.md` § "Proof obligations";
+1. raise `NotImplementedError` naming the specific unmet proof obligation by
+   number from `research_scope/e2_theorem.md` § "Proof obligations" — that file is
+   the single home of the obligation list, since §3a declines to create a
+   placeholder derivation document;
 2. have a test asserting the raise (`pytest.raises(NotImplementedError)`) — not
    `skip`, not `xfail`, so that a later placeholder insertion fails loudly;
 3. never return a plausible-looking numeric array, zeros, or a stub trajectory;
@@ -264,17 +272,25 @@ If any of those three fail, the gate is mis-specified — fix before Phase 4.
 
 ---
 
-### Phase 3 — Theorem A: derivation, then an independent solver (E2-R)
+### Phase 3 — Theorem A: scaffolding and exact special cases only (E2-R)
 
 The note is right that this is the central open item. Split it cleanly: the
 derivation is mathematics and produces a document; the solver is code and must
-be *derived from* that document.
+be *derived from* that document. This pass writes neither the derivation nor a
+placeholder standing in for it — only the scaffolding, the two special cases that
+validate against machinery already exact in this repository, and tested blocks
+everywhere else.
 
-#### 3a. Skeleton document only → `research_scope/dmft_derivation.md` (AMENDED)
+#### 3a. No derivation document this pass (AMENDED TWICE)
 
-This pass creates the document as a **skeleton of numbered, explicitly-empty
-obligations** mirroring `e2_theorem.md` § "Proof obligations", each marked
-`OPEN — author work`:
+**`research_scope/dmft_derivation.md` is deliberately not created.** An empty
+skeleton of numbered headings adds a file that looks like progress while
+containing none, and it invites future edits that fill in plausible mathematics
+without proof. The document should be created by the author at the moment real
+derivation work begins.
+
+The five proof obligations therefore continue to live in exactly one place,
+`research_scope/e2_theorem.md` § "Proof obligations":
 
 1. effective single-site process and its covariance/response kernels;
 2. closure set, including loss-invisible order parameters;
@@ -282,11 +298,15 @@ obligations** mirroring `e2_theorem.md` § "Proof obligations", each marked
 4. joint quenched concentration for both causal conditions under shared disorder;
 5. hitting-time corollary under transversality, plus discretization error.
 
+**Consequence for the blocked-surface policy:** every `NotImplementedError`
+message cites `research_scope/e2_theorem.md` and its obligation number, not a
+derivation file that does not exist. Sequence time `k` and optimization time `τ`
+must remain distinct in every kernel the derivation eventually introduces.
+
 **No mathematical content is written by the implementation pass.** The
-derivation — generating functional, closure enumeration, concentration proof —
-is author work. An assistant may later help draft it, but drafted mathematics is
-not a proof until the author checks it. The document must state that sequence
-time `k` and optimization time `τ` remain distinct in every kernel.
+generating functional, closure enumeration, and concentration proof are author
+work. An assistant may later help draft them, but drafted mathematics is not a
+proof until the author checks it.
 
 #### 3b. Solver → `src/gradient_starvation/dmft.py`
 
@@ -298,7 +318,7 @@ time `k` and optimization time `τ` remain distinct in every kernel.
 - `solve_dmft(spec)` dispatches:
   - `bulk_gain == 0` → check A path, implemented;
   - `frozen_geometry` supplied → check C path, implemented;
-  - otherwise → `NotImplementedError` naming obligations 1 and 2.
+  - otherwise → `NotImplementedError` citing `e2_theorem.md` obligations 1 and 2.
 - **Independence guard, enforced by test:** the module imports nothing from
   `training.py`, `experiments.py`, or `width_validation.py`, and reads no file
   under `results/`. Tested by AST-inspecting the import graph, not by convention.
@@ -537,9 +557,9 @@ Carried forward from `a.md` §20, with additions from this plan:
 3. **Phase 2** — learnability gate, then the replay acceptance against
    `results/e1_corrected_validation-20260821-144112/summary.csv`. Three
    known-answer checks; any failure is a stop condition.
-4. **Phase 3** — skeleton document, solver scaffolding, checks A and C, MSE
-   objective, tested blocks for B / D-solver / E / F, non-passing
-   `e2r_acceptance.json`.
+4. **Phase 3** — solver scaffolding, checks A and C, MSE objective, tested blocks
+   for B / D-solver / E / F, non-passing `e2r_acceptance.json`. No derivation
+   document; obligations stay in `e2_theorem.md`.
 5. **Phase 4-adjacent only** — corrected-E1 rerun under dense scaling.
 6. **Phase 5** — CDC write-up (R1/R2 proved, R3 as target), empirical R3 slope,
    Bloop / PCGrad / two ablations, dense-scaling CDC rerun.
