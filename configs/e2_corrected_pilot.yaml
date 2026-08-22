@@ -1,0 +1,33 @@
+experiment:
+  name: e2_corrected_pilot
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 20
+  n_samples: 512
+  points:
+    - {rho: 2, lag_separation: 2}
+    - {rho: 4, lag_separation: 4}
+  regimes: [positive]
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 0.25
+model:
+  kind: dense_linear
+  widths: [24, 48, 96, 192]
+  bulk_gain: 0.5
+training:
+  steps: 200
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 10
+  seeds: [0, 1, 2, 3]
+  identity_steps: 5
+  weight_decay: 0.0
+closure:
+  # Calibration seeds are disjoint from every held-out network seed.
+  width: 256
+  particles: 8
+  seeds: [100, 101, 102, 103, 104, 105, 106, 107]
+  field_samples: 8192
+  field_seed: 1000003

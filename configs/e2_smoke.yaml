@@ -1,0 +1,32 @@
+experiment:
+  name: smoke_e2
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 5
+  n_samples: 12
+  points:
+    - {rho: 2, lag_separation: 2}
+  regimes: [positive]
+  cue_noise: 0.0
+  background_noise: 0.0
+  beta: -1000000.0
+model:
+  # E2 validates the dense-W metric in the finite-N theorem.
+  kind: dense_linear
+  widths: [6]
+  bulk_gain: 0.3
+training:
+  steps: 1
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 1
+  seeds: [0]
+  identity_steps: 1
+  weight_decay: 0.0
+closure:
+  width: 6
+  particles: 1
+  seeds: [10]
+  field_samples: 128
+  field_seed: 1000003

@@ -1,28 +1,28 @@
 experiment:
-  name: e3_mitigation
+  name: smoke_e3
   output_root: results
-  device: auto
+  device: cpu
 task:
-  sequence_length: 20
-  n_samples: 4096
-  rho_values: [4, 8]
-  lag_separations: [4, 8]
+  sequence_length: 5
+  n_samples: 12
+  rho_values: [2]
+  lag_separations: [2]
   regimes: [positive]
-  cue_noise: 0.1
+  cue_noise: 0.0
   background_noise: 0.0
-  beta: 0.5
+  beta: -1000000.0
   phase_delay: 1.0
 model:
   kinds: [low_rank_linear, tanh, gru]
-  width: 512
-  bulk_gain: 0.8
+  width: 6
+  bulk_gain: 0.3
   rank: 2
 training:
-  steps: 1000
+  steps: 1
   learning_rate: 0.01
   full_batch: true
-  log_every: 10
-  seeds: [0, 1, 2, 3, 4]
+  log_every: 1
+  seeds: [0]
   weight_decay: 0.0
 mitigation:
   methods: [erm, spectral_decoupling, interaction, counterfactual_drift]

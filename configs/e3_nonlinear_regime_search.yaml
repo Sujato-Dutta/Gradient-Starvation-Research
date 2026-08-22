@@ -1,0 +1,26 @@
+experiment:
+  name: e3_nonlinear_regime_search
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 20
+  n_samples: 128
+  rho_values: [2, 4, 8]
+  lag_separations: [0, 2, 4, 8]
+  regimes: [positive]
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 0.1
+  phase_delay: 0.1
+model:
+  kinds: [tanh, gru]
+  width: 24
+training:
+  steps: 80
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 4
+  seeds: [0, 1]
+  weight_decay: 0.0
+mitigation:
+  methods: [erm]

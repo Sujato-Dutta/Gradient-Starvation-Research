@@ -1,0 +1,26 @@
+experiment:
+  name: e3_tanh_long_horizon_search
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 20
+  n_samples: 128
+  rho_values: [4, 8]
+  lag_separations: [2, 4]
+  regimes: [positive]
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 0.5
+  phase_delay: 0.25
+model:
+  kinds: [tanh]
+  width: 24
+training:
+  steps: 1000
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 10
+  seeds: [0, 1]
+  weight_decay: 0.0
+mitigation:
+  methods: [erm]

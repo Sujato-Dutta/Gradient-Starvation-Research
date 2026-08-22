@@ -24,7 +24,10 @@ class DenseLinearRNN(RecurrentBinaryClassifier):
         self.width = width
         self.input_size = input_size
         self.recurrent = nn.Parameter(torch.randn(width, width) * (bulk_gain / math.sqrt(width)))
-        self.input = nn.Parameter(torch.randn(width, input_size) / math.sqrt(input_size))
+        # Both input and readout vectors have O(1) Euclidean norm.  The older
+        # input-size scaling made the input norm grow as sqrt(width), causing
+        # the projected geometry and optimization speed to diverge with N.
+        self.input = nn.Parameter(torch.randn(width, input_size) / math.sqrt(width))
         self.readout = nn.Parameter(torch.randn(width) / math.sqrt(width))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -50,7 +53,7 @@ class LowRankLinearRNN(RecurrentBinaryClassifier):
         self.register_buffer("bulk", torch.randn(width, width) * (bulk_gain / math.sqrt(width)))
         self.left = nn.Parameter(torch.randn(rank, width))
         self.right = nn.Parameter(torch.randn(rank, width))
-        self.input = nn.Parameter(torch.randn(width, input_size) / math.sqrt(input_size))
+        self.input = nn.Parameter(torch.randn(width, input_size) / math.sqrt(width))
         self.readout = nn.Parameter(torch.randn(width) / math.sqrt(width))
 
     @property
@@ -98,7 +101,10 @@ def _linear_probe_responses(
 ) -> torch.Tensor:
     del model
     probes = input_matrix.new_zeros(2, spec.sequence_length, input_matrix.shape[1])
-    probes[0, spec.strong_time, 0] = spec.rho
+    # Feature strength belongs to the latent coordinate z_s.  The mode response
+    # is the network response to a *unit* cue; including rho here as well would
+    # apply the strong-feature scale twice in ``synthetic_logits``.
+    probes[0, spec.strong_time, 0] = 1.0
     probes[1, spec.weak_time, 1] = 1.0
     h = probes.new_zeros(2, recurrent.shape[0])
     for time in range(spec.sequence_length):

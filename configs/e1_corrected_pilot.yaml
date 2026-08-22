@@ -1,0 +1,32 @@
+experiment:
+  name: e1_corrected_pilot
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 20
+  n_samples: 256
+  rho_values: [2, 4]
+  lag_separations: [0, 2, 4]
+  regimes: [positive, negative]
+  negative_control_points:
+    - {rho: 4, lag_separation: 4}
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 0.25
+  phase_delay: 0.25
+  theory_boundary_file: null
+model:
+  kind: low_rank_linear
+  width: 64
+  bulk_gain: 0.5
+  rank: 2
+training:
+  steps: 150
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 5
+  seeds: [0, 1, 2, 3]
+  weight_decay: 0.0
+mitigation:
+  method: erm
+

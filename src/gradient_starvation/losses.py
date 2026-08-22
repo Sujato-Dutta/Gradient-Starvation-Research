@@ -41,6 +41,10 @@ def training_objective(
             coefficient = float(mitigation.get("coefficient", 0.0))
             regularizer = coefficient * torch.relu(chi).square()
             susceptibility = float(chi.detach())
+    elif method == "counterfactual_drift":
+        raise ValueError(
+            "counterfactual_drift requires paired both/weak-only training; use train_paired."
+        )
     elif method != "erm":
         raise ValueError(f"Unknown mitigation method: {method}")
 

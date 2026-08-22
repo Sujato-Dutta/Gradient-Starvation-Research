@@ -1,0 +1,29 @@
+experiment:
+  name: e3_tanh_cdc_width_validation
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 20
+  n_samples: 512
+  rho_values: [4]
+  lag_separations: [2]
+  regimes: [positive]
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 2.0
+  phase_delay: 0.25
+model:
+  kinds: [tanh]
+  # Override to 96 for the second width checkpoint.
+  width: 32
+training:
+  steps: 1000
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 10
+  # New seeds shared across widths to isolate width sensitivity.
+  seeds: [14, 15, 16, 17]
+  weight_decay: 0.0
+mitigation:
+  methods: [erm, counterfactual_drift]
+  feasibility_epsilon: 1.0e-10

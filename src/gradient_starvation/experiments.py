@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -92,7 +93,9 @@ def _paired_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dic
     return {
         **causal.__dict__,
         "phase": phase,
+        "final_both_m_s": float(both.iloc[-1].m_s),
         "final_both_m_w": float(both.iloc[-1].m_w),
+        "final_weak_m_s": float(weak.iloc[-1].m_s),
         "final_weak_m_w": float(weak.iloc[-1].m_w),
         "final_accuracy": float(both.iloc[-1].accuracy),
         "final_gsi5": float(both.iloc[-1].gsi5),
@@ -166,13 +169,98 @@ def _write_finite_n_geometry_check(run_dir: Path, task: Mapping[str, Any], model
 
 
 def _mean_closure(history: pd.DataFrame, condition: str) -> pd.DataFrame:
-    columns = ["m_s", "m_w", "G_ss", "G_sw", "G_ww", "A_ss", "A_sw", "A_ww", "gsi5"]
+    columns = [
+        "m_s", "m_w", "G_ss", "G_sw", "G_ww", "A_ss", "A_sw", "A_ww",
+        "margin_mean", "margin_std", "margin_q10", "margin_q50", "margin_q90", "gsi5",
+    ]
     return (
         history[history.condition == condition]
         .groupby("tau", as_index=False)[columns]
         .mean()
         .sort_values("tau")
     )
+
+
+def _relative_trajectory_rmse(observed: np.ndarray, predicted: np.ndarray) -> tuple[float, float]:
+    difference = np.asarray(observed, dtype=float) - np.asarray(predicted, dtype=float)
+    rmse = float(np.sqrt(np.mean(np.square(difference))))
+    scale = float(np.sqrt(np.mean(np.square(observed))))
+    return rmse, rmse / max(scale, 1e-8)
+
+
+def _write_e2_convergence(summary: pd.DataFrame, run_dir: Path) -> pd.DataFrame:
+    metrics = ["trajectory_nrmse", "geometry_nrmse", "margin_nrmse", "gsi_rmse"]
+    rows: list[dict[str, Any]] = []
+    group_columns = ["rho", "lag_separation", "regime", "condition"]
+    for keys, group in summary.groupby(group_columns):
+        key_values = keys if isinstance(keys, tuple) else (keys,)
+        for metric in metrics:
+            by_width = group.groupby("width", as_index=False)[metric].mean().sort_values("width")
+            finite = by_width[np.isfinite(by_width[metric]) & (by_width[metric] > 0)]
+            slope = float("nan")
+            if len(finite) >= 2:
+                slope = float(
+                    np.polyfit(np.log(finite["width"]), np.log(finite[metric]), deg=1)[0]
+                )
+            rows.append(
+                {
+                    **dict(zip(group_columns, key_values)),
+                    "metric": metric,
+                    "n_widths": int(len(by_width)),
+                    "log_log_slope": slope,
+                    "smallest_width_error": float(by_width.iloc[0][metric]),
+                    "largest_width_error": float(by_width.iloc[-1][metric]),
+                    "decreases_end_to_end": bool(
+                        by_width.iloc[-1][metric] < by_width.iloc[0][metric]
+                    ),
+                }
+            )
+    convergence = pd.DataFrame(rows)
+    convergence.to_csv(run_dir / "convergence.csv", index=False)
+    return convergence
+
+
+def _write_e2_acceptance(
+    run_dir: Path,
+    summary: pd.DataFrame,
+    convergence: pd.DataFrame,
+    closure_seeds: set[int],
+    evaluation_seeds: set[int],
+) -> None:
+    geometry = json.loads((run_dir / "finite_n_geometry_check.json").read_text())
+    mode_rows = convergence[convergence["metric"] == "trajectory_nrmse"]
+    payload = {
+        "closure_and_evaluation_seeds_disjoint": closure_seeds.isdisjoint(evaluation_seeds),
+        "finite_n_geometry_relative_error": float(geometry["relative_error"]),
+        "max_projected_identity_absolute_error": float(
+            summary["max_identity_absolute_error"].max()
+        ),
+        "all_summary_diagnostics_finite": bool(
+            np.isfinite(
+                summary[
+                    [
+                        "trajectory_rmse", "trajectory_nrmse", "geometry_nrmse",
+                        "margin_nrmse", "gsi_rmse", "max_identity_absolute_error",
+                    ]
+                ].to_numpy()
+            ).all()
+        ),
+        "mode_error_decreases_for_every_point_and_condition": bool(
+            len(mode_rows) > 0
+            and mode_rows["decreases_end_to_end"].all()
+            and (mode_rows["log_log_slope"] < 0).all()
+        ),
+        "at_least_three_widths": bool(summary["width"].nunique() >= 3),
+    }
+    payload["passed"] = bool(
+        payload["closure_and_evaluation_seeds_disjoint"]
+        and payload["finite_n_geometry_relative_error"] < 1e-5
+        and payload["max_projected_identity_absolute_error"] < 1e-4
+        and payload["all_summary_diagnostics_finite"]
+        and payload["mode_error_decreases_for_every_point_and_condition"]
+        and payload["at_least_three_widths"]
+    )
+    (run_dir / "e2_acceptance.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def run_e2(config: dict[str, Any]) -> Path:
@@ -184,15 +272,18 @@ def run_e2(config: dict[str, Any]) -> Path:
     )
     all_trajectories: list[dict[str, Any]] = []
     summaries: list[dict[str, Any]] = []
+    closure_seeds = {int(seed) for seed in closure_config.get(
+        "seeds", range(int(closure_config.get("particles", 16)))
+    )}
+    evaluation_seeds = {int(seed) for seed in training.get("seeds", [0, 1, 2])}
+    if not closure_seeds.isdisjoint(evaluation_seeds):
+        raise ValueError("E2 closure.seeds and training.seeds must be disjoint.")
     for rho, lag in _e2_points(task):
         for regime in task.get("regimes", ["positive"]):
             spec = _task_spec(task, rho, lag, str(regime))
             closure_model = {**base_model, "width": int(closure_config.get("width", 256))}
             closure_rows: list[dict[str, Any]] = []
-            closure_seeds = closure_config.get(
-                "seeds", range(int(closure_config.get("particles", 16)))
-            )
-            for particle, seed in enumerate(closure_seeds):
+            for particle, seed in enumerate(sorted(closure_seeds)):
                 both, weak = (batch.to(device) for batch in make_paired_task(spec, int(seed)))
                 history, _ = train_paired(
                     closure_model, both, weak, training, {"method": "erm"}, seed=int(seed)
@@ -200,7 +291,12 @@ def run_e2(config: dict[str, Any]) -> Path:
                 closure_rows.extend(_annotate(history, particle=particle, closure_seed=int(seed)))
             closure_frame = pd.DataFrame(closure_rows)
             theory_by_condition: dict[str, pd.DataFrame] = {}
-            reference_both, reference_weak = make_paired_task(spec, 0)
+            field_spec = replace(
+                spec, n_samples=int(closure_config.get("field_samples", spec.n_samples))
+            )
+            reference_both, reference_weak = make_paired_task(
+                field_spec, int(closure_config.get("field_seed", 1000003))
+            )
             reference = {"both": reference_both, "weak_only": reference_weak}
             for condition in ["both", "weak_only"]:
                 mean = _mean_closure(closure_frame, condition)
@@ -244,15 +340,58 @@ def run_e2(config: dict[str, Any]) -> Path:
                         theory = theory_by_condition[condition]
                         predicted_s = np.interp(observed.tau, theory.tau, theory.m_s)
                         predicted_w = np.interp(observed.tau, theory.tau, theory.m_w)
-                        rmse = float(np.sqrt(np.mean(
-                            np.square(observed.m_s.to_numpy() - predicted_s)
-                            + np.square(observed.m_w.to_numpy() - predicted_w)
-                        )))
+                        observed_modes = observed[["m_s", "m_w"]].to_numpy()
+                        predicted_modes = np.stack((predicted_s, predicted_w), axis=1)
+                        rmse, nrmse = _relative_trajectory_rmse(observed_modes, predicted_modes)
+                        strong_rmse, _ = _relative_trajectory_rmse(
+                            observed.m_s.to_numpy(), predicted_s
+                        )
+                        weak_rmse, _ = _relative_trajectory_rmse(
+                            observed.m_w.to_numpy(), predicted_w
+                        )
+                        geometry_columns = ["G_ss", "G_sw", "G_ww"]
+                        predicted_geometry = np.stack(
+                            [
+                                np.interp(observed.tau, theory.tau, theory[column])
+                                for column in geometry_columns
+                            ],
+                            axis=1,
+                        )
+                        geometry_rmse, geometry_nrmse = _relative_trajectory_rmse(
+                            observed[geometry_columns].to_numpy(), predicted_geometry
+                        )
+                        margin_columns = [
+                            "margin_mean", "margin_std", "margin_q10", "margin_q50", "margin_q90"
+                        ]
+                        predicted_margins = np.stack(
+                            [
+                                np.interp(observed.tau, theory.tau, theory[column])
+                                for column in margin_columns
+                            ],
+                            axis=1,
+                        )
+                        margin_rmse, margin_nrmse = _relative_trajectory_rmse(
+                            observed[margin_columns].to_numpy(), predicted_margins
+                        )
+                        predicted_gsi = np.interp(observed.tau, theory.tau, theory.gsi5)
+                        gsi_rmse, _ = _relative_trajectory_rmse(
+                            observed.gsi5.to_numpy(), predicted_gsi
+                        )
                         identity = observed.projected_identity_relative_error.to_numpy()
+                        identity_absolute = observed.projected_identity_absolute_error.to_numpy()
                         summaries.append({
                             "rho": rho, "lag_separation": lag, "regime": regime,
                             "condition": condition, "width": int(width), "seed": int(seed),
                             "trajectory_rmse": rmse,
+                            "trajectory_nrmse": nrmse,
+                            "strong_mode_rmse": strong_rmse,
+                            "weak_mode_rmse": weak_rmse,
+                            "geometry_rmse": geometry_rmse,
+                            "geometry_nrmse": geometry_nrmse,
+                            "margin_rmse": margin_rmse,
+                            "margin_nrmse": margin_nrmse,
+                            "gsi_rmse": gsi_rmse,
+                            "max_identity_absolute_error": float(np.nanmax(identity_absolute)),
                             "max_identity_relative_error": float(np.nanmax(identity)),
                         })
                     pd.DataFrame(all_trajectories).to_csv(run_dir / "trajectories.csv", index=False)
@@ -260,8 +399,14 @@ def run_e2(config: dict[str, Any]) -> Path:
     trajectories, summary = pd.DataFrame(all_trajectories), pd.DataFrame(summaries)
     _write_aggregate(
         summary, ['rho', 'lag_separation', 'regime', 'condition', 'width'],
-        ['trajectory_rmse', 'max_identity_relative_error'], run_dir / 'aggregate.csv',
+        [
+            'trajectory_rmse', 'trajectory_nrmse', 'strong_mode_rmse', 'weak_mode_rmse',
+            'geometry_nrmse', 'margin_nrmse', 'gsi_rmse',
+            'max_identity_absolute_error', 'max_identity_relative_error',
+        ], run_dir / 'aggregate.csv',
     )
+    convergence = _write_e2_convergence(summary, run_dir)
+    _write_e2_acceptance(run_dir, summary, convergence, closure_seeds, evaluation_seeds)
     plot_e2(trajectories, summary[summary.condition == "both"], run_dir)
     return run_dir
 
@@ -306,7 +451,10 @@ def run_e3(config: dict[str, Any]) -> Path:
     summary = pd.DataFrame(summaries)
     _write_aggregate(
         summary, ['model_kind', 'method', 'rho', 'lag_separation', 'regime'],
-        ['delta_tw', 'weak_auc_gap', 'final_accuracy', 'final_gsi5', 'mean_chi'],
+        [
+            'delta_tw', 'weak_auc_gap', 'final_both_m_s', 'final_both_m_w',
+            'final_accuracy', 'final_gsi5', 'mean_chi',
+        ],
         run_dir / 'aggregate.csv',
     )
     plot_e3(summary, run_dir)

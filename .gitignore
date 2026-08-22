@@ -1,9 +1,16 @@
 .venv/
-__pycache__/
+.venv-test/
 *.py[cod]
 .pytest_cache/
 pytest-cache-files-*/
 .coverage
 data/
+!src/gradient_starvation/data/
+!src/gradient_starvation/data/**
 results/
 tmp/
+.DS_Store
+# Keep bytecode caches ignored even inside the explicitly un-ignored
+# ``src/gradient_starvation/data`` package.  Git applies the last matching rule,
+# so this must follow the negations above.
+**/__pycache__/

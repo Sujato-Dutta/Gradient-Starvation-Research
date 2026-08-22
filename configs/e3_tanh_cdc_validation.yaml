@@ -1,32 +1,32 @@
 experiment:
-  name: e3_mitigation
+  name: e3_tanh_cdc_validation
   output_root: results
   device: auto
 task:
   sequence_length: 20
-  n_samples: 4096
-  rho_values: [4, 8]
-  lag_separations: [4, 8]
+  n_samples: 512
+  rho_values: [4]
+  lag_separations: [2]
   regimes: [positive]
   cue_noise: 0.1
   background_noise: 0.0
-  beta: 0.5
-  phase_delay: 1.0
+  # Selected from the regime-search pilot, then frozen for independent seeds.
+  beta: 2.0
+  phase_delay: 0.25
 model:
-  kinds: [low_rank_linear, tanh, gru]
-  width: 512
-  bulk_gain: 0.8
-  rank: 2
+  kinds: [tanh]
+  width: 64
 training:
   steps: 1000
   learning_rate: 0.01
   full_batch: true
   log_every: 10
-  seeds: [0, 1, 2, 3, 4]
+  seeds: [6, 7, 8, 9, 10, 11, 12, 13]
   weight_decay: 0.0
 mitigation:
   methods: [erm, spectral_decoupling, interaction, counterfactual_drift]
   coefficient: 0.01
   spectral_coefficient: 0.01
   mode: proxy
-  feasibility_epsilon: 1.0e-12
+  feasibility_epsilon: 1.0e-10
+

@@ -17,30 +17,83 @@ def _save_all(fig: plt.Figure, base: Path) -> None:
     plt.close(fig)
 
 
-def plot_e1(summary: pd.DataFrame, run_dir: Path, boundary=None) -> None:
-    positive = summary[(summary["regime"] == "positive") & (~summary["right_censored"])]
+def _e1_plot_tables(
+    summary: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Build complete E1 grids without turning censoring into zero delay."""
+    positive = summary[summary["regime"] == "positive"]
     if positive.empty:
-        return
-    table = positive.pivot_table(
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    lags = sorted(positive["lag_separation"].unique(), reverse=True)
+    strengths = sorted(positive["rho"].unique())
+    auc = positive.pivot_table(
+        index="lag_separation", columns="rho", values="weak_auc_gap", aggfunc="mean"
+    ).reindex(index=lags, columns=strengths)
+    uncensored = positive[~positive["right_censored"]]
+    delay = uncensored.pivot_table(
         index="lag_separation", columns="rho", values="delta_tw", aggfunc="mean"
-    ).sort_index(ascending=False)
-    fig, ax = plt.subplots(figsize=(6.5, 4.8))
+    ).reindex(index=lags, columns=strengths)
+    censored = positive.pivot_table(
+        index="lag_separation", columns="rho", values="right_censored", aggfunc="mean"
+    ).reindex(index=lags, columns=strengths)
+    return auc, delay, censored
+
+
+def plot_e1(summary: pd.DataFrame, run_dir: Path, boundary=None) -> None:
+    auc, delay, censored = _e1_plot_tables(summary)
+    if auc.empty:
+        return
+    fig, axes = plt.subplots(1, 2, figsize=(12.2, 4.8), constrained_layout=True)
+    auc_labels = auc.map(lambda value: f"{value:.2f}")
+    for row in auc.index:
+        for column in auc.columns:
+            if censored.loc[row, column] > 0:
+                auc_labels.loc[row, column] += "†"
+    sns.heatmap(
+        auc,
+        annot=auc_labels,
+        fmt="",
+        cmap="vlag",
+        center=0.0,
+        ax=axes[0],
+        cbar_kws={"label": "Weak-only minus both-feature AUC"},
+    )
+    axes[0].set_title("Causal weak-trajectory gap")
+
+    delay_labels = delay.map(lambda value: "—" if pd.isna(value) else f"{value:.2f}")
+    axes[1].set_facecolor("#d9d9d9")
+    sns.heatmap(
+        delay,
+        annot=delay_labels,
+        fmt="",
+        cmap="magma",
+        ax=axes[1],
+        cbar_kws={"label": "Hitting-time delay"},
+    )
+    axes[1].set_title("Delay among uncensored pairs")
     if boundary is not None and not boundary.empty:
         boundary = boundary[
-            boundary.rho.isin(table.columns) & boundary.lag_separation.isin(table.index)
+            boundary.rho.isin(auc.columns) & boundary.lag_separation.isin(auc.index)
         ]
-        rho_positions = [list(table.columns).index(value) + 0.5 for value in boundary.rho]
-        lag_rows = list(table.index)
+        rho_positions = [list(auc.columns).index(value) + 0.5 for value in boundary.rho]
+        lag_rows = list(auc.index)
         lag_positions = [lag_rows.index(value) + 0.5 for value in boundary.lag_separation]
-        ax.plot(
-            rho_positions, lag_positions, color='cyan', linewidth=2.0,
-            label='Theory boundary', zorder=10,
-        )
-        ax.legend(loc='best')
-    sns.heatmap(table, annot=True, fmt=".2f", cmap="magma", ax=ax, cbar_kws={"label": "Causal delay"})
-    ax.set_title("Weak-feature hitting-time delay")
-    ax.set_xlabel("Feature-strength ratio")
-    ax.set_ylabel("Temporal separation")
+        for ax in axes:
+            ax.plot(
+                rho_positions, lag_positions, color="cyan", linewidth=2.0,
+                label="Theory boundary", zorder=10,
+            )
+            ax.legend(loc="best")
+    for ax in axes:
+        ax.set_xlabel("Feature-strength ratio")
+        ax.set_ylabel("Temporal separation")
+    fig.text(
+        0.5,
+        -0.02,
+        "† at least one paired run is right-censored; — no pair reached the target in both conditions",
+        ha="center",
+        fontsize=9,
+    )
     _save_all(fig, run_dir / "e1_phase_diagram")
 
 
