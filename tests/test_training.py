@@ -3,6 +3,7 @@ import pytest
 import torch
 
 from gradient_starvation.data.synthetic import SyntheticTaskSpec, make_paired_task
+from gradient_starvation.losses import training_objective
 from gradient_starvation.models.recurrent import build_model
 from gradient_starvation.training import (
     _snapshot_state,
@@ -364,3 +365,94 @@ def test_snapshot_state_is_independent_of_later_mutation():
             parameter.add_(1.0)
     for name, value in snapshot.items():
         assert not torch.equal(value, model.state_dict()[name]), name
+
+
+def test_both_equal_time_orderings_reconstruct_exactly():
+    """Regression test: the split must sum to the drift difference.
+
+    The first implementation paired ordering A's geometry term with ordering B's field
+    term. That reconstructs nothing -- the mismatch reached 0.75 on the tanh run -- and
+    inflated the apparent geometry contribution. Each ordering is now checked
+    separately.
+    """
+    spec = SyntheticTaskSpec(sequence_length=8, n_samples=128, rho=4, lag_separation=2,
+                             cue_noise=0.1)
+    both, weak = make_paired_task(spec, seed=51)
+    history, _ = train_paired(
+        {"kind": "tanh", "width": 16},
+        both, weak,
+        {"steps": 60, "learning_rate": 0.05, "log_every": 1, "full_batch": True,
+         "paired_mode": "lockstep"},
+        {"method": "erm"},
+        seed=52,
+    )
+    rows = [r for r in history if r["condition"] == "both"]
+    assert rows
+    for row in rows:
+        for ordering in ("a", "b"):
+            assert row[f"equal_time_geometry_{ordering}"] + row[
+                f"equal_time_field_{ordering}"
+            ] == pytest.approx(row["d_w_equal_time"], rel=2e-5, abs=2e-6)
+            assert abs(row[f"equal_time_reconstruction_error_{ordering}"]) < 2e-6
+
+
+def test_ordering_dominance_flag_detects_disagreement():
+    """The invariance flag must actually be exercised, not vacuously true."""
+    from gradient_starvation.theory import equal_time_drift_difference, projected_statistics
+
+    spec = SyntheticTaskSpec(sequence_length=8, n_samples=128, rho=4, lag_separation=2,
+                             cue_noise=0.1)
+    both, weak = make_paired_task(spec, seed=53)
+    torch.manual_seed(3)
+    model_both = build_model({"kind": "tanh", "width": 16})
+    model_weak = build_model({"kind": "tanh", "width": 16})
+    model_weak.load_state_dict(model_both.state_dict())
+    optimizers = [
+        torch.optim.SGD(m.parameters(), lr=0.05) for m in (model_both, model_weak)
+    ]
+    flags = []
+    for _ in range(80):
+        stats_both = projected_statistics(model_both, both)
+        stats_weak = projected_statistics(model_weak, weak)
+        result = equal_time_drift_difference(stats_both, stats_weak)
+        # Whatever the flag says, both orderings must reconstruct.
+        assert abs(float(result.reconstruction_error_a.detach())) < 2e-5
+        assert abs(float(result.reconstruction_error_b.detach())) < 2e-5
+        flags.append(result.dominance_is_ordering_invariant)
+        for model, batch, optimizer in (
+            (model_both, both, optimizers[0]), (model_weak, weak, optimizers[1])
+        ):
+            optimizer.zero_grad(set_to_none=True)
+            loss, _ = training_objective(model, batch, {"method": "erm"})
+            loss.backward()
+            optimizer.step()
+    assert all(isinstance(flag, bool) for flag in flags)
+
+
+def test_ordering_dominance_flag_can_report_disagreement():
+    """The flag must be capable of firing, or it gives false reassurance.
+
+    Constructed rather than trained: whether a real trajectory enters the disagreement
+    region is an empirical question answered by the E-NL run's
+    `dominance_ordering_invariant_fraction`, not something to assert here.
+    """
+    from gradient_starvation.theory import EqualTimeDriftDifference
+
+    def verdict(geometry_a, field_a, geometry_b, field_b):
+        return EqualTimeDriftDifference(
+            d_w_equal_time=torch.tensor(0.0), both_drift=torch.tensor(0.0),
+            weak_only_drift=torch.tensor(0.0), cross_transport=torch.tensor(0.0),
+            geometry_difference_a=torch.tensor(geometry_a),
+            field_difference_a=torch.tensor(field_a),
+            geometry_difference_b=torch.tensor(geometry_b),
+            field_difference_b=torch.tensor(field_b),
+            reconstruction_error_a=torch.tensor(0.0),
+            reconstruction_error_b=torch.tensor(0.0),
+        ).dominance_is_ordering_invariant
+
+    # A says geometry dominates, B says field does: not invariant.
+    assert verdict(-0.124, -0.018, -0.062, -0.080) is False
+    # Both say geometry: invariant.
+    assert verdict(-0.124, -0.018, -0.109, -0.033) is True
+    # Both say field: invariant.
+    assert verdict(-0.010, -0.500, -0.020, -0.400) is True

@@ -343,11 +343,27 @@ def train_paired_lockstep(
                     # Equal-time family: this one IS d/dtau of the response gap, so it
                     # is the quantity to use for any drift-versus-response comparison.
                     "d_w_equal_time": float(equal_time.d_w_equal_time.detach()),
-                    "equal_time_geometry_difference": float(
-                        equal_time.geometry_difference.detach()
+                    "equal_time_cross_transport": float(
+                        equal_time.cross_transport.detach()
                     ),
-                    "equal_time_field_difference": float(
-                        equal_time.field_difference.detach()
+                    # Both exact orderings, because attribution between geometry and
+                    # field is not unique and they can disagree on dominance.
+                    "equal_time_geometry_a": float(
+                        equal_time.geometry_difference_a.detach()
+                    ),
+                    "equal_time_field_a": float(equal_time.field_difference_a.detach()),
+                    "equal_time_geometry_b": float(
+                        equal_time.geometry_difference_b.detach()
+                    ),
+                    "equal_time_field_b": float(equal_time.field_difference_b.detach()),
+                    "equal_time_reconstruction_error_a": float(
+                        equal_time.reconstruction_error_a.detach()
+                    ),
+                    "equal_time_reconstruction_error_b": float(
+                        equal_time.reconstruction_error_b.detach()
+                    ),
+                    "equal_time_dominance_ordering_invariant": (
+                        equal_time.dominance_is_ordering_invariant
                     ),
                 }
             )

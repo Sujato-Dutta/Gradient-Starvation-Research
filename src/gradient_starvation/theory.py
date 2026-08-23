@@ -252,50 +252,96 @@ class EqualTimeDriftDifference:
     saved tanh run, means of ``1.741`` (matched) versus ``1.611`` (equal-time) -- so
     they must never be substituted for one another.
 
-    No exact three-term geometry/CE split accompanies this quantity: the two
-    conditions are evaluated at different weak responses, so their CE fields are not
-    related by a single gating factor.  ``geometry_difference`` and
-    ``field_difference`` below are a *descriptive* split, labelled as such, not the
-    exact identity that :class:`CausalDriftDecomposition` provides.
+    Attribution between geometry and field is **not unique**, and this class does not
+    pretend otherwise.  Splitting a product difference ``G_B g_B - G_W g_W`` requires
+    choosing which factor is held at which condition, and the two admissible choices
+    are both exact:
+
+    ``ordering_a``  ``(G_B - G_W) g_W  +  G_B (g_B - g_W)``
+    ``ordering_b``  ``(G_B - G_W) g_B  +  G_W (g_B - g_W)``
+
+    Both reconstruct the difference identically, and on the tanh run they disagree
+    about which channel dominates late.  Any claim of the form "late suppression is
+    geometry-driven" is therefore a statement about the chosen ordering, not about the
+    system, unless it holds under both.  :attr:`dominance_is_ordering_invariant`
+    records whether it does.
     """
 
     d_w_equal_time: torch.Tensor
     both_drift: torch.Tensor
     weak_only_drift: torch.Tensor
-    geometry_difference: torch.Tensor
-    field_difference: torch.Tensor
+    cross_transport: torch.Tensor
+    geometry_difference_a: torch.Tensor
+    field_difference_a: torch.Tensor
+    geometry_difference_b: torch.Tensor
+    field_difference_b: torch.Tensor
+    reconstruction_error_a: torch.Tensor
+    reconstruction_error_b: torch.Tensor
+
+    @property
+    def dominance_is_ordering_invariant(self) -> bool:
+        """True when both orderings agree on which channel is larger in magnitude."""
+        a = bool(
+            self.geometry_difference_a.abs() > self.field_difference_a.abs()
+        )
+        b = bool(
+            self.geometry_difference_b.abs() > self.field_difference_b.abs()
+        )
+        return a == b
 
 
 def equal_time_drift_difference(
     both: ProjectedStatistics, weak_only: ProjectedStatistics
 ) -> EqualTimeDriftDifference:
-    """Return the equal-time weak-drift difference and a descriptive split.
+    """Return the equal-time weak-drift difference under both exact orderings.
 
     Each condition's projected weak drift is ``F_w = sum_b G_wb g_b`` evaluated in its
-    own state.  Their difference is the derivative of the equal-time response gap.
+    own state, so their difference is the derivative of the equal-time response gap::
 
-    The descriptive split holds the other factor at the both-feature value in turn::
+        d_w = [G_ws^B g_s^B + G_ww^B g_w^B] - [G_ww^W g_w^W]
 
-        geometry_difference = (G_ww^B - G_ww^W) g_w^W        + G_ws^B g_s^B
-        field_difference    =  G_ww^W (g_w^B - g_w^W)
+    The strong channel contributes only through the both-feature condition, because the
+    weak-only mode response is identically zero and so ``grad(m_s) = 0`` there, making
+    ``G_ws^W = 0``.  That term is returned separately as ``cross_transport`` and added
+    to the geometry channel in each ordering.
 
-    These sum to the difference exactly, but the attribution between them is a
-    choice of ordering, not a unique decomposition.  Use
-    :func:`crossover_decomposition` when an exact identity is required.
+    The remaining product difference ``G_ww^B g_w^B - G_ww^W g_w^W`` admits two exact
+    splits, and **both are computed** because they can disagree about which channel
+    dominates::
+
+        ordering A: (G_ww^B - G_ww^W) g_w^W + G_ww^B (g_w^B - g_w^W)
+        ordering B: (G_ww^B - G_ww^W) g_w^B + G_ww^W (g_w^B - g_w^W)
+
+    Each reconstructs ``d_w`` exactly; ``reconstruction_error_a`` and
+    ``reconstruction_error_b`` are returned so that is checkable rather than assumed.
+    An earlier version mixed the two -- pairing ordering A's geometry term with
+    ordering B's field term -- which reconstructed nothing and inflated the apparent
+    geometry contribution by up to ``0.75`` on the tanh run.
     """
     both_drift = both.predicted_drift[1]
     weak_only_drift = weak_only.predicted_drift[1]
-    geometry_difference = (
-        (both.geometry[1, 1] - weak_only.geometry[1, 1]) * weak_only.field[1]
-        + both.geometry[1, 0] * both.field[0]
-    )
-    field_difference = weak_only.geometry[1, 1] * (both.field[1] - weak_only.field[1])
+    difference = both_drift - weak_only_drift
+
+    geometry_gap = both.geometry[1, 1] - weak_only.geometry[1, 1]
+    field_gap = both.field[1] - weak_only.field[1]
+    cross_transport = both.geometry[1, 0] * both.field[0]
+
+    geometry_a = geometry_gap * weak_only.field[1] + cross_transport
+    field_a = both.geometry[1, 1] * field_gap
+    geometry_b = geometry_gap * both.field[1] + cross_transport
+    field_b = weak_only.geometry[1, 1] * field_gap
+
     return EqualTimeDriftDifference(
-        d_w_equal_time=both_drift - weak_only_drift,
+        d_w_equal_time=difference,
         both_drift=both_drift,
         weak_only_drift=weak_only_drift,
-        geometry_difference=geometry_difference,
-        field_difference=field_difference,
+        cross_transport=cross_transport,
+        geometry_difference_a=geometry_a,
+        field_difference_a=field_a,
+        geometry_difference_b=geometry_b,
+        field_difference_b=field_b,
+        reconstruction_error_a=(geometry_a + field_a) - difference,
+        reconstruction_error_b=(geometry_b + field_b) - difference,
     )
 
 

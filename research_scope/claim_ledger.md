@@ -35,9 +35,19 @@ one invalidates the rows that use it.
    not the definition of starvation and must never be used as one.
 4. **No starvation label outside the learnable region.** A positive AUC gap where
    the weak-only counterfactual never learns is *indeterminate*, not starvation.
-5. **`degenerate` is an artifact bucket, not a phase.** It marks runs whose target
+5. **A drift crossing is *suppression*; starvation additionally requires the outcome.**
+   `transfer_then_suppression` means the weak mode's rate was suppressed;
+   `transfer_then_starvation` additionally requires the response gap to cross zero.
+6. **Geometry-versus-field attribution is ordering-dependent.** Splitting a product
+   difference admits two exact orderings. No dominance claim may be made unless both
+   agree, which `dominance_ordering_invariant` records.
+7. **The Waterbirds "weak coordinate" is an intercept, not an identified feature.**
+   Regressing the margin on `(strong, 1)` makes the second coefficient the average
+   signed margin unexplained by the strong mode. Nothing identifies a bird-shape
+   response, so Waterbirds is a **surrogate** mechanistic probe only.
+8. **`degenerate` is an artifact bucket, not a phase.** It marks runs whose target
    was already met at initialization, before any optimization step.
-6. **`closure_reference` is a numerical approximation.** It is a mean over trained
+9. **`closure_reference` is a numerical approximation.** It is a mean over trained
    finite networks pushed through `integrate_projected_flow`. It is not a solved
    theory and must never be called DMFT.
 
@@ -76,8 +86,10 @@ placeholder document was created.
 | E2 | Exactly one `d_w` sign change per seed; no oscillation | **EMPIRICAL** | same |
 | E3 | The drift-level crossover precedes the outcome-level one by `1.1939` in `τ`, 95% CI `[1.0344, 1.3534]`, strictly positive in every seed | **EMPIRICAL** | `enl_tanh_crossover-20260823-100039`. Now a like-for-like comparison: the drift is measured on the derivative of the same gap whose crossing is compared. The superseded `≈1.06` mixed conventions |
 | E4 | GRU shows transfer throughout: 0/8 crossings under both conventions | **EMPIRICAL** | `enl_tanh_crossover-20260823-100039`. Its equal-time geometry term *grows* (`0.082 → 0.972`) while the field term stays small and slightly negative, so the transfer is geometry-sustained. Caveat: equal-time `d_w` decays to `0.021` and is still falling, so a longer horizon might cross |
-| E14 | tanh late-time suppression is geometry-dominated, but only modestly | **EMPIRICAL** | same. At the crossover the geometry term is still positive (`0.64`) and the field term negative (`−0.24`), so the crossover is field-driven. The geometry term reverses later (`τ ≈ 2.88`) and ends larger in magnitude (`−0.124` vs `−0.080`). **The matched-state convention inflated this**: it showed `−2.78` versus `0.79`, suggesting overwhelming geometry dominance where the equal-time split gives roughly `1.5×` |
-| E15 | Equal-time `d_w` peaks and then decays toward zero (`−0.86` at `τ=4` to `−0.14` at `τ=9.9`) | **EMPIRICAL** | same. The two conditions' weak drifts re-converge late. The matched-state convention showed the opposite, growing monotonically to `−3.57`, so any claim of ever-increasing suppression came from the wrong quantity |
+| E14 | ~~tanh late-time suppression is geometry-dominated~~ | **RETRACTED** | See R9. Not ordering-invariant: only 1/8 seeds agree at the final point, trajectory-wide agreement `0.355`. No geometry-versus-field dominance claim can be made for tanh |
+| E16 | GRU's transfer *is* geometry-sustained, and this one is ordering-invariant | **EMPIRICAL** | `enl_tanh_crossover-20260823-104702`. 8/8 seeds invariant at the final point, trajectory-wide fraction `1.000`. Both exact orderings agree: geometry positive, field negative. Magnitudes differ greatly between orderings (A: `+0.974/−0.953`; B: `+0.049/−0.029`), so only the *sign attribution* transfers, not the size |
+| E17 | Both equal-time orderings reconstruct the drift difference to `2.9e-07` at every logged step | **EMPIRICAL** | same; asserted per row in `tests/test_experiment_smoke.py` and `tests/test_training.py` |
+| E15 | Equal-time `d_w` peaks and then decays toward zero | **EMPIRICAL** | `enl_tanh_crossover-20260823-104702`. The two conditions' weak drifts re-converge late. The matched-state convention grew monotonically instead, so any claim of ever-increasing suppression came from the wrong quantity |
 | E5 | Zero-disorder solver is the correct continuous limit; residual is `O(η)` discretization, fitted slope `1.0115` | **EMPIRICAL** | `e2r_solver_checks-20260823-084911` |
 | E6 | Frozen-geometry solver agrees with `integrate_projected_flow` to `1.91e-15` | **EMPIRICAL** | same |
 | E7 | Under the corrected dense parameterization the AUC gap is monotone increasing in `ρ` at every lag | **EMPIRICAL** | `e1_dense_rerun-20260823-085142` |
@@ -101,6 +113,8 @@ placeholder document was created.
 | R5 | "BOTH-feature E2 RMSE worsens with width, so the closure is incomplete" | **RETRACTED** | True only of `e2_width_extension-20260821-134952` (`19.862 → 25.975`), which is superseded. The corrected run improves (`0.09084 → 0.02958`, non-monotone at N=128). The solver is still needed, for the epistemic reason that a reference calibrated from trained networks cannot falsify the theory |
 | R6 | "CDC beats Bloop and the ablations on the causal weak gap" | **RETRACTED** | It does not; see E11. The defensible claim is narrower: CDC is the unique family member preserving the instantaneous first-order response of a theory-identified feature, and this run does not demonstrate that the property has practical value |
 | R7 | The E-NL `τ*` figures and the "drift leads response" lead time | **RETRACTED, pending rerun** | The logged `d_w` was the matched-state deficit, which recomputes the weak-only field at the both-feature `m_w`. That is **not** `d/dτ[m_w^B − m_w^W]`, so comparing its crossing against the response-gap crossing subtracted two different quantities. Measured discrepancy: `1.741` matched versus `1.611` equal-time, mean over 8 seeds. The qualitative 8/8 crossover and the GRU 0/8 non-crossing survive, because both conventions agree on *whether* a sign change occurs. Fixed by logging `d_w_equal_time` alongside `d_w_matched`, and **rerun**: `enl_tanh_crossover-20260823-100039` supersedes `-074607`. The qualitative 8/8 crossover and GRU 0/8 survive; `τ*`, the lead time, and the geometry-versus-field magnitudes all moved |
+| R9 | "Late tanh suppression is geometry-driven" (E14) | **RETRACTED** | Two defects. First the split was algebraically wrong: it paired ordering A's geometry term with ordering B's field term, reconstructing nothing — mismatch up to `0.753`, e.g. a row with `d_w = 0.011` reported `geometry 0.923`, `field −0.159`, summing to `0.764`. Second, and fatally for the claim, splitting a product difference admits two exact orderings and they **disagree**: at the final point only 1/8 tanh seeds agree on which channel dominates. Both orderings are now computed with per-row reconstruction tests, and a `dominance_ordering_invariant` flag gates any dominance statement. The tanh claim is withdrawn; the GRU one survives as E16 because it *is* invariant |
+| R10 | "A drift crossing necessarily precedes a response crossing" | **RETRACTED as stated** | A `+ → −` derivative crossing establishes a local *maximum* of the response gap, not that the gap later reaches zero. That additionally requires the accumulated negative drift after `τ*` to exceed the gap's value at `τ*`. A run can suppress the weak mode's *rate* without its response ever falling behind. The ordering holds empirically in 8/8 tanh seeds here; it is not a theorem. The phase label now reflects this: a drift crossing alone yields `transfer_then_suppression`, and `transfer_then_starvation` requires the response gap to cross too |
 | R8 | "Waterbirds CDC preserves the instantaneous strong drift" | **RETRACTED as previously implemented** | Two defects, both fixed. The correction wrote gradients only for the head, leaving the backbone at `grad = None` and silently frozen while baselines fine-tuned the whole network. And the optimizer was AdamW with weight decay, whose preconditioned, momentum-carrying, decayed update is not the corrected gradient the guarantee is stated for. The runner now requires SGD with zero decay for *every* arm whenever a CDC arm is present, so the constraint cannot become an optimizer confound |
 
 ---
@@ -116,6 +130,8 @@ placeholder document was created.
 | S5 | MSE training was selectable while every logged projected diagnostic stayed cross-entropy specific | **FIXED** | the paired trainers now refuse `objective: mse` rather than emit mislabelled columns. Objective-aware diagnostics remain unimplemented |
 | S6 | `tau_max` was unvalidated, and a both-condition crossing *after* the horizon produced a finite delay the run never demonstrated | **FIXED** | non-finite or sub-initial horizons rejected; post-horizon crossings censored |
 | S7 | Waterbirds reused one classifier-head initialization across all seeds, so seed variation covered only data order | **FIXED** | the head is re-drawn per seed, preserving within-seed pairing across methods |
+| S8 | The Waterbirds modal arm ran a second forward pass in train mode. `no_grad` suppresses gradients but **not** BatchNorm running-statistic updates, so that arm advanced its normalization state twice per batch while every baseline advanced it once | **FIXED** | features are captured by a forward hook on the pass that already happens; a test compares BatchNorm state against a single-forward baseline at `atol=0` |
+| S9 | `modal_feature_coordinates` and `modal_estimator_agreement` each called randomized `torch.pca_lowrank` independently, so the logged agreement could describe a different component from the one corrected | **FIXED** | `leading_feature_direction` uses a deterministic full SVD and the direction is computed once and shared |
 
 ---
 

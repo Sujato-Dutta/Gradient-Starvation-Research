@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import copy
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -112,21 +114,47 @@ def _build_optimizer(
     )
 
 
-def _penultimate_features(model: torch.nn.Module, images: torch.Tensor) -> torch.Tensor:
-    """Return backbone features feeding the classifier head, detached.
+@contextlib.contextmanager
+def capture_penultimate_features(model: torch.nn.Module) -> Iterator[list[torch.Tensor]]:
+    """Capture the head's input during the ordinary forward pass, via a hook.
 
-    Used only by the group-label-free modal estimator.  Detached because the modal
-    coordinates are a *measurement* of internal structure, not a differentiable part
-    of the objective; letting gradients flow into the PCA would make the estimated
-    mode direction itself trainable, which is a different method.
+    A second forward pass would be wrong here, not merely wasteful.  It runs while
+    ``model.train()`` is active, and ``torch.no_grad`` suppresses gradients but **not**
+    BatchNorm running-statistic updates, so the modal arm would advance its
+    normalization state twice per batch while every baseline advanced it once.  That is
+    a different state-update process, and the comparison would no longer be about the
+    method.
+
+    Using a forward hook on the head takes the features from the forward pass that
+    already happened, so every arm sees exactly one BatchNorm update per batch.
+    Captured tensors are detached: the modal coordinates are a *measurement* of internal
+    structure, and letting gradients reach the PCA would make the estimated direction
+    itself trainable, which is a different method again.
     """
-    head = model.fc
+    captured: list[torch.Tensor] = []
+
+    def hook(_module, inputs, _output):
+        captured.append(inputs[0].detach())
+
+    handle = model.fc.register_forward_hook(hook)
     try:
-        model.fc = torch.nn.Identity()
-        with torch.no_grad():
-            return model(images).detach()
+        yield captured
     finally:
-        model.fc = head
+        handle.remove()
+
+
+def leading_feature_direction(features: torch.Tensor) -> torch.Tensor:
+    """Return the leading principal direction of the centred features.
+
+    Deterministic: uses a full SVD rather than ``torch.pca_lowrank``, which draws a
+    random projection and so returns a slightly different direction on each call.  The
+    correction and its agreement diagnostic must describe the *same* component,
+    otherwise the logged agreement does not characterize the direction actually used.
+    """
+    centred = features - features.mean(dim=0, keepdim=True)
+    # `full_matrices=False` keeps this tractable for wide feature blocks.
+    _, _, vh = torch.linalg.svd(centred, full_matrices=False)
+    return vh[0]
 
 
 def _margin(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
@@ -226,27 +254,33 @@ def oracle_feature_coordinates(
 
 
 def modal_feature_coordinates(
-    features: torch.Tensor, labels: torch.Tensor
+    features: torch.Tensor,
+    labels: torch.Tensor,
+    *,
+    direction: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Strong/weak coordinates estimated from internal structure. **No group labels.**
 
     The dominant internal mode is taken to be the leading principal direction of the
     centred penultimate features, on the hypothesis that the spurious cue is the
     largest source of representational variance.  The strong coordinate is the
-    label-signed projection onto that direction; the weak coordinate is the
-    constant, as in the oracle case.
+    label-signed projection onto that direction.
 
-    This is a *hypothesis*, not a validated estimator.  It has not been run against
-    Waterbirds -- see `docs/waterbirds_setup.md` -- and the leading component may
-    track something other than the background.  Any use must report the estimator's
-    agreement with the true background annotation as a diagnostic, which
-    :func:`modal_estimator_agreement` computes.
+    **The weak coordinate is a constant, and that is a surrogate, not an identified
+    feature.** Regressing the margin on ``(strong, 1)`` makes the second coefficient an
+    *intercept*: the average signed margin not explained by the estimated strong mode.
+    It is not a bird-shape response, and nothing here identifies one. Waterbirds can
+    therefore only be presented as a surrogate mechanistic probe unless that coordinate
+    is independently validated against a known core-feature readout.  The same caveat
+    applies to :func:`oracle_feature_coordinates`.
+
+    Pass ``direction`` to reuse a direction already computed by
+    :func:`leading_feature_direction`, so that the correction and its diagnostic
+    describe the same component.
     """
+    if direction is None:
+        direction = leading_feature_direction(features)
     centred = features - features.mean(dim=0, keepdim=True)
-    # Leading right-singular vector; `torch.pca_lowrank` is cheaper than a full SVD
-    # and sufficient because only the top component is used.
-    _, _, components = torch.pca_lowrank(centred, q=min(8, centred.shape[1]))
-    direction = components[:, 0]
     projection = centred @ direction
     scale = projection.abs().mean().clamp_min(1e-8)
     signed_labels = labels.mul(2).sub(1).float()
@@ -257,7 +291,10 @@ def modal_feature_coordinates(
 
 @torch.no_grad()
 def modal_estimator_agreement(
-    features: torch.Tensor, background: torch.Tensor
+    features: torch.Tensor,
+    background: torch.Tensor,
+    *,
+    direction: torch.Tensor | None = None,
 ) -> float:
     """Absolute correlation between the modal estimator and the true background.
 
@@ -265,10 +302,15 @@ def modal_estimator_agreement(
     measurable rather than assumed.  A low value means the leading component is not
     tracking the spurious cue, and the modal variant's rescue direction is then not
     the causal one.
+
+    Pass the same ``direction`` used by the correction.  Recomputing it here would
+    describe a different component whenever the extraction is randomized, so the logged
+    agreement would not characterize the direction actually applied.
     """
+    if direction is None:
+        direction = leading_feature_direction(features)
     centred = features - features.mean(dim=0, keepdim=True)
-    _, _, components = torch.pca_lowrank(centred, q=min(8, centred.shape[1]))
-    projection = centred @ components[:, 0]
+    projection = centred @ direction
     signed_background = background.mul(2).sub(1).float()
     if projection.std() < 1e-12:
         return float("nan")
@@ -436,10 +478,19 @@ def run_waterbirds(config: dict[str, Any]) -> Path:
                 model.train()
                 loss_sum, count, chi_sum = 0.0, 0, 0.0
                 cdc_records: list[dict[str, float]] = []
+                needs_features = method == "counterfactual_drift_modal"
                 for images, labels, metadata in train_loader:
                     images, labels = images.to(device), labels.to(device)
                     background = metadata[:, background_index].long().to(device)
-                    logits = model(images)
+                    # One forward pass for every arm. The modal method reads the head's
+                    # input from a hook on this pass rather than running a second one,
+                    # which would advance BatchNorm statistics twice for that arm alone.
+                    if needs_features:
+                        with capture_penultimate_features(model) as captured:
+                            logits = model(images)
+                        features = captured[0]
+                    else:
+                        logits = model(images)
                     loss = F.cross_entropy(logits, labels)
                     chi = logits.new_zeros(())
                     if method == "spectral_decoupling":
@@ -458,12 +509,17 @@ def run_waterbirds(config: dict[str, Any]) -> Path:
                         if method == "counterfactual_drift_oracle":
                             coordinates = oracle_feature_coordinates(labels, background)
                         else:
-                            features = _penultimate_features(model, images)
-                            coordinates = modal_feature_coordinates(features, labels)
+                            # One direction, shared by the correction and the
+                            # diagnostic, so the logged agreement characterizes the
+                            # component actually corrected.
+                            direction = leading_feature_direction(features)
+                            coordinates = modal_feature_coordinates(
+                                features, labels, direction=direction
+                            )
                             cdc_records.append(
                                 {
                                     "modal_background_agreement": modal_estimator_agreement(
-                                        features, background
+                                        features, background, direction=direction
                                     )
                                 }
                             )

@@ -1,0 +1,69 @@
+# Waterbirds sensitivity pilot. Run this BEFORE the full study.
+#
+# NOTHING HERE HAS BEEN RUN. See research_scope/waterbirds_setup.md.
+#
+# Why a pilot is now mandatory rather than optional: the CDC arms require plain SGD
+# with zero weight decay, and that requirement binds every arm so the comparison is
+# not confounded by the optimizer. The 1e-4 learning rate in configs/waterbirds.yaml
+# was inherited from an AdamW setup and is almost certainly wrong for SGD on a
+# ResNet -- AdamW's per-parameter scaling makes 1e-4 a very different step size from
+# SGD's. Running the full grid before establishing a usable rate would waste GPU
+# hours and, worse, could produce a "CDC underperforms" result that is really a
+# learning-rate artifact.
+#
+# Sweep these two axes with `--set`, one epoch each, and read the criteria below:
+#
+#   for lr in 0.3 0.1 0.03 0.01 0.003; do
+#     python run_experiment.py waterbirds --config configs/waterbirds_pilot.yaml \
+#       --set training.learning_rate=$lr --set experiment.name=wb_pilot_lr$lr
+#   done
+#
+#   for target in 0.0 0.05 0.2 1.0; do
+#     python run_experiment.py waterbirds --config configs/waterbirds_pilot.yaml \
+#       --set mitigation.weak_drift_target=$target \
+#       --set experiment.name=wb_pilot_target$target
+#   done
+#
+# Acceptance criteria before scaling up:
+#   1. ERM train loss decreases over the epoch. If not, the rate is unusable and no
+#      comparison is meaningful.
+#   2. val_accuracy exceeds chance for every arm.
+#   3. cdc_strong_drift_change stays near zero for the CDC arms. A large value means
+#      the guarantee is not describing the update, which should be impossible under
+#      SGD with zero decay and indicates a wiring fault.
+#   4. modal_background_agreement is reported and plausible. A low value means the
+#      leading component is not tracking the background, so the modal arm's rescue
+#      direction is not the causal one and the arm measures something else.
+#   5. backbone_updated is true for the CDC arms. False means the backbone is frozen
+#      and the comparison is unfair.
+#   6. The weak_drift_target sweep changes cdc_alpha. If alpha is zero throughout,
+#      there is no deficit to correct and CDC is inactive -- the same inactivity seen
+#      before the crossover on synthetic data.
+experiment:
+  name: waterbirds_pilot
+  output_root: results
+  device: auto
+data:
+  root: data
+  download: false
+  batch_size: 64
+  num_workers: 4
+model:
+  architecture: resnet18   # cheaper than resnet50 for a wiring and rate check
+  pretrained: true
+training:
+  epochs: 1
+  learning_rate: 0.01      # a plausible SGD starting point, NOT the AdamW 1e-4
+  optimizer: sgd
+  weight_decay: 0.0
+  reinitialize_head_per_seed: true
+  seeds: [0]
+mitigation:
+  methods:
+    - erm
+    - counterfactual_drift_oracle
+    - counterfactual_drift_modal
+  coefficient: 0.01
+  spectral_coefficient: 0.01
+  mode: proxy
+  weak_drift_target: 0.0

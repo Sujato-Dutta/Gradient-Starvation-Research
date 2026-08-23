@@ -57,7 +57,17 @@ direction is not the causal one, and the modal variant is then measuring somethi
 else. This diagnostic uses group labels, so it is a *diagnostic only* — it must not
 feed back into the method.
 
-## Two honest limitations to state in any write-up
+## Run the sensitivity pilot first
+
+`configs/waterbirds_pilot.yaml` exists because the learning rate in
+`configs/waterbirds.yaml` is now wrong. The CDC arms require plain SGD with zero
+weight decay, and that requirement binds every arm so the comparison is not
+confounded by the optimizer -- but `1e-4` was inherited from the AdamW setup, and
+AdamW's per-parameter scaling makes it a very different step size from SGD's. Running
+the full grid first risks a "CDC underperforms" result that is really a learning-rate
+artifact. The pilot config lists the two sweeps and six acceptance criteria.
+
+## Three honest limitations to state in any write-up
 
 1. **There is no exact weak-only counterfactual on Waterbirds.** On synthetic data
    the target comes from a matched shadow model trained on exactly strong-ablated
@@ -67,7 +77,14 @@ feed back into the method.
    the synthetic guarantee. Result 1 of `cdc_theorem.md` still holds relative to
    whatever target is supplied, because it is a property of the projection; but the
    target itself is no longer the exact counterfactual.
-2. **The correction is applied to the classifier head only.** This matches the
+2. **The "weak coordinate" is an intercept, not an identified feature.** Both variants
+   regress the margin on `(strong, 1)`, so the second coefficient is the average
+   signed margin *unexplained* by the estimated strong mode. It is not a bird-shape
+   response, and nothing in this implementation identifies one. Waterbirds is
+   therefore a **surrogate** mechanistic probe, and stays one until that coordinate is
+   validated against an independent core-feature readout. This applies to the oracle
+   variant too: knowing the background does not identify the bird.
+3. **The correction is applied to the classifier head only.** This matches the
    existing interaction penalty. Extending it to the backbone changes the protected
    geometry and would need its own validation, so it is not done implicitly.
 

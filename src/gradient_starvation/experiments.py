@@ -195,10 +195,18 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
         suppressing it.
 
     ``tau_star_response``
-        First ``+ -> -`` sign change of ``m_w(both) - m_w(weak-only)`` itself.  Since
-        ``tau_star_drift`` is measured on the derivative of exactly this gap, the
-        drift crossing necessarily precedes the response crossing, and the lead time
-        is meaningful.
+        First ``+ -> -`` sign change of ``m_w(both) - m_w(weak-only)`` itself.
+
+        ``tau_star_drift`` is measured on the derivative of exactly this gap, which
+        makes the lead time a like-for-like comparison -- but it does **not** make the
+        ordering a theorem.  A ``+ -> -`` derivative crossing establishes only a local
+        *maximum* of the gap.  For the gap itself to cross zero it must additionally
+        integrate down through zero, i.e. the accumulated negative drift after ``tau*``
+        must exceed the gap's value at ``tau*``.  A run can therefore cross in drift
+        and never cross in response, in which case the strong feature suppressed the
+        weak mode's *rate* without the weak response ever falling behind.  On the tanh
+        regime both crossings occur in 8/8 seeds and the lead is positive throughout,
+        but that is an observation about this run.
 
     ``tau_star_matched_state``
         Sign change of the matched-state deficit from
@@ -281,24 +289,43 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
         "final_d_w_matched": float(d_w_matched[-1]),
         "mean_t_geom": float(both.t_geom.mean()),
         "mean_s_ce": float(both.s_ce.mean()),
-        "mean_equal_time_geometry_difference": float(
-            both.equal_time_geometry_difference.mean()
+        "final_equal_time_geometry_a": float(both.iloc[-1].equal_time_geometry_a),
+        "final_equal_time_field_a": float(both.iloc[-1].equal_time_field_a),
+        "final_equal_time_geometry_b": float(both.iloc[-1].equal_time_geometry_b),
+        "final_equal_time_field_b": float(both.iloc[-1].equal_time_field_b),
+        "max_equal_time_reconstruction_error": float(
+            np.maximum(
+                both.equal_time_reconstruction_error_a.abs(),
+                both.equal_time_reconstruction_error_b.abs(),
+            ).max()
         ),
-        "mean_equal_time_field_difference": float(
-            both.equal_time_field_difference.mean()
+        # True only if BOTH exact orderings agree on which channel dominates at the
+        # end. When false, no ordering-independent dominance claim can be made.
+        "final_dominance_ordering_invariant": bool(
+            both.iloc[-1].equal_time_dominance_ordering_invariant
+        ),
+        "dominance_ordering_invariant_fraction": float(
+            both.equal_time_dominance_ordering_invariant.mean()
         ),
         "final_both_m_s": float(both.iloc[-1].m_s),
         "final_both_m_w": float(both.iloc[-1].m_w),
         "final_weak_m_w": float(weak.iloc[-1].m_w),
         "final_accuracy": float(both.iloc[-1].accuracy),
         "final_gsi5": float(both.iloc[-1].gsi5),
+        # A drift crossing alone establishes suppression of the weak mode's *rate*.
+        # Calling it starvation requires the outcome to follow, so the label is only
+        # promoted when the response gap crosses too.
         "phase": (
-            "transfer_then_starvation"
+            (
+                "transfer_then_starvation"
+                if math.isfinite(tau_star_response)
+                else "transfer_then_suppression"
+            )
             if math.isfinite(tau_star_drift)
             else (
                 "transfer_throughout"
                 if d_w_equal_time[-1] > 0
-                else "starvation_throughout"
+                else "suppression_throughout"
             )
         ),
     }

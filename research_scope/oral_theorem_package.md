@@ -167,15 +167,16 @@ results in this file that no longer hold.
 ### Results in this file that no longer hold
 
 - **The linear CDC numbers above are superseded.** They predate the input-scaling
-  correction. The rerun is `results/e3_cdc_dense_ablation-20260823-090702`.
+  correction. The rerun is `results/e3_cdc_dense_ablation-20260823-090702`. Note also that the five shadow
+  methods are *numerically similar* rather than statistically indistinguishable: 9 of
+  10 direct pairwise tests are significant.
 - **The corrected E1 per-lag magnitudes are superseded.** The rerun under the final
   parameterization peaks at lag 2 rather than decaying monotonically with lag. The
   directional claims survive; the magnitudes do not. See
   `results/e1_dense_rerun-20260823-085142`.
 - **The claim that CDC is the strongest mitigation is withdrawn.** A five-way
   ablation sharing one causal target found all shadow-based methods statistically
-  indistinguishable on the causal weak gap (every paired interval overlapping, all
-  `p = 1.48e-08`). CDC's unique property is exact instantaneous strong-drift
+  indistinguishable on the causal weak gap (every paired interval overlapping, all `p = 1.48e-08` against ERM). CDC's unique property is exact instantaneous strong-drift
   preservation, `4.77e-07` against `1.5e-01`–`3.8e-01`. But `unconstrained_rescue`
   and `pcgrad` finish with a *higher* final strong response than CDC (`1.295` versus
   `1.042`), so the first-order guarantee does not translate into better retention.
@@ -187,17 +188,35 @@ results in this file that no longer hold.
   `t_geom`, `s_ce`, `d_w` and their two geometry channels are logged per step by an
   opt-in lockstep trainer whose equivalence to the sequential path is asserted at
   `rtol=0` on final parameters.
-- On 8 unseen seeds, tanh crosses in 8/8 runs at `τ* = 1.741`, 95% CI
-  `[1.427, 2.056]`, with exactly one sign change per seed. GRU does not cross in any
+- On 8 unseen seeds, tanh crosses in 8/8 runs at `τ* = 1.6112`, 95% CI
+  `[1.3248, 1.8977]`, with exactly one sign change per seed. GRU does not cross in any
   of 8.
-- **The mechanism is more specific than previously stated.** At the crossover
-  `T_geom` is still positive and `S_CE` overtakes it, matching the expected account.
-  But `T_geom` itself later turns negative (`τ ≈ 2.75`, reaching `−2.78`) while
-  `S_CE` saturates near `0.79`, so late suppression is geometry-driven rather than
-  CE-gating-driven. Within `T_geom`, the cross-transport channel supplies most of the
-  early transfer and decays without ever changing sign; the weak self-geometry
-  channel is what reverses.
+- **No mechanism attribution is claimed for tanh.** An earlier version of this note
+  said late suppression was geometry-driven. That rested on the matched-state
+  decomposition, which is not the derivative of the equal-time response gap, and on a
+  split that did not reconstruct. Under the corrected equal-time difference the
+  attribution is **ordering-dependent**: splitting a product difference admits two
+  exact orderings, and at the final point only 1/8 tanh seeds agree on which channel
+  dominates (trajectory-wide agreement `0.355`). The claim is withdrawn; see
+  `claim_ledger.md` R9.
+- **GRU's transfer is geometry-sustained, and that attribution does survive.** Both
+  orderings agree in 8/8 seeds: geometry positive, field negative. Only the sign
+  attribution transfers -- the magnitudes differ greatly between orderings.
+- **The drift-before-response ordering is empirical, not necessary.** A `+ → −`
+  derivative crossing gives a local maximum of the response gap, not a guarantee that
+  the gap reaches zero. It holds in 8/8 tanh seeds here. The phase label reflects the
+  distinction: a drift crossing alone yields `transfer_then_suppression`.
 - The learnability gate is implemented and replayed against a completed run. It
   required a fifth outcome, `degenerate`, for runs whose target was met at
   initialization — 8 of 136 rows in the superseded E1 grid, and 0 of 136 after the
   scaling correction.
+
+### Superseded run identifiers
+
+Quote only these. Earlier E-NL directories used a drift convention that does not
+differentiate the response gap, and a decomposition that did not reconstruct.
+
+- E-NL: `results/enl_tanh_crossover-20260823-104702`
+- E1: `results/e1_dense_rerun-20260823-085142`
+- E-CDC: `results/e3_cdc_dense_ablation-20260823-090702`
+- E2-R: `results/e2r_solver_checks-20260823-084911`

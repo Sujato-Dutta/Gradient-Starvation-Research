@@ -206,9 +206,21 @@ def test_enl_smoke_run_writes_crossover_artifacts(tmp_path):
     weak = trajectories[trajectories["condition"] == "weak_only"]
     assert {
         "d_w_matched", "d_w_equal_time", "t_geom", "s_ce",
-        "t_geom_self", "t_geom_cross",
-        "equal_time_geometry_difference", "equal_time_field_difference",
+        "t_geom_self", "t_geom_cross", "equal_time_cross_transport",
+        "equal_time_geometry_a", "equal_time_field_a",
+        "equal_time_geometry_b", "equal_time_field_b",
     } <= set(both)
+    # Both exact orderings must reconstruct the equal-time difference.
+    for ordering in ("a", "b"):
+        assert (both[f"equal_time_reconstruction_error_{ordering}"].abs() < 2e-6).all()
+        reconstructed = (
+            both[f"equal_time_geometry_{ordering}"] + both[f"equal_time_field_{ordering}"]
+        )
+        np.testing.assert_allclose(
+            reconstructed.to_numpy(), both["d_w_equal_time"].to_numpy(),
+            rtol=2e-5, atol=2e-6,
+        )
+    assert summary["max_equal_time_reconstruction_error"].max() < 2e-6
     assert both[["d_w_matched", "d_w_equal_time", "t_geom", "s_ce"]].notna().all().all()
     assert weak["d_w_matched"].isna().all()
     assert weak["d_w_equal_time"].isna().all()

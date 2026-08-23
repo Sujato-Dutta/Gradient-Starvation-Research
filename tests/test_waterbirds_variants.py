@@ -19,7 +19,8 @@ from gradient_starvation.waterbirds import (
     ORACLE_METHODS,
     WATERBIRDS_METHODS,
     _margin,
-    _penultimate_features,
+    capture_penultimate_features,
+    leading_feature_direction,
     constrained_weak_rescue,
     information_setting,
     modal_estimator_agreement,
@@ -130,25 +131,72 @@ def test_constrained_rescue_is_inactive_without_a_deficit():
     assert record["cdc_alpha"] == 0.0
 
 
-def test_penultimate_features_restore_the_head():
-    """Swapping in Identity must not leave the model mutated."""
-    model = torch.nn.Sequential()
-    model.fc = torch.nn.Linear(6, 2)
-    original = model.fc
+def test_feature_capture_does_not_add_a_second_batchnorm_update():
+    """Regression test: a second forward pass would advance BatchNorm twice.
 
-    class Wrapper(torch.nn.Module):
-        def __init__(self, head):
+    ``no_grad`` suppresses gradients but not running-statistic updates, so an extra
+    forward in train mode would give the modal arm a different normalization
+    trajectory from every baseline. The hook reads the head's input from the forward
+    pass that already happened.
+    """
+    torch.manual_seed(11)
+
+    class BatchNormNet(torch.nn.Module):
+        def __init__(self):
             super().__init__()
-            self.fc = head
+            self.norm = torch.nn.BatchNorm1d(6)
+            self.fc = torch.nn.Linear(6, 2)
 
         def forward(self, x):
-            return self.fc(x)
+            return self.fc(self.norm(x))
 
-    wrapper = Wrapper(original)
-    features = _penultimate_features(wrapper, torch.randn(10, 6))
-    assert features.shape == (10, 6)          # Identity head passes features through
-    assert wrapper.fc is original
-    assert not features.requires_grad
+    net = BatchNormNet()
+    net.train()
+    images = torch.randn(24, 6)
+
+    baseline = BatchNormNet()
+    baseline.load_state_dict(net.state_dict())
+    baseline.train()
+    baseline(images)                       # exactly one update, as a baseline arm does
+
+    with capture_penultimate_features(net) as captured:
+        net(images)
+    assert len(captured) == 1
+    assert captured[0].shape == (24, 6)
+    assert not captured[0].requires_grad
+
+    # The modal arm must have advanced BatchNorm exactly as much as the baseline.
+    torch.testing.assert_close(
+        net.norm.running_mean, baseline.norm.running_mean, rtol=0, atol=0
+    )
+    torch.testing.assert_close(
+        net.norm.num_batches_tracked, baseline.norm.num_batches_tracked, rtol=0, atol=0
+    )
+    # And the hook must be removed afterwards.
+    before = net.norm.running_mean.clone()
+    net(images)
+    assert not torch.equal(before, net.norm.running_mean)
+
+
+def test_leading_direction_is_deterministic_and_shared():
+    """Correction and diagnostic must describe the same component."""
+    torch.manual_seed(12)
+    features = torch.randn(64, 10)
+    first = leading_feature_direction(features)
+    second = leading_feature_direction(features)
+    torch.testing.assert_close(first, second, rtol=0, atol=0)
+
+    labels = torch.randint(0, 2, (64,))
+    background = torch.randint(0, 2, (64,))
+    # Passing the shared direction must reproduce the default exactly.
+    torch.testing.assert_close(
+        modal_feature_coordinates(features, labels),
+        modal_feature_coordinates(features, labels, direction=first),
+        rtol=0, atol=0,
+    )
+    assert modal_estimator_agreement(
+        features, background
+    ) == pytest.approx(modal_estimator_agreement(features, background, direction=first))
 
 
 def test_run_waterbirds_rejects_unknown_methods_before_touching_data(monkeypatch):
