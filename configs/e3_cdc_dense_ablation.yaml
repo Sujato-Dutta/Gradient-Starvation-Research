@@ -1,0 +1,65 @@
+# E-CDC: fair constrained-control evaluation under the final dense parameterization.
+#
+# a.md §11.1 flags results/e3_cdc_validation-20260821-142502 as predating the
+# input-scaling correction, so the linear CDC benchmark is rerun here with
+# dense_linear, the family the finite-width geometry theorem is stated for.
+#
+# The method list is an ABLATION OF THE CONSTRAINT, not of the objective. Every
+# shadow-based method aims at the same causal target -- the instantaneous weak drift
+# of a matched weak-only shadow -- and differs only in what it protects:
+#
+#   counterfactual_drift      project rescue orthogonal to grad(m_s)   <- CDC
+#   loss_gradient_projection  project rescue orthogonal to grad(L)     <- ablation iii
+#   unconstrained_rescue      no projection                            <- ablation ii
+#   bloop                     loss-gradient projection, EMA rescue     <- closest prior work
+#   pcgrad                    symmetric conflict removal               <- secondary baseline
+#
+# INFORMATION SETTING: every shadow-based method above trains a second, weak-only
+# model in lockstep on strong-ablated data using full-batch gradients. That roughly
+# doubles memory and per-step cost and requires the ablated counterfactual to be
+# constructible. ERM, spectral_decoupling and interaction do NOT use it. Any table
+# built from this run must disclose that difference rather than absorb it into a win.
+experiment:
+  name: e3_cdc_dense_ablation
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 20
+  n_samples: 256
+  rho_values: [4]
+  lag_separations: [2]
+  regimes: [positive]
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 0.25
+  phase_delay: 0.25
+  tau_max: 5.0
+  delta_tw_tolerance: 0.25
+model:
+  kinds: [dense_linear]
+  width: 96
+  bulk_gain: 0.5
+training:
+  steps: 500
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 10
+  # Disjoint from every seed already spent: E1 used 4-11, tanh CDC used 6-17,
+  # E-NL used 20-27.
+  seeds: [40, 41, 42, 43, 44, 45, 46, 47]
+  weight_decay: 0.0
+mitigation:
+  methods:
+    - erm
+    - spectral_decoupling
+    - interaction
+    - counterfactual_drift
+    - loss_gradient_projection
+    - unconstrained_rescue
+    - bloop
+    - pcgrad
+  coefficient: 0.01
+  spectral_coefficient: 0.01
+  mode: proxy
+  feasibility_epsilon: 1.0e-12
+  ema_decay: 0.9

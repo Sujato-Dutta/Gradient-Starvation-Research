@@ -9,6 +9,18 @@ from .data.synthetic import SyntheticBatch
 from .models.recurrent import RecurrentBinaryClassifier, synthetic_logits
 from .theory import fixed_geometry_susceptibility, projected_statistics
 
+#: Methods that cannot be expressed as a single-model objective because their target
+#: is the instantaneous weak drift of a matched weak-only shadow.
+SHADOW_REQUIRING_METHODS = frozenset(
+    {
+        "counterfactual_drift",
+        "loss_gradient_projection",
+        "unconstrained_rescue",
+        "bloop",
+        "pcgrad",
+    }
+)
+
 
 def base_objective(
     model: RecurrentBinaryClassifier,
@@ -69,9 +81,10 @@ def training_objective(
             coefficient = float(mitigation.get("coefficient", 0.0))
             regularizer = coefficient * torch.relu(chi).square()
             susceptibility = float(chi.detach())
-    elif method == "counterfactual_drift":
+    elif method in SHADOW_REQUIRING_METHODS:
         raise ValueError(
-            "counterfactual_drift requires paired both/weak-only training; use train_paired."
+            f"{method} requires paired both/weak-only training because it needs the "
+            "matched weak-only shadow drift as its target; use train_paired."
         )
     elif method != "erm":
         raise ValueError(f"Unknown mitigation method: {method}")

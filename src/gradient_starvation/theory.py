@@ -357,6 +357,234 @@ def counterfactual_drift_correction(
     )
 
 
+@dataclass
+class FiniteStepDeviation:
+    """One-step strong-response deviation between a corrected and ERM update."""
+
+    learning_rates: list[float]
+    deviations: list[float]
+    log_log_slope: float
+    instantaneous_strong_drift_change: float
+    correction_norm: float
+
+
+def finite_step_deviation_sweep(
+    model: RecurrentBinaryClassifier,
+    batch: SyntheticBatch,
+    target_weak_drift: torch.Tensor,
+    learning_rates: Iterable[float],
+    *,
+    max_alpha: float | None = None,
+) -> FiniteStepDeviation:
+    """Measure how the one-step strong response diverges between CDC and ERM.
+
+    Result 1 of ``research_scope/cdc_theorem.md`` is exact and proved: the
+    *instantaneous first-order* strong drift is unchanged.  Result 3 is a target:
+    after an actual step of size ``eta`` the strong responses should differ by
+    ``O(eta^2)``, because the first-order terms cancel and the leading survivor is
+    the curvature term.
+
+    This routine measures that scaling.  It takes one gradient computation at the
+    current parameter state, forms both candidate velocities, then evaluates
+    ``m_s`` after stepping along each with several ``eta`` and fits the log-log
+    slope.  A slope near 2 is consistent with the target.
+
+    The measurement is empirical.  It is not the bound Result 3 calls for, which
+    needs an explicit Lipschitz neighbourhood and a bound on the corrected update
+    norm.
+    """
+    parameters = _trainable_parameters(model)
+    correction = counterfactual_drift_correction(
+        model, batch, target_weak_drift, max_alpha=max_alpha
+    )
+    logits = synthetic_logits(model, batch)
+    loss = F.binary_cross_entropy_with_logits(logits, batch.y.float())
+    erm_gradients = _scalar_gradients(loss, parameters, create_graph=False)
+
+    erm_velocity = [-gradient for gradient in erm_gradients]
+    corrected_velocity = [-gradient for gradient in correction.gradients]
+    baseline = [parameter.detach().clone() for parameter in parameters]
+
+    def strong_response_after(velocity: list[torch.Tensor], step: float) -> float:
+        with torch.no_grad():
+            for parameter, start, direction in zip(parameters, baseline, velocity):
+                parameter.copy_(start + step * direction)
+            value = float(differentiable_mode_responses(model, batch)[0].detach())
+            for parameter, start in zip(parameters, baseline):
+                parameter.copy_(start)
+        return value
+
+    rates: list[float] = []
+    deviations: list[float] = []
+    for rate in learning_rates:
+        corrected = strong_response_after(corrected_velocity, float(rate))
+        erm = strong_response_after(erm_velocity, float(rate))
+        rates.append(float(rate))
+        deviations.append(abs(corrected - erm))
+
+    usable = [
+        (rate, deviation)
+        for rate, deviation in zip(rates, deviations)
+        if deviation > 0 and np.isfinite(deviation)
+    ]
+    slope = float("nan")
+    if len(usable) >= 2:
+        slope = float(
+            np.polyfit(
+                np.log([rate for rate, _ in usable]),
+                np.log([deviation for _, deviation in usable]),
+                deg=1,
+            )[0]
+        )
+    return FiniteStepDeviation(
+        learning_rates=rates,
+        deviations=deviations,
+        log_log_slope=slope,
+        instantaneous_strong_drift_change=float(
+            (correction.strong_drift_after - correction.strong_drift_before).detach()
+        ),
+        correction_norm=float(correction.correction_norm.detach()),
+    )
+
+
+#: Correction families sharing one weak-drift target, differing only in what they
+#: protect.  This is the ablation set that tests whether CDC's distinctness comes
+#: from constraining a theory-defined feature response rather than from generic
+#: gradient projection.
+CORRECTION_CONSTRAINTS = (
+    "strong_response",       # CDC: project orthogonal to grad(m_s)
+    "loss_gradient",         # ablation iii: project orthogonal to grad(L_train)
+    "unconstrained",         # ablation ii: same rescue direction, no projection
+    "bloop",                 # loss-gradient projection with an EMA-smoothed rescue
+    "pcgrad",                # symmetric conflict removal between the two directions
+)
+
+
+def drift_correction(
+    model: RecurrentBinaryClassifier,
+    batch: SyntheticBatch,
+    target_weak_drift: torch.Tensor,
+    *,
+    constraint: str = "strong_response",
+    feasibility_epsilon: float = 1e-12,
+    max_alpha: float | None = None,
+    rescue_state: list[torch.Tensor] | None = None,
+    ema_decay: float = 0.9,
+) -> CounterfactualDriftCorrection:
+    """Apply a weak-drift rescue under one of several protection rules.
+
+    All families share the same causal target -- the instantaneous weak drift of a
+    matched weak-only shadow model -- so the comparison isolates *what is
+    protected*, not *what is aimed at*.
+
+    ``strong_response`` (CDC)
+        Rescue along the component of ``grad(m_w)`` orthogonal to ``grad(m_s)``.
+        Preserves the instantaneous strong-response drift exactly.
+    ``loss_gradient``
+        The same rescue projected orthogonal to ``grad(L_train)`` instead.  This is
+        the object generic gradient surgery protects, and is the ablation that tests
+        whether constraining the feature response specifically matters.
+    ``unconstrained``
+        Rescue along ``grad(m_w)`` with no projection at all.
+    ``bloop``
+        Loss-gradient projection applied to an exponentially smoothed rescue
+        direction, following the EMA idea of Bloop.  Requires ``rescue_state``,
+        which the caller carries across steps.
+    ``pcgrad``
+        Symmetric conflict removal: if the ERM velocity and the rescue direction
+        conflict, each has the other's conflicting component removed.
+
+    Only ``strong_response`` carries the proved Result 1 guarantee.  The others are
+    expected to perturb the strong drift, and the returned
+    ``strong_drift_after - strong_drift_before`` records by how much.
+    """
+    if constraint not in CORRECTION_CONSTRAINTS:
+        raise ValueError(
+            f"Unknown constraint {constraint!r}; expected one of {CORRECTION_CONSTRAINTS}."
+        )
+    parameters = _trainable_parameters(model)
+    logits = synthetic_logits(model, batch)
+    loss = F.binary_cross_entropy_with_logits(logits, batch.y.float())
+    mode = differentiable_mode_responses(model, batch)
+    loss_gradients = _scalar_gradients(loss, parameters, create_graph=False)
+    strong_gradient = _scalar_gradients(mode[0], parameters, create_graph=False)
+    weak_gradient = _scalar_gradients(mode[1], parameters, create_graph=False)
+
+    def inner(left: list[torch.Tensor], right: list[torch.Tensor]) -> torch.Tensor:
+        return sum((a * b).sum() for a, b in zip(left, right))
+
+    def project_out(
+        vector: list[torch.Tensor], direction: list[torch.Tensor]
+    ) -> list[torch.Tensor]:
+        norm_sq = inner(direction, direction)
+        scale = torch.where(
+            norm_sq > feasibility_epsilon,
+            inner(vector, direction) / norm_sq.clamp_min(feasibility_epsilon),
+            norm_sq.new_zeros(()),
+        )
+        return [v - scale * d for v, d in zip(vector, direction)]
+
+    erm_velocity = [-gradient for gradient in loss_gradients]
+    rescue = weak_gradient
+    if constraint == "bloop":
+        if rescue_state is None:
+            rescue_state = [torch.zeros_like(g) for g in weak_gradient]
+        for index, gradient in enumerate(weak_gradient):
+            rescue_state[index].mul_(ema_decay).add_(gradient, alpha=1.0 - ema_decay)
+        rescue = [state.clone() for state in rescue_state]
+
+    if constraint == "strong_response":
+        protected = project_out(rescue, strong_gradient)
+    elif constraint in {"loss_gradient", "bloop"}:
+        protected = project_out(rescue, loss_gradients)
+    elif constraint == "unconstrained":
+        protected = [direction.clone() for direction in rescue]
+    else:  # pcgrad
+        conflict = inner(rescue, erm_velocity)
+        protected = (
+            project_out(rescue, erm_velocity)
+            if bool(conflict.detach() < 0)
+            else [direction.clone() for direction in rescue]
+        )
+
+    protected_norm_sq = inner(protected, protected)
+    weak_before = inner(weak_gradient, erm_velocity)
+    strong_before = inner(strong_gradient, erm_velocity)
+    target = target_weak_drift.detach().to(weak_before)
+    deficit = torch.relu(target - weak_before)
+    # The achievable weak-drift gain per unit alpha is grad(m_w) . protected, which
+    # equals ||protected||^2 only in the CDC case; solving with the correct
+    # denominator is what lets every family actually reach the shared target.
+    gain = inner(weak_gradient, protected)
+    feasible = bool(gain.detach() > feasibility_epsilon or deficit.detach() <= 0)
+    alpha = torch.where(
+        gain > feasibility_epsilon,
+        deficit / gain.clamp_min(feasibility_epsilon),
+        gain.new_zeros(()),
+    )
+    if max_alpha is not None:
+        alpha = alpha.clamp(max=float(max_alpha))
+
+    corrected_gradients = [
+        gradient - alpha * direction
+        for gradient, direction in zip(loss_gradients, protected)
+    ]
+    corrected_velocity = [-gradient for gradient in corrected_gradients]
+    return CounterfactualDriftCorrection(
+        gradients=corrected_gradients,
+        weak_drift_before=weak_before,
+        weak_drift_after=inner(weak_gradient, corrected_velocity),
+        strong_drift_before=strong_before,
+        strong_drift_after=inner(strong_gradient, corrected_velocity),
+        target_weak_drift=target,
+        deficit=deficit,
+        alpha=alpha,
+        protected_norm_sq=protected_norm_sq,
+        correction_norm=alpha.abs() * protected_norm_sq.sqrt(),
+        feasible=feasible,
+    )
+
+
 def exact_dense_linear_geometry(model: DenseLinearRNN, spec: SyntheticTaskSpec) -> torch.Tensor:
     """Evaluate the finite-width analytic Gram matrix for channel-localized modes."""
     W, B, c = model.recurrent, model.input, model.readout

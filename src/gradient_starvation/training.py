@@ -14,12 +14,23 @@ from .metrics import gsi5
 from .models.recurrent import RecurrentBinaryClassifier, build_model, synthetic_logits
 from .theory import (
     ProjectedStatistics,
-    counterfactual_drift_correction,
     crossover_decomposition,
+    drift_correction,
     fixed_geometry_susceptibility,
     projected_statistics,
 )
 from .utils import seed_everything
+
+#: Mitigation methods that require a matched weak-only shadow model, mapped to the
+#: protection rule they apply.  All share the same causal target, so a comparison
+#: across them isolates what is protected rather than what is aimed at.
+_SHADOW_METHODS = {
+    "counterfactual_drift": "strong_response",
+    "loss_gradient_projection": "loss_gradient",
+    "unconstrained_rescue": "unconstrained",
+    "bloop": "bloop",
+    "pcgrad": "pcgrad",
+}
 
 
 def _snapshot_state(model: torch.nn.Module) -> dict[str, torch.Tensor]:
@@ -172,7 +183,7 @@ def train_paired(
     kind: str | None = None,
     identity_steps: int = 0,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, torch.Tensor]]]:
-    if str(mitigation.get("method", "erm")) == "counterfactual_drift":
+    if str(mitigation.get("method", "erm")) in _SHADOW_METHODS:
         return _train_paired_counterfactual_drift(
             model_config,
             both,
@@ -343,6 +354,8 @@ def _train_paired_counterfactual_drift(
     the both-feature strong drift.  Weight decay and gradient clipping are
     rejected because they would invalidate that guarantee after correction.
     """
+    method = str(mitigation.get("method", "counterfactual_drift"))
+    constraint = _SHADOW_METHODS[method]
     if not bool(training.get("full_batch", True)):
         raise NotImplementedError("Counterfactual drift correction requires full_batch: true.")
     if float(training.get("weight_decay", 0.0)) != 0.0:
@@ -363,6 +376,12 @@ def _train_paired_counterfactual_drift(
     weak_optimizer = torch.optim.SGD(weak_model.parameters(), learning_rate)
     history: list[dict[str, Any]] = []
     started = time.perf_counter()
+    # Only the Bloop family carries state across steps; the others are memoryless.
+    rescue_state: list[torch.Tensor] | None = (
+        [torch.zeros_like(parameter) for parameter in both_model.parameters()]
+        if constraint == "bloop"
+        else None
+    )
 
     for step in range(steps + 1):
         weak_stats = projected_statistics(
@@ -370,16 +389,19 @@ def _train_paired_counterfactual_drift(
         )
         if weak_stats.direct_drift is None:  # pragma: no cover - defensive
             raise RuntimeError("Weak-only target drift was not computed.")
-        correction = counterfactual_drift_correction(
+        correction = drift_correction(
             both_model,
             both,
             weak_stats.direct_drift[1],
+            constraint=constraint,
             feasibility_epsilon=float(mitigation.get("feasibility_epsilon", 1e-12)),
             max_alpha=(
                 None
                 if mitigation.get("max_alpha") is None
                 else float(mitigation["max_alpha"])
             ),
+            rescue_state=rescue_state,
+            ema_decay=float(mitigation.get("ema_decay", 0.9)),
         )
 
         should_log = step % log_every == 0 or step == steps
