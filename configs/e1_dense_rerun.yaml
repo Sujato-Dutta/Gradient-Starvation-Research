@@ -1,0 +1,50 @@
+# E1 rerun under the final width-scaled dense parameterization.
+#
+# a.md §10 flags results/e1_corrected_validation-20260821-144112 as predating the
+# input-scaling correction. That run used `low_rank_linear`; the finite-width
+# geometry theorem is stated for the dense family, so this rerun uses
+# `dense_linear`, matching the corrected E2 choice.
+#
+# Two things therefore change relative to the completed run: the input scaling
+# (1/sqrt(input_size) -> 1/sqrt(width), which affects both linear families) and the
+# model family. To keep the difference attributable, the same grid is also run with
+# `--set model.kind=low_rank_linear`, which isolates the scaling fix alone.
+#
+# Grid, seeds and thresholds are otherwise identical to the completed run so the
+# comparison is like-for-like.
+experiment:
+  name: e1_dense_rerun
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 20
+  n_samples: 256
+  rho_values: [1, 2, 4, 8]
+  lag_separations: [0, 2, 4, 8]
+  regimes: [positive, negative]
+  negative_control_points:
+    - {rho: 4, lag_separation: 4}
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 0.25
+  phase_delay: 0.25
+  # Stated explicitly rather than inferred, so the learnability gate is reproducible.
+  tau_max: 5.0                 # 500 steps at lr 0.01
+  delta_tw_tolerance: 0.25
+  theory_boundary_file: null   # analytic boundary is blocked; see Phase 4
+model:
+  kind: dense_linear
+  width: 96
+  bulk_gain: 0.5
+training:
+  steps: 500
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 10
+  seeds: [4, 5, 6, 7, 8, 9, 10, 11]
+  weight_decay: 0.0
+  paired_mode: sequential      # E-NL is the only lockstep consumer
+mitigation:
+  method: erm
+  coefficient: 0.0
+  mode: proxy

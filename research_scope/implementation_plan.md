@@ -423,10 +423,61 @@ When unblocked, the work is:
 3. `configs/e1_heldout_boundary.yaml` — a *small* set of unrun points below / near
    / above the boundary, unseen seeds (e.g. 200–207). Not another broad grid.
 
-**The one Phase-4-adjacent item in scope now:** rerun the corrected E1 grid under
-the final width-scaled dense parameterization, since `a.md` §10 flags the existing
-grid as predating that fix. New timestamped directory. Report whether the
-conclusions hold.
+#### E1 rerun under the final parameterization: done, and it matters
+
+`configs/e1_dense_rerun.yaml`, identical grid / seeds / thresholds to the
+superseded run. Because the rerun changes two things at once — the input scaling
+and the model family — the same grid was also run with
+`--set model.kind=low_rank_linear` to isolate the scaling fix.
+
+| | original (`low_rank`, old scaling) | rescaled `low_rank` | **rescaled `dense` (final)** |
+|---|---|---|---|
+| run | `e1_corrected_validation-20260821-144112` | `e1_lowrank_rescaled-20260823-085409` | `e1_dense_rerun-20260823-085142` |
+| AUC gap by lag 0/2/4 | 19.20 / 8.96 / 1.49 | 6.11 / 1.02 / 0.055 | 5.76 / 8.93 / 6.11 |
+| AUC gap > 0, lag 0/2/4 | 32/32 each | 32/32, 32/32, 31/32 | 32/32 each |
+| negative control | −0.750 | −0.032 | **−4.038** |
+| min final accuracy | 1.000 | **0.492** | 1.000 |
+| `degenerate` rows | 8 / 136 | — | **0 / 136** |
+| lag 8 | unlearnable | unlearnable | unlearnable |
+
+**What holds.** The directional claims survive: a positive AUC gap for every seed
+at lag 0/2/4, a negative control that comes out `transfer`, and lag 8 `unlearnable`
+across all `ρ`.
+
+**What does not.** The lag-magnitude ordering. The superseded run decays
+monotonically with lag (19.2 → 8.96 → 1.49); the dense run peaks at lag 2
+(5.76 → 8.93 → 6.11). The original's per-lag magnitudes must not be carried into
+the paper.
+
+**Three ways the corrected run is better, not merely different.**
+
+1. **The initialization artifact is gone.** 0 of 136 rows are `degenerate`, against
+   8 of 136 before. Width-scaled input weights give a smaller initial `|m_w|`, so it
+   no longer trips `β = 0.25` before training starts. Finding §0.4/`degenerate`
+   remains necessary as a guard, but no longer fires on this grid.
+2. **The negative control is far stronger**: −4.038 versus −0.750, at 8/8
+   `transfer`.
+3. **The phase structure is monotone in `ρ` at every lag** (lag 0: 2.68 → 5.26 →
+   7.13 → 7.97; lag 2: 6.13 → 9.14 → 10.08 → 10.37; lag 4: 5.72 → 6.15 → 6.26 →
+   6.30). The superseded run was non-monotone at lag 4. A `ρ_c` boundary needs
+   monotonicity in `ρ`, so this materially improves the Phase 4 starting point.
+
+The regime map is also cleaner: lag 4 is 8/8 `starvation` at every `ρ`; lag 2 is
+`neutral` at `ρ = 1` then 8/8 `starvation` for `ρ ≥ 2`; lag 0 is `neutral` at
+`ρ ≤ 2` then `starvation` at `ρ ≥ 4`. That is a monotone boundary in `ρ`.
+
+**The rescaled `low_rank` arm is reported but not used.** Its accuracy collapses to
+0.492 — chance — on all 8 negative-control seeds, so that family cannot fit the
+anti-correlated control under the corrected scaling. Its positive-grid AUC gaps also
+collapse by roughly an order of magnitude. This confirms the scaling fix alone is
+responsible for most of the magnitude change, and independently supports using
+`dense_linear`, which is the family the finite-width geometry theorem is stated for.
+
+**Consequence for Finding §Phase 2/2.** The claim that `ΔT_w` and the AUC gap rank
+the lag axis in *opposite* directions was measured on the superseded run. Under the
+final parameterization the two orderings differ but no longer oppose, and both now
+rise monotonically with `ρ`. The requirement that a boundary state its metric
+stands; the specific opposition claim does not transfer.
 
 ---
 
