@@ -261,3 +261,61 @@ def plot_e1_regions(summary: pd.DataFrame, run_dir: Path, boundary=None) -> None
         ha="center", fontsize=8, wrap=True,
     )
     _save_all(fig, run_dir / "e1_causal_regions")
+
+
+def plot_e2r(checks: pd.DataFrame, run_dir: Path) -> None:
+    """Report the two implementable solver checks, and label the blocked ones.
+
+    The right-hand panel is intentionally a text panel rather than an empty axis:
+    a blank plot reads as missing data, whereas the blocked checks are a deliberate
+    and documented state.
+    """
+    if checks.empty:
+        return
+    check_a = checks[checks["check"] == "check_a_zero_disorder"]
+    fig, axes = plt.subplots(1, 2, figsize=(12.0, 4.4), constrained_layout=True)
+
+    if not check_a.empty:
+        for rate, group in check_a.groupby("learning_rate"):
+            ordered = group.sort_values("width")
+            axes[0].plot(
+                ordered.width, ordered.wide_limit_relative_error, "o-",
+                label=rf"wide-limit init, $\eta$={rate:g}",
+            )
+        for rate, group in check_a.groupby("learning_rate"):
+            ordered = group.sort_values("width")
+            axes[0].plot(
+                ordered.width, ordered.exact_seeded_relative_error, "s--",
+                label=rf"exact init, $\eta$={rate:g}",
+            )
+        axes[0].set_xscale("log", base=2)
+        axes[0].set_yscale("log")
+        axes[0].set(
+            xlabel="Width", ylabel="Max relative mode error",
+            title="Check A: zero disorder\nsolid = initial-condition concentration, "
+                  "dashed = O($\\eta$) discretization",
+        )
+        axes[0].legend(fontsize=7)
+
+    axes[1].axis("off")
+    axes[1].text(
+        0.02, 0.98,
+        "Blocked checks\n"
+        "\n"
+        "B  weak-only reduction      obligations 1, 2\n"
+        "D  MSE solver branch        obligations 1, 2\n"
+        "E  internal convergence     obligations 2, 3\n"
+        "F  finite-width vs frozen   obligations 1-4\n"
+        "\n"
+        'Source: research_scope/e2_theorem.md\n'
+        '        § "Proof obligations"\n'
+        "\n"
+        "e2r_acceptance.json reports passed = false.\n"
+        "No run in this phase may be described as\n"
+        "DMFT validation: there is no independent\n"
+        "solver to freeze a prediction from.",
+        transform=axes[1].transAxes, va="top", ha="left",
+        family="monospace", fontsize=9,
+        bbox={"boxstyle": "round", "facecolor": "#f0f0f0", "edgecolor": "#999999"},
+    )
+    _save_all(fig, run_dir / "e2r_solver_checks")

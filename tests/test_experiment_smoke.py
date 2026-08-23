@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from gradient_starvation.config import load_config
-from gradient_starvation.experiments import run_e1, run_e2, run_e3, run_enl
+from gradient_starvation.experiments import run_e1, run_e2, run_e2r, run_e3, run_enl
 from gradient_starvation.metrics import CAUSAL_REGIMES
 from gradient_starvation.plotting import _e1_plot_tables
 
@@ -105,7 +105,12 @@ def test_e2_smoke_run_writes_geometry_and_agreement_outputs(tmp_path):
     geometry = json.loads((run_dir / "finite_n_geometry_check.json").read_text())
     summary = pd.read_csv(run_dir / "summary.csv")
     assert float(geometry["relative_error"]) < 1e-4
-    assert {"network", "particle_closure"} <= set(pd.read_csv(run_dir / "trajectories.csv")["source"])
+    sources = set(pd.read_csv(run_dir / "trajectories.csv")["source"])
+    # The reference is a mean over trained finite networks, so it must not be
+    # labelled as a solved theory.
+    assert {"network", "closure_reference"} <= sources
+    assert "particle_closure" not in sources
+    assert not any("dmft" in source.lower() for source in sources)
     assert np.isfinite(summary["trajectory_rmse"]).all()
     assert np.isfinite(summary["trajectory_nrmse"]).all()
     assert np.isfinite(summary["geometry_nrmse"]).all()
@@ -218,3 +223,54 @@ def test_enl_tau_star_identity_check_is_documented_as_degenerate(tmp_path):
     summary = pd.read_csv(run_dir / "summary.csv")
     gaps = summary["abs_tau_star_error"].to_numpy(dtype=float)
     assert np.all((gaps == 0.0) | np.isnan(gaps) | (gaps < 1e-9))
+
+
+def test_e2r_acceptance_record_cannot_pass_and_names_its_blocks(tmp_path):
+    """The correct output for this phase is an acceptance record that refuses."""
+    config = _smoke_config("e2r_solver_checks.yaml", tmp_path)
+    config["model"]["widths"] = [16, 32]
+    config["task"]["learning_rates"] = [0.04, 0.02]
+    config["task"]["n_samples"] = 256
+    config["task"]["tau_max"] = 0.4
+    config["task"]["frozen_geometries"] = [[[1.0, 0.0], [0.0, 1.0]]]
+    run_dir = run_e2r(config)
+
+    assert (run_dir / "config.resolved.yaml").is_file()
+    assert (run_dir / "environment.json").is_file()
+    assert (run_dir / "checks.csv").is_file()
+    assert (run_dir / "blocked_checks.txt").is_file()
+    _assert_figure_pair(run_dir, "e2r_solver_checks")
+
+    payload = json.loads((run_dir / "e2r_acceptance.json").read_text())
+    assert payload["passed"] is False
+    assert "passed_reason" in payload
+    for blocked in (
+        "check_b_weak_only_reduction", "check_d_mse_solver",
+        "check_e_internal_convergence", "check_f_finite_width_against_frozen_prediction",
+    ):
+        assert payload[blocked] == "blocked", blocked
+        assert payload["blocked_on"][blocked]["obligations"]
+        assert "e2_theorem.md" in payload["blocked_on"][blocked]["source"]
+
+    # The implemented checks must carry real numbers, not the blocked sentinel.
+    assert payload["check_a_zero_disorder"]["implemented"] is True
+    assert payload["check_a_zero_disorder"]["recurrent_block_inert_everywhere"] is True
+    assert np.isfinite(payload["check_a_zero_disorder"]["max_exact_seeded_relative_error"])
+    assert payload["check_c_frozen_geometry"]["geometry_held_constant"] is True
+    assert payload["check_c_frozen_geometry"]["max_relative_error"] < 1e-2
+
+
+def test_e2r_outputs_never_use_the_phrase_dmft_validation(tmp_path):
+    """Guard the vocabulary, not just the numbers."""
+    config = _smoke_config("e2r_solver_checks.yaml", tmp_path)
+    config["model"]["widths"] = [16]
+    config["task"]["learning_rates"] = [0.04, 0.02]
+    config["task"]["n_samples"] = 128
+    config["task"]["tau_max"] = 0.2
+    config["task"]["frozen_geometries"] = [[[1.0, 0.0], [0.0, 1.0]]]
+    run_dir = run_e2r(config)
+
+    for artifact in ("e2r_acceptance.json", "blocked_checks.txt", "checks.csv"):
+        text = (run_dir / artifact).read_text().lower()
+        assert "dmft validation" not in text, artifact
+        assert "validated dmft" not in text, artifact

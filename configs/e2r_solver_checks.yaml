@@ -1,0 +1,35 @@
+# E2-R: the two solver checks that are implementable without the joint
+# cross-entropy recurrent mean-field derivation.
+#
+# Check A (zero disorder) and check C (frozen geometry) validate against machinery
+# already exact in this repository: theory.exact_dense_linear_geometry with autograd,
+# and theory.integrate_projected_flow with a constant metric.
+#
+# Checks B, D-solver, E and F are BLOCKED. They are recorded in e2r_acceptance.json
+# with the literal string "blocked" and the obligation numbers they wait on, and the
+# record's top-level `passed` is false by construction. That is the correct output:
+# there is no independent solver yet, so nothing here is DMFT validation.
+#
+# No `e2r_finite_width.yaml` companion exists, because check F is blocked.
+experiment:
+  name: e2r_solver_checks
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 5
+  n_samples: 2048
+  rho: 2.0
+  cue_noise: 0.0
+  lag_separation: 0        # check A is exact only where the recurrent block is inert
+  tau_max: 2.0
+  seed: 0
+  learning_rates: [0.04, 0.02, 0.01]
+  quadrature_size: 61
+  frozen_geometries:
+    - [[1.0, 0.0], [0.0, 1.0]]
+    - [[1.8, 0.2], [0.2, 1.1]]
+    - [[2.5, -0.4], [-0.4, 0.9]]
+model:
+  kind: dense_linear
+  widths: [32, 64, 128, 256]
+  bulk_gain: 0.0           # zero disorder is the whole point of check A

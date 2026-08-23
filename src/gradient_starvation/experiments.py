@@ -11,6 +11,8 @@ import pandas as pd
 import torch
 
 from .data.synthetic import SyntheticTaskSpec, make_paired_task
+from .dmft import DMFTSpec, cue_quadrature, solve_frozen_geometry, solve_zero_disorder
+from .losses import training_objective
 from .metrics import (
     causal_metrics,
     classify_causal_regime,
@@ -18,11 +20,11 @@ from .metrics import (
     n_sign_changes,
     sign_crossing_time,
 )
-from .plotting import plot_e1, plot_e1_regions, plot_e2, plot_e3, plot_enl
+from .plotting import plot_e1, plot_e1_regions, plot_e2, plot_e2r, plot_e3, plot_enl
 from .models.recurrent import DenseLinearRNN
 from .theory import exact_dense_linear_geometry, gradient_gram, integrate_projected_flow
 from .training import train_paired
-from .utils import create_run_directory, resolve_device
+from .utils import create_run_directory, resolve_device, seed_everything
 
 
 def _task_spec(task: Mapping[str, Any], rho: float, lag: int, regime: str) -> SyntheticTaskSpec:
@@ -537,7 +539,12 @@ def run_e2(config: dict[str, Any]) -> Path:
                 )
                 theory = mean.copy()
                 theory["m_s"], theory["m_w"] = modes[:, 0], modes[:, 1]
-                theory["condition"], theory["source"] = condition, "particle_closure"
+                # Named `closure_reference`, not `particle_closure` and not
+                # anything containing "dmft": this is a mean over trained finite
+                # networks fed through integrate_projected_flow. It is a numerical
+                # approximation used as a reference, not a solved theory. Existing
+                # run directories keep their original label and are not rewritten.
+                theory["condition"], theory["source"] = condition, "closure_reference"
                 theory["width"], theory["seed"] = int(closure_config.get("width", 256)), -1
                 theory["rho"], theory["lag_separation"], theory["regime"] = rho, lag, regime
                 theory_by_condition[condition] = theory
@@ -632,6 +639,241 @@ def run_e2(config: dict[str, Any]) -> Path:
     convergence = _write_e2_convergence(summary, run_dir)
     _write_e2_acceptance(run_dir, summary, convergence, closure_seeds, evaluation_seeds)
     plot_e2(trajectories, summary[summary.condition == "both"], run_dir)
+    return run_dir
+
+
+_E2R_BLOCKED_CHECKS = {
+    "check_b_weak_only_reduction": [1, 2],
+    "check_d_mse_solver": [1, 2],
+    "check_e_internal_convergence": [2, 3],
+    "check_f_finite_width_against_frozen_prediction": [1, 2, 3, 4],
+}
+
+
+def _e2r_check_a(task: Mapping[str, Any], model: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Compare the zero-disorder solver against finite networks at several widths.
+
+    Two errors are reported per width and learning rate.
+
+    ``exact_seeded_relative_error``
+        Solver seeded from the network's own initial inner products.  The reduction
+        is exact at every width, so the only residual is the O(eta) gap between
+        gradient flow and discrete SGD.  It should track the learning rate and be
+        essentially width-independent.
+
+    ``wide_limit_relative_error``
+        Solver seeded from the wide-limit initial conditions (unit input Gram, unit
+        readout norm, zero modes).  This one *should* shrink with width, because it
+        measures concentration of the initial inner products.
+    """
+    sequence_length = int(task.get("sequence_length", 5))
+    spec_kwargs = dict(
+        sequence_length=sequence_length, bulk_gain=0.0, lag_separation=0,
+        rho=float(task.get("rho", 2.0)), cue_noise=float(task.get("cue_noise", 0.0)),
+    )
+    rows: list[dict[str, Any]] = []
+    for width in model.get("widths", [32, 64, 128, 256]):
+        for learning_rate in task.get("learning_rates", [0.04, 0.02, 0.01]):
+            tau_max = float(task.get("tau_max", 2.0))
+            steps = int(round(tau_max / learning_rate))
+            data_spec = SyntheticTaskSpec(
+                sequence_length=sequence_length,
+                n_samples=int(task.get("n_samples", 2048)),
+                rho=float(task.get("rho", 2.0)), lag_separation=0,
+                cue_noise=float(task.get("cue_noise", 0.0)), background_noise=0.0,
+            )
+            both, _ = make_paired_task(data_spec, int(task.get("seed", 0)))
+            seed_everything(int(task.get("seed", 0)))
+            network = DenseLinearRNN(width=int(width), bulk_gain=0.0)
+            with torch.no_grad():
+                b_s = network.input[:, 0].clone()
+                b_w = network.input[:, 1].clone()
+                c = network.readout.clone()
+            shared = dict(tau_max=tau_max, dtau=min(learning_rate / 50, 1e-3), **spec_kwargs)
+            exact = solve_zero_disorder(
+                DMFTSpec(
+                    **shared,
+                    initial_mode=(float(c @ b_s), float(c @ b_w)),
+                    initial_input_gram=(
+                        (float(b_s @ b_s), float(b_s @ b_w)),
+                        (float(b_s @ b_w), float(b_w @ b_w)),
+                    ),
+                    initial_readout_norm_sq=float(c @ c),
+                )
+            )
+            wide = solve_zero_disorder(DMFTSpec(**shared))
+
+            optimizer = torch.optim.SGD(network.parameters(), lr=learning_rate)
+            observed = []
+            for _ in range(steps + 1):
+                observed.append(network.mode_responses(data_spec).detach().numpy().copy())
+                optimizer.zero_grad(set_to_none=True)
+                loss, _ = training_objective(network, both, {"method": "erm"})
+                loss.backward()
+                optimizer.step()
+            observed = np.asarray(observed)
+            grid = np.arange(steps + 1) * learning_rate
+            scale = max(float(np.abs(observed).max()), 1e-8)
+
+            def relative(solution) -> float:
+                predicted = np.stack(
+                    [np.interp(grid, solution.tau, solution.m_s),
+                     np.interp(grid, solution.tau, solution.m_w)], axis=1
+                )
+                return float(np.abs(observed - predicted).max() / scale)
+
+            rows.append({
+                "check": "check_a_zero_disorder",
+                "width": int(width),
+                "learning_rate": float(learning_rate),
+                "recurrent_block_inert": float(network.recurrent.detach().abs().max()) == 0.0,
+                "exact_seeded_relative_error": relative(exact),
+                "wide_limit_relative_error": relative(wide),
+            })
+    return rows
+
+
+def _e2r_check_c(task: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Compare the frozen-geometry solver against ``integrate_projected_flow``."""
+    rows: list[dict[str, Any]] = []
+    for geometry in task.get(
+        "frozen_geometries", [[[1.0, 0.0], [0.0, 1.0]], [[1.8, 0.2], [0.2, 1.1]]]
+    ):
+        matrix = np.asarray(geometry, dtype=float)
+        spec = DMFTSpec(
+            frozen_geometry=((matrix[0, 0], matrix[0, 1]), (matrix[1, 0], matrix[1, 1])),
+            rho=float(task.get("rho", 2.0)), cue_noise=float(task.get("cue_noise", 0.0)),
+            tau_max=float(task.get("tau_max", 2.0)), dtau=0.005,
+            quadrature_size=int(task.get("quadrature_size", 61)),
+        )
+        solution = solve_frozen_geometry(spec)
+        coordinates, weights = cue_quadrature(spec)
+        counts = np.maximum((weights / weights.max() * 4000).astype(int), 1)
+        empirical = np.repeat(coordinates, counts, axis=0)
+        reference = integrate_projected_flow(
+            np.zeros(2), empirical, solution.tau,
+            np.repeat(matrix[None, :, :], len(solution.tau), axis=0),
+        )
+        scale = max(float(np.abs(reference).max()), 1e-8)
+        rows.append({
+            "check": "check_c_frozen_geometry",
+            "geometry": json.dumps(matrix.tolist()),
+            "relative_error": float(np.abs(solution.modes - reference).max() / scale),
+            "geometry_held_constant": bool(
+                np.allclose(solution.geometry[0], solution.geometry[-1])
+            ),
+        })
+    return rows
+
+
+def _write_e2r_acceptance(run_dir: Path, checks: pd.DataFrame) -> dict[str, Any]:
+    """Write an acceptance record that cannot pass, and say why.
+
+    Only checks A and C are implementable without the closure derivation.  The rest
+    carry the literal string ``"blocked"`` and the top-level ``passed`` is ``false``.
+    An acceptance record that refuses to pass is the correct output for this stage;
+    a passing one would misrepresent an unproved theory as validated.
+    """
+    check_a = checks[checks["check"] == "check_a_zero_disorder"]
+    check_c = checks[checks["check"] == "check_c_frozen_geometry"]
+
+    widths = sorted(check_a["width"].unique())
+    by_width = check_a.groupby("width")["wide_limit_relative_error"].mean()
+    slopes: dict[str, float] = {}
+    for rate, group in check_a.groupby("learning_rate"):
+        ordered = group.sort_values("width")
+        slopes[str(rate)] = float(ordered["exact_seeded_relative_error"].mean())
+    rates = sorted(check_a["learning_rate"].unique())
+    by_rate = check_a.groupby("learning_rate")["exact_seeded_relative_error"].mean()
+    discretization_slope = (
+        float(np.polyfit(np.log(rates), np.log(by_rate.loc[rates].to_numpy()), 1)[0])
+        if len(rates) >= 2 else float("nan")
+    )
+
+    payload: dict[str, Any] = {
+        "check_a_zero_disorder": {
+            "implemented": True,
+            "recurrent_block_inert_everywhere": bool(check_a["recurrent_block_inert"].all()),
+            "max_exact_seeded_relative_error": float(
+                check_a["exact_seeded_relative_error"].max()
+            ),
+            "discretization_log_log_slope_vs_learning_rate": discretization_slope,
+            "wide_limit_error_by_width": {str(k): float(v) for k, v in by_width.items()},
+            "wide_limit_error_decreases_end_to_end": bool(
+                len(widths) >= 2 and by_width.loc[widths[-1]] < by_width.loc[widths[0]]
+            ),
+            "wide_limit_error_monotone_in_width": bool(
+                len(widths) >= 2
+                and all(
+                    by_width.loc[widths[index + 1]] < by_width.loc[widths[index]]
+                    for index in range(len(widths) - 1)
+                )
+            ),
+            "wide_limit_caveat": (
+                "Single initialization seed. The wide-limit error measures "
+                "concentration of the initial inner products, so intermediate "
+                "widths fluctuate and non-monotonicity here is sampling noise "
+                "rather than a systematic effect. Report the end-to-end trend only, "
+                "or average over seeds before claiming a rate."
+            ),
+            "mean_exact_seeded_error_by_learning_rate": slopes,
+        },
+        "check_c_frozen_geometry": {
+            "implemented": True,
+            "max_relative_error": float(check_c["relative_error"].max()),
+            "geometry_held_constant": bool(check_c["geometry_held_constant"].all()),
+        },
+    }
+    for name, obligations in _E2R_BLOCKED_CHECKS.items():
+        payload[name] = "blocked"
+    payload["blocked_on"] = {
+        name: {
+            "obligations": obligations,
+            "source": 'research_scope/e2_theorem.md § "Proof obligations"',
+        }
+        for name, obligations in _E2R_BLOCKED_CHECKS.items()
+    }
+    payload["passed"] = False
+    payload["passed_reason"] = (
+        "Deliberately false. Only the zero-disorder and frozen-geometry special "
+        "cases are implementable without the joint cross-entropy recurrent "
+        "mean-field derivation. Until obligations 1-4 of "
+        'research_scope/e2_theorem.md § "Proof obligations" are discharged there is '
+        "no independent solver to freeze a prediction from, so nothing in this "
+        "phase validates the joint mean-field theory."
+    )
+    (run_dir / "e2r_acceptance.json").write_text(
+        json.dumps(payload, indent=2), encoding="utf-8"
+    )
+    return payload
+
+
+def run_e2r(config: dict[str, Any]) -> Path:
+    """E2-R: exercise the implementable solver special cases and record the blocks.
+
+    This experiment cannot pass its own acceptance record, by construction.  It
+    exists to verify the two exact special cases against machinery the repository
+    already trusts, and to make the remaining blocks legible as an artifact rather
+    than as an omission.
+    """
+    run_dir = create_run_directory(config)
+    task, model = config.get("task", {}), config.get("model", {})
+    rows = _e2r_check_a(task, model) + _e2r_check_c(task)
+    checks = pd.DataFrame(rows)
+    checks.to_csv(run_dir / "checks.csv", index=False)
+    payload = _write_e2r_acceptance(run_dir, checks)
+    plot_e2r(checks, run_dir)
+    (run_dir / "blocked_checks.txt").write_text(
+        "\n".join(
+            f"{name}: blocked on obligations "
+            f"{', '.join(str(number) for number in obligations)} of "
+            'research_scope/e2_theorem.md § "Proof obligations"'
+            for name, obligations in _E2R_BLOCKED_CHECKS.items()
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    assert payload["passed"] is False  # invariant: this record must never pass
     return run_dir
 
 
