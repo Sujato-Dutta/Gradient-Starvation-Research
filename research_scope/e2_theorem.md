@@ -82,7 +82,51 @@ unlearnable/indeterminate region, not the starvation phase.
    finite-step discretization error.
 
 Until these obligations are complete, the repository calls the numerical
-reference a **held-out quenched ensemble closure**, not a proved DMFT solver.
+reference a **held-out quenched ensemble closure**, not a proved DMFT solver. In
+new outputs it is labelled `closure_reference`; the older `particle_closure` label
+survives only in run directories already on disk, which are not rewritten.
+
+### Status of these obligations as of 2026-08-23
+
+**None of the five has advanced.** No derivation was written, and no placeholder
+derivation document was created, deliberately: an empty skeleton of headings looks
+like progress while containing none, and invites later edits that fill in plausible
+mathematics without proof. This file remains the single home of the obligation list.
+
+`src/gradient_starvation/dmft.py` provides the solver *interface* and two exact
+special cases that need no part of the derivation:
+
+| path | status | validated against |
+|---|---|---|
+| `solve_zero_disorder` (`g = 0`, `lag = 0`) | implemented | `exact_dense_linear_geometry` plus autograd; residual is `O(η)` discretization with fitted slope `1.0115` |
+| `solve_frozen_geometry` | implemented | `integrate_projected_flow` with constant `G`, agreeing to `1.91e-15` |
+| general solve | **blocked** | obligations 1, 2 |
+| weak-only reduction | **blocked** | obligations 1, 2 — a weak-only mean-field theory is itself defined by the undelivered kernels, so there is nothing to reduce *to* |
+| MSE solver branch | **blocked** | obligations 1, 2. The MSE *objective* for finite networks is implemented in `losses.py` |
+| self-consistency residual / refinement | **blocked** | obligations 2, 3 — a residual is only defined relative to derived equations, so a converging residual would be a false pass |
+| finite-width against a frozen prediction | **blocked** | obligations 1–4 |
+
+The zero-disorder reduction deserves one note, because it is stronger than a
+mean-field statement and weaker than progress on Theorem A. At `g = 0` and `lag = 0`
+the recurrent block is provably inert — `m_a = c·b_a` carries no recurrent
+dependence, and the synthetic logits depend on the parameters only through the two
+mode responses, so `∂L/∂W` vanishes identically. Verified: `‖W‖` stays bitwise zero
+at lag 0 while reaching `0.346` by step 20 at lag 1. The projected system then closes
+*exactly, at every width*, on six scalars:
+
+```
+dm_a/dτ  = g_a w + Σ_b g_b u_ab
+du_ab/dτ = g_a m_b + g_b m_a
+dw/dτ    = 2 Σ_b g_b m_b        with  G_ab = u_ab + δ_ab w
+```
+
+where `u_ab = b_a·b_b` and `w = c·c`. Width enters only through the initial
+conditions. This is a closed finite-dimensional identity, not a large-width limit,
+so it does not bear on obligations 1–4.
+
+Every blocked surface raises `NotImplementedError` naming its obligation numbers,
+and each has a test asserting the raise rather than skipping it, so a later
+placeholder cannot quietly start passing.
 
 ## Falsifiable E2 validation contract
 

@@ -141,3 +141,63 @@ starvation even though neither condition learns the weak feature.
 Publication-scale claims must wait for these proofs and for independent
 width-convergence experiments; empirical particle averaging is not a proof or
 an independent DMFT solver.
+
+---
+
+## Update, 2026-08-23
+
+`research_scope/claim_ledger.md` is now the authoritative per-statement record.
+This section notes only what changed for the four proof targets above, plus the
+results in this file that no longer hold.
+
+### Proof targets
+
+1. **Trajectory comparison and hitting-time bound.** Partially addressed.
+   `cdc_theorem.md` writes Results 1 and 2 as proofs and states Result 3 as a target
+   with its three missing pieces named. The `O(η²)` scaling is *measured* — fitted
+   log-log slope `2.0000` for the linear families, `1.9961` for tanh — but a
+   measurement is not the bound, and the trajectory-level claim remains open.
+2. **Paired causal DMFT / concentration.** No advance, deliberately. See
+   `e2_theorem.md` § "Status of these obligations".
+3. **Starvation phase boundary.** No advance. One input improved: under the
+   corrected dense parameterization the AUC gap is now monotone increasing in `ρ` at
+   every lag, which a `ρ_c` derivation needs and the superseded run did not provide.
+4. **Non-identifiability of observational GSI.** No advance.
+
+### Results in this file that no longer hold
+
+- **The linear CDC numbers above are superseded.** They predate the input-scaling
+  correction. The rerun is `results/e3_cdc_dense_ablation-20260823-090702`.
+- **The corrected E1 per-lag magnitudes are superseded.** The rerun under the final
+  parameterization peaks at lag 2 rather than decaying monotonically with lag. The
+  directional claims survive; the magnitudes do not. See
+  `results/e1_dense_rerun-20260823-085142`.
+- **The claim that CDC is the strongest mitigation is withdrawn.** A five-way
+  ablation sharing one causal target found all shadow-based methods statistically
+  indistinguishable on the causal weak gap (every paired interval overlapping, all
+  `p = 1.48e-08`). CDC's unique property is exact instantaneous strong-drift
+  preservation, `4.77e-07` against `1.5e-01`–`3.8e-01`. But `unconstrained_rescue`
+  and `pcgrad` finish with a *higher* final strong response than CDC (`1.295` versus
+  `1.042`), so the first-order guarantee does not translate into better retention.
+  The defensible claim is narrower than this document previously implied.
+
+### Newly measured, and newly available
+
+- The transfer-to-starvation crossover is now instrumented rather than inferred.
+  `t_geom`, `s_ce`, `d_w` and their two geometry channels are logged per step by an
+  opt-in lockstep trainer whose equivalence to the sequential path is asserted at
+  `rtol=0` on final parameters.
+- On 8 unseen seeds, tanh crosses in 8/8 runs at `τ* = 1.741`, 95% CI
+  `[1.427, 2.056]`, with exactly one sign change per seed. GRU does not cross in any
+  of 8.
+- **The mechanism is more specific than previously stated.** At the crossover
+  `T_geom` is still positive and `S_CE` overtakes it, matching the expected account.
+  But `T_geom` itself later turns negative (`τ ≈ 2.75`, reaching `−2.78`) while
+  `S_CE` saturates near `0.79`, so late suppression is geometry-driven rather than
+  CE-gating-driven. Within `T_geom`, the cross-transport channel supplies most of the
+  early transfer and decays without ever changing sign; the weak self-geometry
+  channel is what reverses.
+- The learnability gate is implemented and replayed against a completed run. It
+  required a fifth outcome, `degenerate`, for runs whose target was met at
+  initialization — 8 of 136 rows in the superseded E1 grid, and 0 of 136 after the
+  scaling correction.
