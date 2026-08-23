@@ -121,6 +121,13 @@ def classify_causal_regime(
     """
     if delta < 0:
         raise ValueError("delta must be non-negative.")
+    if not math.isfinite(tau_max):
+        raise ValueError("tau_max must be finite.")
+    if tau_max <= initial_tau:
+        raise ValueError(
+            f"tau_max ({tau_max}) must exceed initial_tau ({initial_tau}); otherwise "
+            "no run can be learnable and every point is trivially unlearnable."
+        )
     weak_learnable = math.isfinite(weak_hitting_time) and weak_hitting_time <= tau_max
     if not weak_learnable:
         return CausalRegimeVerdict(
@@ -142,7 +149,10 @@ def classify_causal_regime(
             delta_tw=float("nan"),
             right_censored=False,
         )
-    censored = not math.isfinite(both_hitting_time)
+    # A both-condition crossing *after* the declared horizon is as censored as one that
+    # never happens: the horizon is the observation window, so anything beyond it was
+    # not observed and must not contribute a finite delay.
+    censored = not (math.isfinite(both_hitting_time) and both_hitting_time <= tau_max)
     delta_tw = float("inf") if censored else both_hitting_time - weak_hitting_time
     if delta_tw > delta:
         regime = "starvation"
@@ -204,9 +214,11 @@ def sign_crossing_time(
     finite float
         The interpolated crossing time.
 
-    Exact zeros are treated as neither positive nor negative and are skipped, so
-    a ``+, 0, -`` series crosses once, at the zero, while ``+, 0, +`` does not
-    cross at all.
+    Exact zeros are treated as neither positive nor negative when locating the
+    bracketing samples, so ``+, 0, +`` merely touches zero and does not cross.  When a
+    zero *is* bracketed by opposite signs it is returned directly as the crossing time
+    rather than interpolated across, which matters whenever the bracketing values are
+    asymmetric: ``[1, 0, -2]`` at ``[0, 1, 2]`` crosses at ``1``, not at ``2/3``.
     """
     times = np.asarray(times, dtype=float)
     values = np.asarray(values, dtype=float)
@@ -229,6 +241,13 @@ def sign_crossing_time(
         if signs[index] == 0:
             continue
         if previous is not None and signs[previous] == before and signs[index] == after:
+            # An exact zero between the two sign-carrying samples *is* the crossing,
+            # so return it rather than interpolating across it.  Interpolating would
+            # give the wrong answer whenever the bracketing values are asymmetric:
+            # values [1, 0, -2] at times [0, 1, 2] crosses at 1, not at 2/3.
+            zeros = np.flatnonzero(signs[previous + 1 : index] == 0)
+            if len(zeros):
+                return float(times[previous + 1 + zeros[0]])
             t0, t1 = times[previous], times[index]
             v0, v1 = values[previous], values[index]
             span = v0 - v1

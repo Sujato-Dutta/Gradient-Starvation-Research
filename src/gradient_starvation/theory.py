@@ -133,7 +133,15 @@ def projected_statistics(
     compute_direct_drift: bool = False,
     create_graph: bool = False,
 ) -> ProjectedStatistics:
-    """Compute the exact two-mode CE field and empirical parameter geometry."""
+    """Compute the exact two-mode CE field and empirical parameter geometry.
+
+    **Cross-entropy only.** The field ``g_a = E[z_a sigma(-margin)]``, the sensitivity
+    ``A``, the margin statistics and GSI-5 are all defined by the logistic loss.  Under
+    an MSE objective the parameters follow a different flow and every one of these
+    diagnostics would describe a loss that is not being minimized.  Callers training
+    with ``objective: mse`` must not log these; ``training.train_single`` refuses that
+    combination rather than emitting mislabelled columns.
+    """
     logits = synthetic_logits(model, batch)
     signed_labels = batch.signed_labels
     margins = signed_labels * logits
@@ -226,6 +234,68 @@ def matched_weak_drift_decomposition(
         geometry_shift=geometry_shift,
         cross_transport=cross_transport,
         reconstruction_error=reconstructed - causal_deficit,
+    )
+
+
+@dataclass
+class EqualTimeDriftDifference:
+    """Difference of the two conditions' own weak drifts at equal optimization time.
+
+    This is exactly ``d/dtau [ m_w(both) - m_w(weak-only) ]``: each condition's drift
+    is evaluated with *its own* field at *its own* weak response.  It is therefore the
+    quantity whose sign change can be compared against the crossing of the response
+    gap, and the only one for which "drift leads response" is meaningful.
+
+    It is **not** the matched-state deficit of :func:`crossover_decomposition`, which
+    recomputes the weak-only field at the both-feature ``m_w`` and so does not
+    differentiate the equal-time gap.  The two cross at different times -- on the
+    saved tanh run, means of ``1.741`` (matched) versus ``1.611`` (equal-time) -- so
+    they must never be substituted for one another.
+
+    No exact three-term geometry/CE split accompanies this quantity: the two
+    conditions are evaluated at different weak responses, so their CE fields are not
+    related by a single gating factor.  ``geometry_difference`` and
+    ``field_difference`` below are a *descriptive* split, labelled as such, not the
+    exact identity that :class:`CausalDriftDecomposition` provides.
+    """
+
+    d_w_equal_time: torch.Tensor
+    both_drift: torch.Tensor
+    weak_only_drift: torch.Tensor
+    geometry_difference: torch.Tensor
+    field_difference: torch.Tensor
+
+
+def equal_time_drift_difference(
+    both: ProjectedStatistics, weak_only: ProjectedStatistics
+) -> EqualTimeDriftDifference:
+    """Return the equal-time weak-drift difference and a descriptive split.
+
+    Each condition's projected weak drift is ``F_w = sum_b G_wb g_b`` evaluated in its
+    own state.  Their difference is the derivative of the equal-time response gap.
+
+    The descriptive split holds the other factor at the both-feature value in turn::
+
+        geometry_difference = (G_ww^B - G_ww^W) g_w^W        + G_ws^B g_s^B
+        field_difference    =  G_ww^W (g_w^B - g_w^W)
+
+    These sum to the difference exactly, but the attribution between them is a
+    choice of ordering, not a unique decomposition.  Use
+    :func:`crossover_decomposition` when an exact identity is required.
+    """
+    both_drift = both.predicted_drift[1]
+    weak_only_drift = weak_only.predicted_drift[1]
+    geometry_difference = (
+        (both.geometry[1, 1] - weak_only.geometry[1, 1]) * weak_only.field[1]
+        + both.geometry[1, 0] * both.field[0]
+    )
+    field_difference = weak_only.geometry[1, 1] * (both.field[1] - weak_only.field[1])
+    return EqualTimeDriftDifference(
+        d_w_equal_time=both_drift - weak_only_drift,
+        both_drift=both_drift,
+        weak_only_drift=weak_only_drift,
+        geometry_difference=geometry_difference,
+        field_difference=field_difference,
     )
 
 

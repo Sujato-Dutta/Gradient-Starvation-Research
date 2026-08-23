@@ -171,3 +171,127 @@ def test_run_waterbirds_rejects_unknown_methods_before_touching_data(monkeypatch
                 "mitigation": {"methods": ["counterfactual_drift"]},
             }
         )
+
+
+class _TwoBlockNet(torch.nn.Module):
+    """Minimal backbone-plus-head stand-in for the ResNet layout."""
+
+    def __init__(self, width: int = 6, hidden: int = 5):
+        super().__init__()
+        self.body = torch.nn.Linear(width, hidden)
+        self.fc = torch.nn.Linear(hidden, 2)
+
+    def forward(self, x):
+        return self.fc(self.body(x))
+
+
+def test_backbone_receives_its_erm_gradient_when_the_model_is_passed():
+    """Regression test: CDC arms must not silently train only the head.
+
+    Without the model argument the backbone keeps ``grad = None`` and the optimizer
+    skips it, so the CDC arms would freeze the backbone while every baseline
+    fine-tunes the whole network. That is an unfair comparison, not a variant method.
+    """
+    torch.manual_seed(5)
+    net = _TwoBlockNet()
+    features = torch.randn(32, 6)
+    labels = torch.randint(0, 2, (32,))
+    background = torch.randint(0, 2, (32,))
+    logits = net(features)
+    loss = torch.nn.functional.cross_entropy(logits, labels)
+    coordinates = oracle_feature_coordinates(labels, background)
+
+    record = constrained_weak_rescue(
+        net.fc, _margin(logits, labels), coordinates,
+        target_weak_drift=5.0, loss=loss, model=net,
+    )
+    assert record["backbone_updated"] is True
+    assert net.body.weight.grad is not None
+    assert net.fc.weight.grad is not None
+    # The head guarantee must survive the backbone gradient being written.
+    assert abs(record["cdc_strong_drift_change"]) < 1e-4
+
+    # An optimizer step must move both blocks.
+    body_before = net.body.weight.detach().clone()
+    head_before = net.fc.weight.detach().clone()
+    torch.optim.SGD(net.parameters(), lr=1e-2).step()
+    assert not torch.equal(body_before, net.body.weight.detach())
+    assert not torch.equal(head_before, net.fc.weight.detach())
+
+
+def test_omitting_the_model_is_recorded_rather_than_hidden():
+    """Head-only mode remains available, but the record says so."""
+    torch.manual_seed(6)
+    net = _TwoBlockNet()
+    features = torch.randn(16, 6)
+    labels = torch.randint(0, 2, (16,))
+    background = torch.randint(0, 2, (16,))
+    logits = net(features)
+    loss = torch.nn.functional.cross_entropy(logits, labels)
+    record = constrained_weak_rescue(
+        net.fc, _margin(logits, labels), oracle_feature_coordinates(labels, background),
+        target_weak_drift=5.0, loss=loss,
+    )
+    assert record["backbone_updated"] is False
+    assert net.body.weight.grad is None
+
+
+def test_cdc_arms_require_sgd_without_weight_decay_for_every_arm(monkeypatch):
+    """AdamW would mean the logged guarantee does not describe the update taken.
+
+    And the constraint has to bind the whole comparison: running only the CDC arms on
+    SGD would swap a broken guarantee for an optimizer confound.
+    """
+    from pathlib import Path
+
+    from gradient_starvation import waterbirds
+
+    monkeypatch.setattr(
+        waterbirds, "_setup",
+        lambda config: (None, None, None, _TwoBlockNet(), 0),
+    )
+    monkeypatch.setattr(waterbirds, "create_run_directory", lambda config: Path("."))
+    monkeypatch.setattr(waterbirds, "resolve_device", lambda requested: torch.device("cpu"))
+
+    def run(training, methods):
+        return waterbirds.run_waterbirds(
+            {
+                "experiment": {"device": "cpu"}, "data": {},
+                "training": {"seeds": [0], "epochs": 0, **training},
+                "mitigation": {"methods": methods},
+            }
+        )
+
+    # The check must fire before any data is touched, which the stub loaders prove:
+    # a ValueError here means validation ran first.
+    with pytest.raises(ValueError, match="training.optimizer: sgd"):
+        run({"optimizer": "adamw"}, ["erm", "counterfactual_drift_oracle"])
+    with pytest.raises(ValueError, match="weight_decay: 0"):
+        run(
+            {"optimizer": "sgd", "weight_decay": 1e-4},
+            ["erm", "counterfactual_drift_modal"],
+        )
+
+    # Without a CDC arm the requirement does not apply. Asserted on the validator
+    # directly, because completing a run needs real loaders.
+    assert waterbirds._require_raw_velocity_settings(
+        ["counterfactual_drift_oracle"], {"optimizer": "sgd", "weight_decay": 0.0}
+    ) is None
+    for methods in (["erm"], ["erm", "spectral_decoupling"], ["interaction"]):
+        assert not set(methods) & waterbirds.CDC_METHODS, methods
+
+
+def test_shipped_waterbirds_config_satisfies_the_raw_velocity_requirement():
+    """The config ships CDC arms, so it must also ship SGD with zero decay."""
+    from pathlib import Path
+
+    from gradient_starvation.config import load_config
+    from gradient_starvation.waterbirds import CDC_METHODS
+
+    root = Path(__file__).resolve().parents[1]
+    config = load_config(root / "configs" / "waterbirds.yaml")
+    methods = set(config["mitigation"]["methods"])
+    training = config["training"]
+    if methods & CDC_METHODS:
+        assert str(training.get("optimizer", "adamw")).lower() == "sgd"
+        assert float(training.get("weight_decay", 0.0)) == 0.0

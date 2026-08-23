@@ -13,7 +13,18 @@ model:
 training:
   epochs: 30
   learning_rate: 0.0001
-  weight_decay: 0.0001
+  # SGD with zero weight decay is REQUIRED whenever a counterfactual_drift_* arm is
+  # present, and it binds every arm in the comparison. The guarantee is stated for the
+  # raw corrected velocity: AdamW's preconditioning, momentum and decoupled decay mean
+  # the update taken is not the corrected gradient. Running only the CDC arms on SGD
+  # would swap a broken guarantee for an optimizer confound, so run_waterbirds rejects
+  # that. Drop the CDC arms to use AdamW.
+  optimizer: sgd
+  weight_decay: 0.0
+  # The classifier head is re-drawn per seed so that seed variation is not limited to
+  # data order. Within a seed every method still starts from the same draw, which is
+  # what the comparison is paired on.
+  reinitialize_head_per_seed: true
   seeds: [0, 1, 2]
 mitigation:
   # Two information settings, and they must be tabulated separately. Every emitted

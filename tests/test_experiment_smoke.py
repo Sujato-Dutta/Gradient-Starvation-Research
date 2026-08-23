@@ -64,14 +64,24 @@ def test_e1_smoke_run_writes_documented_artifacts(tmp_path):
 def test_e1_learnability_gate_config_keys_are_honoured(tmp_path):
     """`task.tau_max` and `task.delta_tw_tolerance` must reach the classifier."""
     config = _smoke_config("smoke.yaml", tmp_path)
-    config["task"]["beta"] = -1_000_000.0
-    # An impossibly early horizon makes every point unlearnable, which is the
-    # cheapest way to prove the key is actually consumed.
-    config["task"]["tau_max"] = -1.0
+    # An unreachable target makes every point unlearnable, which proves the gate runs.
+    # `tau_max` cannot be used for this any more: it is validated to exceed the initial
+    # time, precisely so a nonsensical horizon cannot masquerade as a finding.
+    config["task"]["beta"] = 1_000_000.0
+    config["task"]["tau_max"] = 0.5
     run_dir = run_e1(config)
     summary = pd.read_csv(run_dir / "summary.csv")
     assert set(summary["regime_class"]) == {"unlearnable"}
     assert not summary["weak_only_learnable"].any()
+
+
+def test_e1_rejects_a_degenerate_horizon(tmp_path):
+    """`tau_max` at or below the initial time would make every point unlearnable."""
+    config = _smoke_config("smoke.yaml", tmp_path)
+    config["task"]["beta"] = -1_000_000.0
+    config["task"]["tau_max"] = 0.0
+    with pytest.raises(ValueError, match="must exceed initial_tau"):
+        run_e1(config)
 
 
 def test_e1_plot_tables_keep_censored_grid_cells_visible():
@@ -194,9 +204,19 @@ def test_enl_smoke_run_writes_crossover_artifacts(tmp_path):
     # the weak-only rows, since the decomposition is a property of the pair.
     both = trajectories[trajectories["condition"] == "both"]
     weak = trajectories[trajectories["condition"] == "weak_only"]
-    assert {"d_w", "t_geom", "s_ce", "t_geom_self", "t_geom_cross"} <= set(both)
-    assert both[["d_w", "t_geom", "s_ce"]].notna().all().all()
-    assert weak["d_w"].isna().all()
+    assert {
+        "d_w_matched", "d_w_equal_time", "t_geom", "s_ce",
+        "t_geom_self", "t_geom_cross",
+        "equal_time_geometry_difference", "equal_time_field_difference",
+    } <= set(both)
+    assert both[["d_w_matched", "d_w_equal_time", "t_geom", "s_ce"]].notna().all().all()
+    assert weak["d_w_matched"].isna().all()
+    assert weak["d_w_equal_time"].isna().all()
+    # Both conventions must be reported, and which one drives tau_star_drift must be
+    # unambiguous: it is the equal-time one.
+    assert {"tau_star_drift", "tau_star_matched_state", "tau_star_convention_gap"} <= set(
+        summary
+    )
 
     # The reparameterization must reconstruct at every logged step.
     assert (both["decomposition_reconstruction_error"].abs() < 2e-6).all()

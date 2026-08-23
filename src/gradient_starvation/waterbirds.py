@@ -69,6 +69,49 @@ def _setup(config: Mapping[str, Any]):
     return train_loader, validation_loader, test_loader, model, background_index
 
 
+#: The two shadow-based rescue arms, whose guarantee requires the raw SGD velocity.
+CDC_METHODS = frozenset({"counterfactual_drift_oracle", "counterfactual_drift_modal"})
+
+
+def _require_raw_velocity_settings(
+    methods: list[str], training: Mapping[str, Any]
+) -> None:
+    """Refuse settings under which the CDC guarantee would not describe the update."""
+    optimizer = str(training.get("optimizer", "adamw")).lower()
+    if optimizer != "sgd":
+        raise ValueError(
+            f"Methods {sorted(set(methods) & CDC_METHODS)} require "
+            "training.optimizer: sgd, and so does every arm they are compared "
+            "against, otherwise the comparison confounds the method with the "
+            "optimizer. AdamW's preconditioning, momentum and decoupled weight decay "
+            "mean the update taken is not the corrected gradient, so the logged "
+            f"strong-drift change would not describe it. Received {optimizer!r}."
+        )
+    decay = float(training.get("weight_decay", 0.0))
+    if decay != 0.0:
+        raise ValueError(
+            "Counterfactual drift requires training.weight_decay: 0; received "
+            f"{decay}. Weight decay perturbs the update after the correction is "
+            "computed and so breaks the first-order guarantee."
+        )
+
+
+def _build_optimizer(
+    model: torch.nn.Module, training: Mapping[str, Any], *, use_sgd: bool
+) -> torch.optim.Optimizer:
+    learning_rate = float(training.get("learning_rate", 1e-4))
+    if use_sgd or str(training.get("optimizer", "adamw")).lower() == "sgd":
+        # Weight decay is already validated to be zero when `use_sgd` is set.
+        return torch.optim.SGD(
+            model.parameters(), lr=learning_rate,
+            weight_decay=0.0 if use_sgd else float(training.get("weight_decay", 0.0)),
+        )
+    return torch.optim.AdamW(
+        model.parameters(), lr=learning_rate,
+        weight_decay=float(training.get("weight_decay", 1e-4)),
+    )
+
+
 def _penultimate_features(model: torch.nn.Module, images: torch.Tensor) -> torch.Tensor:
     """Return backbone features feeding the classifier head, detached.
 
@@ -240,6 +283,7 @@ def constrained_weak_rescue(
     target_weak_drift: float,
     loss: torch.Tensor,
     *,
+    model: torch.nn.Module | None = None,
     feasibility_epsilon: float = 1e-12,
 ) -> dict[str, float]:
     """Apply the CDC correction to the classifier head, in place on ``.grad``.
@@ -249,11 +293,37 @@ def constrained_weak_rescue(
     the instantaneous strong-response drift is preserved exactly (Result 1 of
     `research_scope/cdc_theorem.md`).
 
-    Restricted to the head parameters, matching the existing interaction penalty.
-    Extending it to the backbone is possible but changes the protected geometry, so
-    it is deliberately not done silently.
+    The *correction* is confined to the head, matching the existing interaction
+    penalty: the protected geometry is defined by head-parameter gradients, and
+    extending it to the backbone would change that geometry and need its own
+    validation.
+
+    Pass ``model`` so that the **backbone still receives its ordinary ERM gradient**.
+    Without it the backbone would be left with ``grad = None`` and silently frozen,
+    while every baseline fine-tunes the whole network -- an unfair comparison rather
+    than a different method.  ``backbone_updated`` in the returned record states which
+    happened.
     """
     parameters = [p for p in head.parameters() if p.requires_grad]
+    head_parameters = {id(p) for p in parameters}
+    backbone = (
+        [
+            p
+            for p in model.parameters()
+            if p.requires_grad and id(p) not in head_parameters
+        ]
+        if model is not None
+        else []
+    )
+    if backbone:
+        # Ordinary ERM gradient for everything outside the protected head.
+        for parameter, gradient in zip(
+            backbone,
+            torch.autograd.grad(loss, backbone, retain_graph=True, allow_unused=True),
+        ):
+            parameter.grad = (
+                torch.zeros_like(parameter) if gradient is None else gradient.detach().clone()
+            )
     mode = _projected_modes(margin, coordinates)
     strong = torch.autograd.grad(mode[0], parameters, retain_graph=True, allow_unused=True)
     weak = torch.autograd.grad(mode[1], parameters, retain_graph=True, allow_unused=True)
@@ -296,6 +366,7 @@ def constrained_weak_rescue(
         "cdc_strong_drift_after": float(inner(strong, corrected_velocity)),
         "cdc_strong_drift_change": float(inner(strong, corrected_velocity) - strong_before),
         "cdc_feasible": bool(float(gain) > feasibility_epsilon or float(deficit) <= 0),
+        "backbone_updated": bool(backbone),
     }
 
 
@@ -337,16 +408,30 @@ def run_waterbirds(config: dict[str, Any]) -> Path:
             f"Unknown Waterbirds methods {unknown}; expected a subset of "
             f"{sorted(WATERBIRDS_METHODS)}."
         )
+    # CDC's Result 1 is stated for the raw corrected velocity. AdamW applies adaptive
+    # preconditioning, momentum and decoupled weight decay, so the update actually
+    # taken would not be the corrected gradient and the logged orthogonality would
+    # not describe it. The constraint has to bind the WHOLE comparison, not just the
+    # CDC arms: running CDC on SGD while baselines run on AdamW would trade a broken
+    # guarantee for an optimizer confound.
+    raw_velocity_required = bool(set(methods) & CDC_METHODS)
+    if raw_velocity_required:
+        _require_raw_velocity_settings(methods, training)
     for method in methods:
         for seed in training.get("seeds", [0, 1, 2]):
             seed_everything(int(seed))
             model = copy.deepcopy(base_model)
             model.load_state_dict(initial_state)
+            # `initial_state` is shared so that a method comparison at a given seed is
+            # paired on initialization, which is the point of the design. But it also
+            # means the *classifier head* is identical across seeds, so seed variation
+            # covers only data order and augmentation. Re-drawing the head per seed
+            # restores across-seed variation without breaking the within-seed pairing,
+            # since every method at that seed still starts from the same draw.
+            if bool(training.get("reinitialize_head_per_seed", True)):
+                model.fc.reset_parameters()
             model.to(device)
-            optimizer = torch.optim.AdamW(
-                model.parameters(), lr=float(training.get("learning_rate", 1e-4)),
-                weight_decay=float(training.get("weight_decay", 1e-4)),
-            )
+            optimizer = _build_optimizer(model, training, use_sgd=raw_velocity_required)
             for epoch in range(int(training.get("epochs", 30))):
                 model.train()
                 loss_sum, count, chi_sum = 0.0, 0, 0.0
@@ -394,6 +479,7 @@ def run_waterbirds(config: dict[str, Any]) -> Path:
                                 mitigation.get("weak_drift_target", 0.0)
                             ),
                             loss=loss,
+                            model=model,
                         )
                         cdc_records.append(record)
                         optimizer.step()

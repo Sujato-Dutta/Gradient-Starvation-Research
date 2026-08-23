@@ -192,3 +192,35 @@ def test_replay_degenerate_rows_are_the_known_initialization_artifact():
     # They are an artifact of threshold choice, not of the strong feature: the
     # shared initialization means both conditions trip the threshold together.
     assert (degenerate.both_hitting_time == 0.0).all()
+
+
+def test_a_both_crossing_after_the_horizon_is_censored():
+    """The horizon is the observation window, so a later crossing was not observed.
+
+    Regression test: previously any finite `both_hitting_time` produced a finite
+    `delta_tw`, even one past the declared `tau_max`, which would report a delay that
+    the run never actually demonstrated.
+    """
+    verdict = classify_causal_regime(
+        weak_hitting_time=1.0, both_hitting_time=9.0, tau_max=5.0, delta=0.25
+    )
+    assert verdict.regime == "starvation"
+    assert verdict.right_censored
+    assert verdict.delta_tw == math.inf
+
+    # Inside the horizon it stays a finite, uncensored delay.
+    inside = classify_causal_regime(
+        weak_hitting_time=1.0, both_hitting_time=4.0, tau_max=5.0, delta=0.25
+    )
+    assert not inside.right_censored
+    assert inside.delta_tw == pytest.approx(3.0)
+
+
+@pytest.mark.parametrize("tau_max", [0.0, -1.0, math.inf, math.nan])
+def test_degenerate_horizons_are_rejected(tau_max):
+    """A horizon at or below the start would make everything trivially unlearnable."""
+    with pytest.raises(ValueError):
+        classify_causal_regime(
+            weak_hitting_time=1.0, both_hitting_time=2.0,
+            tau_max=tau_max, delta=0.25, initial_tau=0.0,
+        )

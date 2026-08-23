@@ -108,7 +108,14 @@ def plot_e2(trajectories: pd.DataFrame, summary: pd.DataFrame, run_dir: Path) ->
     ]
     for (source, width), group in selected.groupby(["source", "width"], dropna=False):
         averaged = group.groupby("tau", as_index=False)["m_w"].mean()
-        label = source if source == "particle_closure" else f"network N={int(width)}"
+        # `closure_reference` is the current label; `particle_closure` appears only in
+        # run directories predating the rename and is still recognized so those
+        # figures do not mislabel the reference as a trained network.
+        label = (
+            source
+            if source in {"closure_reference", "particle_closure"}
+            else f"network N={int(width)}"
+        )
         axes[0].plot(averaged.tau, averaged.m_w, label=label)
     axes[0].set(xlabel="Optimization time", ylabel="Weak response", title="Joint trajectories")
     axes[0].legend(fontsize=8)
@@ -151,24 +158,34 @@ def plot_enl(trajectories: pd.DataFrame, summary: pd.DataFrame, run_dir: Path) -
     if trajectories.empty or summary.empty:
         return
     both = trajectories[trajectories["condition"] == "both"]
-    if both.empty or "d_w" not in both:
+    if both.empty or "d_w_equal_time" not in both:
         return
     kinds = sorted(both["model_kind"].unique())
     fig, axes = plt.subplots(
         len(kinds), 2, figsize=(11.5, 3.6 * len(kinds)), squeeze=False, constrained_layout=True
     )
+    columns = ["t_geom", "s_ce", "d_w_matched", "d_w_equal_time"]
     for row, kind in enumerate(kinds):
         subset = both[both["model_kind"] == kind]
-        averaged = subset.groupby("tau", as_index=False)[["t_geom", "s_ce", "d_w"]].mean()
+        averaged = subset.groupby("tau", as_index=False)[columns].mean()
         left, right = axes[row][0], axes[row][1]
         left.plot(averaged.tau, averaged.t_geom, label=r"$T_{geom}$ (transfer)")
         left.plot(averaged.tau, averaged.s_ce, label=r"$S_{CE}$ (suppression)")
         left.set(xlabel="Optimization time", ylabel="Drift contribution",
-                 title=f"{kind}: competing terms")
+                 title=f"{kind}: competing terms (matched state)")
         left.legend(fontsize=8)
 
         right.axhline(0.0, color="0.5", linewidth=1.0, linestyle="--")
-        right.plot(averaged.tau, averaged.d_w, color="C3", label=r"$d_w = T_{geom} - S_{CE}$")
+        # Both conventions are drawn, because they cross at different times and only
+        # the equal-time one differentiates the response gap.
+        right.plot(
+            averaged.tau, averaged.d_w_equal_time, color="C3",
+            label=r"$d_w$ equal-time $=\frac{d}{d\tau}[m_w^B-m_w^W]$",
+        )
+        right.plot(
+            averaged.tau, averaged.d_w_matched, color="C7", linestyle=":",
+            label=r"$d_w$ matched state $=T_{geom}-S_{CE}$",
+        )
         crossings = summary[summary["model_kind"] == kind]["tau_star_drift"].to_numpy(dtype=float)
         finite = crossings[np.isfinite(crossings)]
         if len(finite):

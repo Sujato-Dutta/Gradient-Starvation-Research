@@ -52,6 +52,26 @@ def test_sign_crossing_time_returns_nan_when_undecidable():
     )
 
 
+def test_sign_crossing_time_returns_an_asymmetric_exact_zero_exactly():
+    """A bracketed zero IS the crossing and must not be interpolated across.
+
+    Regression test: interpolating between the bracketing samples gave 2/3 here,
+    because the values are asymmetric. The symmetric case happened to give the right
+    answer, which is why this was not caught by the original zero-handling test.
+    """
+    times = np.array([0.0, 1.0, 2.0])
+    assert sign_crossing_time(times, np.array([1.0, 0.0, -2.0])) == pytest.approx(1.0)
+    assert sign_crossing_time(times, np.array([2.0, 0.0, -1.0])) == pytest.approx(1.0)
+    # Several consecutive zeros: the first is the crossing.
+    assert sign_crossing_time(
+        np.array([0.0, 1.0, 2.0, 3.0]), np.array([1.0, 0.0, 0.0, -5.0])
+    ) == pytest.approx(1.0)
+    # Ascending direction, likewise exact.
+    assert sign_crossing_time(
+        times, np.array([-1.0, 0.0, 4.0]), descending=False
+    ) == pytest.approx(1.0)
+
+
 def test_sign_crossing_time_handles_exact_zeros_and_direction():
     times = np.array([0.0, 1.0, 2.0])
     # +, 0, - crosses at the zero itself.

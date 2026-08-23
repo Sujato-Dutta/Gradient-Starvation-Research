@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 import torch
 
@@ -8,6 +9,22 @@ from gradient_starvation.training import (
     train_paired,
     train_paired_lockstep,
 )
+
+
+def test_mse_objective_is_refused_by_the_diagnostic_pipeline():
+    """CE-specific diagnostics must not be silently logged for an MSE run."""
+    spec = SyntheticTaskSpec(sequence_length=5, n_samples=16, rho=2, lag_separation=1)
+    both, weak = make_paired_task(spec, seed=41)
+    for paired_mode in ("sequential", "lockstep"):
+        with pytest.raises(NotImplementedError, match="cross-entropy specific"):
+            train_paired(
+                {"kind": "dense_linear", "width": 6, "bulk_gain": 0.3},
+                both, weak,
+                {"steps": 1, "learning_rate": 0.01, "log_every": 1,
+                 "full_batch": True, "paired_mode": paired_mode},
+                {"method": "erm", "objective": "mse"},
+                seed=42,
+            )
 
 
 def test_small_paired_run_logs_complete_diagnostics():
@@ -235,7 +252,10 @@ def test_lockstep_logs_exact_crossover_columns():
     assert len(both_rows) == len(weak_rows) == 7
 
     for row in both_rows:
-        assert row["t_geom"] - row["s_ce"] == pytest.approx(row["d_w"], rel=2e-5, abs=2e-6)
+        # The three-term identity applies to the MATCHED-STATE quantity only.
+        assert row["t_geom"] - row["s_ce"] == pytest.approx(
+            row["d_w_matched"], rel=2e-5, abs=2e-6
+        )
         # float32 arithmetic: the two channels are summed in float32 inside the
         # decomposition, then widened to Python floats independently, so the
         # tolerance must be float32-scale rather than float64-scale.
@@ -246,7 +266,48 @@ def test_lockstep_logs_exact_crossover_columns():
 
     # The weak-only rows carry no crossover columns; the decomposition is a
     # property of the pair and is attached to the both-feature row only.
-    assert all("d_w" not in row for row in weak_rows)
+    assert all("d_w_matched" not in row for row in weak_rows)
+    assert all("d_w_equal_time" not in row for row in weak_rows)
+
+
+def test_equal_time_drift_difference_is_the_response_gap_derivative():
+    """The equal-time column must differentiate m_w(both) - m_w(weak-only).
+
+    The matched-state column does not, and conflating them shifts the measured
+    crossover. Both are logged so the distinction is auditable.
+    """
+    spec = SyntheticTaskSpec(sequence_length=8, n_samples=128, rho=4, lag_separation=2,
+                             cue_noise=0.1)
+    both, weak = make_paired_task(spec, seed=31)
+    history, _ = train_paired(
+        {"kind": "tanh", "width": 16},
+        both, weak,
+        {"steps": 120, "learning_rate": 0.05, "log_every": 1, "full_batch": True,
+         "paired_mode": "lockstep"},
+        {"method": "erm"},
+        seed=32,
+    )
+    both_rows = sorted(
+        (r for r in history if r["condition"] == "both"), key=lambda r: r["step"]
+    )
+    weak_rows = sorted(
+        (r for r in history if r["condition"] == "weak_only"), key=lambda r: r["step"]
+    )
+    tau = np.array([r["tau"] for r in both_rows])
+    gap = np.array([b["m_w"] - w["m_w"] for b, w in zip(both_rows, weak_rows)])
+    equal_time = np.array([r["d_w_equal_time"] for r in both_rows])
+    matched = np.array([r["d_w_matched"] for r in both_rows])
+
+    # The equal-time column equals each condition's own drift difference exactly.
+    own_drifts = np.array([b["drift_w"] - w["drift_w"] for b, w in zip(both_rows, weak_rows)])
+    np.testing.assert_allclose(equal_time, own_drifts, rtol=1e-6, atol=1e-9)
+
+    # And it tracks the numeric derivative of the gap, which the matched column does
+    # not: compare correlation against a central-difference estimate.
+    numeric = np.gradient(gap, tau)
+    assert np.corrcoef(equal_time, numeric)[0, 1] > 0.999
+    # The two conventions genuinely differ, so substituting one for the other is a bug.
+    assert np.abs(equal_time - matched).max() > 1e-3
 
 
 def test_lockstep_rejects_counterfactual_drift():

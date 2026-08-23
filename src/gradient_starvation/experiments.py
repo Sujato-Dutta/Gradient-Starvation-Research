@@ -189,16 +189,25 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
     Two crossing times are reported and they are *not* the same quantity.
 
     ``tau_star_drift``
-        First ``+ -> -`` sign change of the causal weak-drift difference ``d_w``.
-        This is the drift-level crossover: the optimization time at which the
-        strong feature stops helping the weak mode and begins suppressing it.
+        First ``+ -> -`` sign change of the **equal-time** weak-drift difference,
+        ``d/dtau [ m_w(both) - m_w(weak-only) ]``.  This is the drift-level
+        crossover: when the strong feature stops helping the weak mode and begins
+        suppressing it.
 
     ``tau_star_response``
-        First ``+ -> -`` sign change of ``m_w(both) - m_w(weak-only)``.  This is
-        the outcome-level crossover: when the both-feature weak *response*
-        actually falls behind its counterfactual.  Because the drift is the
-        derivative of the response gap, the drift crossing necessarily precedes
-        the response crossing, and the lead time is reported.
+        First ``+ -> -`` sign change of ``m_w(both) - m_w(weak-only)`` itself.  Since
+        ``tau_star_drift`` is measured on the derivative of exactly this gap, the
+        drift crossing necessarily precedes the response crossing, and the lead time
+        is meaningful.
+
+    ``tau_star_matched_state``
+        Sign change of the matched-state deficit from
+        :func:`theory.crossover_decomposition`, which recomputes the weak-only field
+        at the both-feature ``m_w``.  Reported because it is the quantity the exact
+        three-term geometry/CE identity applies to -- but it is **not** the derivative
+        of the equal-time gap and crosses earlier.  On the tanh regime the means
+        differ by about ``0.13`` in ``tau``.  Do not use it for drift-versus-response
+        comparisons.
 
     On ``tau_star_decomposition_check`` and ``abs_tau_star_error``: the note
     proposes predicting the crossover from ``T_geom = S_CE``.  Under the exact
@@ -214,27 +223,38 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
     weak = frame[frame.condition == "weak_only"].sort_values("tau")
     if not np.allclose(both.tau.to_numpy(), weak.tau.to_numpy()):
         raise RuntimeError("Paired trajectories do not share the same optimization-time grid.")
-    if "d_w" not in both:
+    if "d_w_equal_time" not in both:
         raise RuntimeError(
             "E-NL requires the crossover columns; run with training.paired_mode: lockstep."
         )
 
     tau = both.tau.to_numpy()
-    d_w = both.d_w.to_numpy()
+    # The equal-time difference is the derivative of the response gap, so it is what
+    # the drift-versus-response comparison must use.
+    d_w_equal_time = both.d_w_equal_time.to_numpy()
+    d_w_matched = both.d_w_matched.to_numpy()
     decomposition = both.t_geom.to_numpy() - both.s_ce.to_numpy()
     response_gap = both.m_w.to_numpy() - weak.m_w.to_numpy()
 
-    tau_star_drift = sign_crossing_time(tau, d_w)
+    tau_star_drift = sign_crossing_time(tau, d_w_equal_time)
+    tau_star_matched = sign_crossing_time(tau, d_w_matched)
     tau_star_check = sign_crossing_time(tau, decomposition)
     tau_star_response = sign_crossing_time(tau, response_gap)
+    # `decomposition` reconstructs `d_w_matched` identically, so this gap is a
+    # numerical self-consistency check on the matched-state family only.
     identity_gap = (
-        abs(tau_star_drift - tau_star_check)
-        if math.isfinite(tau_star_drift) and math.isfinite(tau_star_check)
-        else (0.0 if tau_star_drift == tau_star_check else float("nan"))
+        abs(tau_star_matched - tau_star_check)
+        if math.isfinite(tau_star_matched) and math.isfinite(tau_star_check)
+        else (0.0 if tau_star_matched == tau_star_check else float("nan"))
     )
     lead = (
         tau_star_response - tau_star_drift
         if math.isfinite(tau_star_drift) and math.isfinite(tau_star_response)
+        else float("nan")
+    )
+    convention_gap = (
+        tau_star_drift - tau_star_matched
+        if math.isfinite(tau_star_drift) and math.isfinite(tau_star_matched)
         else float("nan")
     )
 
@@ -242,20 +262,31 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
     return {
         **causal.__dict__,
         "tau_star_drift": tau_star_drift,
+        "tau_star_matched_state": tau_star_matched,
+        "tau_star_convention_gap": convention_gap,
         "tau_star_decomposition_check": tau_star_check,
         "abs_tau_star_error": identity_gap,
         "tau_star_response": tau_star_response,
         "drift_leads_response_by": lead,
         "drift_crossed": bool(math.isfinite(tau_star_drift)),
         "response_crossed": bool(math.isfinite(tau_star_response)),
-        "n_sign_changes_d_w": n_sign_changes(d_w),
+        "n_sign_changes_d_w": n_sign_changes(d_w_equal_time),
+        "n_sign_changes_d_w_matched": n_sign_changes(d_w_matched),
         "max_decomposition_reconstruction_error": float(
             both.decomposition_reconstruction_error.abs().max()
         ),
-        "initial_d_w": float(d_w[0]),
-        "final_d_w": float(d_w[-1]),
+        "initial_d_w": float(d_w_equal_time[0]),
+        "final_d_w": float(d_w_equal_time[-1]),
+        "initial_d_w_matched": float(d_w_matched[0]),
+        "final_d_w_matched": float(d_w_matched[-1]),
         "mean_t_geom": float(both.t_geom.mean()),
         "mean_s_ce": float(both.s_ce.mean()),
+        "mean_equal_time_geometry_difference": float(
+            both.equal_time_geometry_difference.mean()
+        ),
+        "mean_equal_time_field_difference": float(
+            both.equal_time_field_difference.mean()
+        ),
         "final_both_m_s": float(both.iloc[-1].m_s),
         "final_both_m_w": float(both.iloc[-1].m_w),
         "final_weak_m_w": float(weak.iloc[-1].m_w),
@@ -264,7 +295,11 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
         "phase": (
             "transfer_then_starvation"
             if math.isfinite(tau_star_drift)
-            else ("transfer_throughout" if d_w[-1] > 0 else "starvation_throughout")
+            else (
+                "transfer_throughout"
+                if d_w_equal_time[-1] > 0
+                else "starvation_throughout"
+            )
         ),
     }
 

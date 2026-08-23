@@ -206,11 +206,35 @@ lag 2, 8 unseen seeds (40–47), 500 steps.
 | pcgrad | yes | −0.0007 | −10.516 [−11.373, −9.660] | 1.48e-01 | 1.295 |
 
 All five shadow-based methods attain the shared target at 100% of logged steps and
-are **statistically indistinguishable on the causal weak gap** (every paired
-interval overlaps; all `p = 1.48e-08` against ERM). This is not a surprise in
-hindsight: once every family reaches the same weak-drift target at every step, the
-weak trajectory is essentially pinned, so the constraint cannot change the weak
-outcome. The constraint governs *collateral damage*, not the rescue.
+are **numerically similar on the causal weak gap, agreeing to about four decimal
+places**. Once every family reaches the same weak-drift target at every step the weak
+trajectory is essentially pinned, so the constraint cannot change the weak outcome by
+much. The constraint governs *collateral damage*, not the rescue.
+
+**They are not statistically indistinguishable, and that phrase must not be used.**
+Overlapping confidence intervals against a common baseline do not establish
+equivalence. Direct pairwise tests on the same eight seeds find 9 of 10 comparisons
+significant at 0.05, with differences that are tiny but real:
+
+| pair | mean difference | 95% CI | p |
+|---|---:|---|---:|
+| CDC − loss_gradient_projection | −0.000350 | `[−0.000383, −0.000317]` | 4.3e-08 |
+| CDC − unconstrained_rescue | +0.000176 | `[+0.000158, +0.000194]` | 8.5e-08 |
+| CDC − bloop | −0.000720 | `[−0.000811, −0.000630]` | 2.9e-07 |
+| CDC − pcgrad | +0.000176 | `[+0.000158, +0.000194]` | 8.5e-08 |
+| loss_gradient_projection − bloop | −0.000370 | `[−0.000443, −0.000297]` | 6.4e-06 |
+| unconstrained_rescue − bloop | −0.000896 | `[−0.000982, −0.000811]` | 4.5e-08 |
+| unconstrained_rescue − pcgrad | 0.000000 | `[0, 0]` | n/a |
+
+`unconstrained_rescue` and `pcgrad` are *bitwise identical* on this run, because
+PCGrad only projects when the rescue direction conflicts with the ERM velocity and no
+conflict arose. That is a property of this regime, not of the methods.
+
+The honest summary is therefore: the differences are statistically detectable and
+practically negligible, roughly four orders of magnitude smaller than the
+`≈ −10.5` effect each has against ERM. Claiming equivalence would require a
+**preregistered equivalence margin** and a test against it, which has not been done.
+Until then, say "numerically similar" and quote the table.
 
 **What CDC uniquely delivers.** Exact instantaneous strong-drift preservation:
 `4.77e-07`, consistent with float32 rounding, against `1.5e-01` to `3.8e-01` for

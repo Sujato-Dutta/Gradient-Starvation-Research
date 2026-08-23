@@ -16,6 +16,7 @@ from .theory import (
     ProjectedStatistics,
     crossover_decomposition,
     drift_correction,
+    equal_time_drift_difference,
     fixed_geometry_susceptibility,
     projected_statistics,
 )
@@ -31,6 +32,28 @@ _SHADOW_METHODS = {
     "bloop": "bloop",
     "pcgrad": "pcgrad",
 }
+
+
+def _reject_mismatched_diagnostics(mitigation: Mapping[str, object]) -> None:
+    """Refuse to log cross-entropy diagnostics for a run trained on another objective.
+
+    ``projected_statistics`` computes the CE field, CE sensitivity, margin law and
+    GSI-5.  Under ``objective: mse`` the parameters follow a different flow, so every
+    one of those columns would describe a loss that is not being minimized -- silently,
+    and under the same column names. Blocking is better than emitting mislabelled
+    numbers; making the diagnostics objective-aware is the real fix and is not done
+    here.
+    """
+    objective = str(mitigation.get("objective", "cross_entropy"))
+    if objective != "cross_entropy":
+        raise NotImplementedError(
+            f"Diagnostic logging is cross-entropy specific, so training with "
+            f"objective={objective!r} is refused rather than reported. The projected "
+            "field, sensitivity, margin statistics and GSI-5 are all defined by the "
+            "logistic loss; under another objective they would describe a loss that is "
+            "not being minimized. The MSE objective itself is available through "
+            "losses.base_objective for use outside the diagnostic pipeline."
+        )
 
 
 def _snapshot_state(model: torch.nn.Module) -> dict[str, torch.Tensor]:
@@ -143,6 +166,7 @@ def train_single(
     log_every = int(training.get("log_every", 10))
     if not bool(training.get("full_batch", True)):
         raise NotImplementedError("Controlled synthetic experiments require full_batch: true.")
+    _reject_mismatched_diagnostics(mitigation)
     optimizer = torch.optim.SGD(
         model.parameters(), learning_rate, weight_decay=float(training.get("weight_decay", 0.0))
     )
@@ -258,6 +282,7 @@ def train_paired_lockstep(
         )
     if not bool(training.get("full_batch", True)):
         raise NotImplementedError("Controlled synthetic experiments require full_batch: true.")
+    _reject_mismatched_diagnostics(mitigation)
 
     seed_everything(seed)
     device = both.x.device
@@ -300,10 +325,13 @@ def train_paired_lockstep(
                 weak_stats, weak_model, weak, step, learning_rate
             )
             crossover = crossover_decomposition(both_stats, weak_stats, both.z_w)
+            equal_time = equal_time_drift_difference(both_stats, weak_stats)
             both_row.update(
                 {
                     "wall_seconds": elapsed,
-                    "d_w": float(crossover.d_w.detach()),
+                    # Matched-state family: exact three-term identity, but NOT the
+                    # derivative of the equal-time response gap.
+                    "d_w_matched": float(crossover.d_w.detach()),
                     "t_geom": float(crossover.t_geom.detach()),
                     "s_ce": float(crossover.s_ce.detach()),
                     "t_geom_self": float(crossover.geometry_self_term.detach()),
@@ -312,6 +340,15 @@ def train_paired_lockstep(
                         crossover.reconstruction_error.detach()
                     ),
                     "matched_weak_only_m_w": float(weak_stats.mode[1].detach()),
+                    # Equal-time family: this one IS d/dtau of the response gap, so it
+                    # is the quantity to use for any drift-versus-response comparison.
+                    "d_w_equal_time": float(equal_time.d_w_equal_time.detach()),
+                    "equal_time_geometry_difference": float(
+                        equal_time.geometry_difference.detach()
+                    ),
+                    "equal_time_field_difference": float(
+                        equal_time.field_difference.detach()
+                    ),
                 }
             )
             weak_row["wall_seconds"] = elapsed
