@@ -185,3 +185,79 @@ def plot_enl(trajectories: pd.DataFrame, summary: pd.DataFrame, run_dir: Path) -
                   title=f"{kind}: transfer above zero, starvation below")
         right.legend(fontsize=8)
     _save_all(fig, run_dir / "enl_crossover")
+
+
+# Ordered so the colour ramp reads unlearnable/degenerate (artifact buckets)
+# through transfer -> neutral -> starvation (the physical axis).
+_REGION_ORDER = ("unlearnable", "degenerate", "transfer", "neutral", "starvation")
+_REGION_COLOURS = ("#bdbdbd", "#7b6888", "#2c7fb8", "#f0e442", "#d7301f")
+
+
+def plot_e1_regions(summary: pd.DataFrame, run_dir: Path, boundary=None) -> None:
+    """Categorical learnability-gated region map.
+
+    Each cell shows the modal regime across seeds plus the seed agreement, so a
+    split cell cannot be mistaken for a unanimous one.  Cells are never blank-filled
+    as a numeric zero; an absent cell stays visibly empty.
+    """
+    if summary.empty or "regime_class" not in summary:
+        return
+    positive = summary[summary["regime"] == "positive"]
+    if positive.empty:
+        return
+    lags = sorted(positive["lag_separation"].unique(), reverse=True)
+    strengths = sorted(positive["rho"].unique())
+    index = {value: position for position, value in enumerate(_REGION_ORDER)}
+
+    codes = pd.DataFrame(index=lags, columns=strengths, dtype=float)
+    labels = pd.DataFrame("", index=lags, columns=strengths, dtype=object)
+    for lag in lags:
+        for rho in strengths:
+            cell = positive[
+                (positive["lag_separation"] == lag) & (positive["rho"] == rho)
+            ]
+            if cell.empty:
+                codes.loc[lag, rho] = np.nan
+                labels.loc[lag, rho] = ""
+                continue
+            counts = cell["regime_class"].value_counts()
+            modal = counts.index[0]
+            codes.loc[lag, rho] = index.get(modal, np.nan)
+            labels.loc[lag, rho] = (
+                f"{modal}\n{int(counts.iloc[0])}/{int(counts.sum())}"
+            )
+
+    fig, ax = plt.subplots(figsize=(1.7 * len(strengths) + 3.4, 1.3 * len(lags) + 2.4),
+                           constrained_layout=True)
+    ax.set_facecolor("#f7f7f7")
+    cmap = matplotlib.colors.ListedColormap(_REGION_COLOURS)
+    sns.heatmap(
+        codes.astype(float), annot=labels, fmt="", cmap=cmap,
+        vmin=-0.5, vmax=len(_REGION_ORDER) - 0.5, ax=ax, linewidths=0.6,
+        linecolor="white", annot_kws={"fontsize": 8},
+        cbar_kws={"label": "Causal regime", "ticks": range(len(_REGION_ORDER))},
+    )
+    colorbar = ax.collections[0].colorbar
+    colorbar.set_ticklabels(_REGION_ORDER)
+    if boundary is not None and not boundary.empty:
+        overlay = boundary[
+            boundary.rho.isin(strengths) & boundary.lag_separation.isin(lags)
+        ]
+        if not overlay.empty:
+            ax.plot(
+                [strengths.index(value) + 0.5 for value in overlay.rho],
+                [lags.index(value) + 0.5 for value in overlay.lag_separation],
+                color="black", linewidth=2.0, label="Theory boundary", zorder=10,
+            )
+            ax.legend(loc="best")
+    ax.set(xlabel="Feature-strength ratio", ylabel="Temporal separation",
+           title="Causal regime after the weak-only learnability gate")
+    fig.text(
+        0.5, -0.03,
+        "Cell label is the modal regime and seed agreement. 'unlearnable' means the "
+        "weak-only counterfactual never reached the target, so the point is "
+        "indeterminate rather than starved; 'degenerate' means the target was already "
+        "met at initialization.",
+        ha="center", fontsize=8, wrap=True,
+    )
+    _save_all(fig, run_dir / "e1_causal_regions")

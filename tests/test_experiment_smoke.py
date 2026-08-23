@@ -9,6 +9,7 @@ import pytest
 
 from gradient_starvation.config import load_config
 from gradient_starvation.experiments import run_e1, run_e2, run_e3, run_enl
+from gradient_starvation.metrics import CAUSAL_REGIMES
 from gradient_starvation.plotting import _e1_plot_tables
 
 
@@ -42,11 +43,35 @@ def test_e1_smoke_run_writes_documented_artifacts(tmp_path):
 
     _assert_common_outputs(run_dir)
     _assert_figure_pair(run_dir, "e1_phase_diagram")
+    _assert_figure_pair(run_dir, "e1_causal_regions")
+    assert (run_dir / "regions.csv").is_file()
     summary = pd.read_csv(run_dir / "summary.csv")
     trajectories = pd.read_csv(run_dir / "trajectories.csv")
     assert {"rho", "lag_separation", "regime", "delta_tw", "right_censored"} <= set(summary)
     assert {"both", "weak_only"} == set(trajectories["condition"])
     assert not summary["right_censored"].any()
+
+    # The gated classification is emitted alongside the pre-gate label, so the
+    # run directories already on disk stay interpretable.
+    assert {
+        "regime_class", "weak_only_learnable", "target_met_at_initialization",
+        "gated_delta_tw", "legacy_phase", "phase",
+    } <= set(summary)
+    assert set(summary["regime_class"]) <= set(CAUSAL_REGIMES)
+    assert (summary["legacy_phase"] == summary["phase"]).all()
+
+
+def test_e1_learnability_gate_config_keys_are_honoured(tmp_path):
+    """`task.tau_max` and `task.delta_tw_tolerance` must reach the classifier."""
+    config = _smoke_config("smoke.yaml", tmp_path)
+    config["task"]["beta"] = -1_000_000.0
+    # An impossibly early horizon makes every point unlearnable, which is the
+    # cheapest way to prove the key is actually consumed.
+    config["task"]["tau_max"] = -1.0
+    run_dir = run_e1(config)
+    summary = pd.read_csv(run_dir / "summary.csv")
+    assert set(summary["regime_class"]) == {"unlearnable"}
+    assert not summary["weak_only_learnable"].any()
 
 
 def test_e1_plot_tables_keep_censored_grid_cells_visible():

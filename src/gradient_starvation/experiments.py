@@ -13,11 +13,12 @@ import torch
 from .data.synthetic import SyntheticTaskSpec, make_paired_task
 from .metrics import (
     causal_metrics,
+    classify_causal_regime,
     mean_confidence_interval,
     n_sign_changes,
     sign_crossing_time,
 )
-from .plotting import plot_e1, plot_e2, plot_e3, plot_enl
+from .plotting import plot_e1, plot_e1_regions, plot_e2, plot_e3, plot_enl
 from .models.recurrent import DenseLinearRNN
 from .theory import exact_dense_linear_geometry, gradient_gram, integrate_projected_flow
 from .training import train_paired
@@ -83,21 +84,45 @@ def _write_aggregate(
     pd.DataFrame(rows).to_csv(path, index=False)
 
 
-def _paired_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[str, Any]:
+def _paired_summary(
+    frame: pd.DataFrame,
+    beta: float,
+    phase_delay: float,
+    *,
+    tau_max: float | None = None,
+    delta: float | None = None,
+) -> dict[str, Any]:
     both = frame[frame.condition == "both"].sort_values("tau")
     weak = frame[frame.condition == "weak_only"].sort_values("tau")
     if not np.allclose(both.tau.to_numpy(), weak.tau.to_numpy()):
         raise RuntimeError("Paired trajectories do not share the same optimization-time grid.")
-    causal = causal_metrics(both.tau.to_numpy(), both.m_w.to_numpy(), weak.m_w.to_numpy(), beta)
+    times = both.tau.to_numpy()
+    causal = causal_metrics(times, both.m_w.to_numpy(), weak.m_w.to_numpy(), beta)
+
+    # `legacy_phase` preserves the label emitted before the learnability gate
+    # existed, so the run directories already on disk stay interpretable.
     if math.isfinite(causal.delta_tw):
-        phase = "delayed_weak" if causal.delta_tw > phase_delay else "jointly_learned"
+        legacy_phase = "delayed_weak" if causal.delta_tw > phase_delay else "jointly_learned"
     elif math.isfinite(causal.weak_hitting_time) and not math.isfinite(causal.both_hitting_time):
-        phase = "strongly_starved"
+        legacy_phase = "strongly_starved"
     else:
-        phase = "indeterminate"
+        legacy_phase = "indeterminate"
+
+    verdict = classify_causal_regime(
+        weak_hitting_time=causal.weak_hitting_time,
+        both_hitting_time=causal.both_hitting_time,
+        tau_max=float(times[-1]) if tau_max is None else float(tau_max),
+        delta=phase_delay if delta is None else float(delta),
+        initial_tau=float(times[0]),
+    )
     return {
         **causal.__dict__,
-        "phase": phase,
+        "regime_class": verdict.regime,
+        "weak_only_learnable": verdict.weak_only_learnable,
+        "target_met_at_initialization": verdict.target_met_at_initialization,
+        "gated_delta_tw": verdict.delta_tw,
+        "legacy_phase": legacy_phase,
+        "phase": legacy_phase,
         "final_both_m_s": float(both.iloc[-1].m_s),
         "final_both_m_w": float(both.iloc[-1].m_w),
         "final_weak_m_s": float(weak.iloc[-1].m_s),
@@ -131,6 +156,8 @@ def run_e1(config: dict[str, Any]) -> Path:
                         pd.DataFrame(annotated),
                         beta=float(task.get("beta", 0.5)),
                         phase_delay=float(task.get("phase_delay", 1.0)),
+                        tau_max=task.get("tau_max"),
+                        delta=task.get("delta_tw_tolerance"),
                     ),
                 }
             )
@@ -142,9 +169,15 @@ def run_e1(config: dict[str, Any]) -> Path:
         ['delta_tw', 'weak_auc_gap', 'final_accuracy', 'final_gsi5', 'mean_A_sw'],
         run_dir / 'aggregate.csv',
     )
+    summary.groupby(
+        ["rho", "lag_separation", "regime", "regime_class"], dropna=False
+    ).size().rename("n_seeds").reset_index().to_csv(run_dir / "regions.csv", index=False)
+    # `theory_boundary_file` stays optional: the analytic boundary needs the DMFT
+    # solver, which is blocked.  Both figures accept the overlay when it exists.
     boundary_path = task.get('theory_boundary_file')
     boundary = pd.read_csv(boundary_path) if boundary_path else None
     plot_e1(summary, run_dir, boundary)
+    plot_e1_regions(summary, run_dir, boundary)
     return run_dir
 
 

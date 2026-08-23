@@ -65,6 +65,124 @@ def causal_metrics(
     )
 
 
+CAUSAL_REGIMES = ("unlearnable", "degenerate", "transfer", "neutral", "starvation")
+
+
+@dataclass(frozen=True)
+class CausalRegimeVerdict:
+    """Learnability-gated classification of one paired run."""
+
+    regime: str
+    weak_only_learnable: bool
+    target_met_at_initialization: bool
+    weak_hitting_time: float
+    both_hitting_time: float
+    delta_tw: float
+    right_censored: bool
+
+
+def classify_causal_regime(
+    *,
+    weak_hitting_time: float,
+    both_hitting_time: float,
+    tau_max: float,
+    delta: float,
+    initial_tau: float = 0.0,
+) -> CausalRegimeVerdict:
+    """Classify a paired run only after establishing counterfactual learnability.
+
+    A positive delay means nothing unless the weak feature demonstrably learns in
+    the weak-only counterfactual.  The gate is applied first, and ``delta_tw`` is
+    left undefined outside the learnable region.
+
+    Regimes
+    -------
+    ``unlearnable``
+        The weak-only condition never reaches the target within ``tau_max``.
+        There is no counterfactual learning to suppress, so the point is
+        indeterminate rather than starved.
+    ``degenerate``
+        The target was already satisfied at ``initial_tau``, before any
+        optimization step.  This is a measurement artifact -- initialization noise
+        exceeding the threshold -- not a phase.  It is bucketed separately so it
+        cannot be silently read as "learned instantly" or "neutral".
+    ``starvation``
+        ``delta_tw > delta``.  This includes the right-censored case where the
+        both-feature condition never reaches the target while weak-only does,
+        which is the strongest form of starvation and carries ``delta_tw = inf``.
+    ``neutral``
+        ``abs(delta_tw) <= delta``.
+    ``transfer``
+        ``delta_tw < -delta``.  The strong feature accelerates weak learning.
+
+    Note that ``delta_tw`` at a single threshold is a far less sensitive detector
+    than the trajectory AUC gap: at small ``beta`` both conditions can cross the
+    threshold almost immediately and diverge only afterwards.  Report both.
+    """
+    if delta < 0:
+        raise ValueError("delta must be non-negative.")
+    weak_learnable = math.isfinite(weak_hitting_time) and weak_hitting_time <= tau_max
+    if not weak_learnable:
+        return CausalRegimeVerdict(
+            regime="unlearnable",
+            weak_only_learnable=False,
+            target_met_at_initialization=False,
+            weak_hitting_time=weak_hitting_time,
+            both_hitting_time=both_hitting_time,
+            delta_tw=float("nan"),
+            right_censored=True,
+        )
+    if weak_hitting_time <= initial_tau:
+        return CausalRegimeVerdict(
+            regime="degenerate",
+            weak_only_learnable=True,
+            target_met_at_initialization=True,
+            weak_hitting_time=weak_hitting_time,
+            both_hitting_time=both_hitting_time,
+            delta_tw=float("nan"),
+            right_censored=False,
+        )
+    censored = not math.isfinite(both_hitting_time)
+    delta_tw = float("inf") if censored else both_hitting_time - weak_hitting_time
+    if delta_tw > delta:
+        regime = "starvation"
+    elif delta_tw < -delta:
+        regime = "transfer"
+    else:
+        regime = "neutral"
+    return CausalRegimeVerdict(
+        regime=regime,
+        weak_only_learnable=True,
+        target_met_at_initialization=False,
+        weak_hitting_time=weak_hitting_time,
+        both_hitting_time=both_hitting_time,
+        delta_tw=delta_tw,
+        right_censored=censored,
+    )
+
+
+def classify_causal_regime_from_trajectories(
+    times: np.ndarray,
+    both_values: np.ndarray,
+    weak_values: np.ndarray,
+    *,
+    beta: float,
+    tau_max: float | None = None,
+    delta: float,
+) -> CausalRegimeVerdict:
+    """Convenience wrapper computing the hitting times before classifying."""
+    times = np.asarray(times, dtype=float)
+    if len(times) == 0:
+        raise ValueError("times must not be empty.")
+    return classify_causal_regime(
+        weak_hitting_time=first_hitting_time(times, weak_values, beta),
+        both_hitting_time=first_hitting_time(times, both_values, beta),
+        tau_max=float(times[-1]) if tau_max is None else float(tau_max),
+        delta=delta,
+        initial_tau=float(times[0]),
+    )
+
+
 def sign_crossing_time(
     times: np.ndarray, values: np.ndarray, *, descending: bool = True
 ) -> float:
