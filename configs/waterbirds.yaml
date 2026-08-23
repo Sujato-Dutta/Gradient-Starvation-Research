@@ -16,8 +16,27 @@ training:
   weight_decay: 0.0001
   seeds: [0, 1, 2]
 mitigation:
-  methods: [erm, spectral_decoupling, interaction]
+  # Two information settings, and they must be tabulated separately. Every emitted
+  # row carries an `information_setting` column recording which applies.
+  #
+  #   group_agnostic            erm, spectral_decoupling, counterfactual_drift_modal
+  #   oracle_uses_group_labels  interaction, counterfactual_drift_oracle
+  #
+  # counterfactual_drift_oracle is a mechanistic transfer probe using the background
+  # annotation; it is NOT comparable to group-agnostic robustness methods.
+  #
+  # NOTHING HERE HAS BEEN RUN. See research_scope/waterbirds_setup.md for the dataset
+  # and pretrained-asset setup the author must perform first.
+  methods:
+    - erm
+    - spectral_decoupling
+    - interaction
+    - counterfactual_drift_oracle
+    - counterfactual_drift_modal
   coefficient: 0.01
   spectral_coefficient: 0.01
   mode: proxy
+  # Waterbirds has no exact strong-ablated counterfactual, so the weak-drift target
+  # is a stated surrogate rather than a matched shadow model. See the setup note.
+  weak_drift_target: 0.0
 

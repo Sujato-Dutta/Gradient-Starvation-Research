@@ -163,6 +163,22 @@ def test_waterbirds_dependency_preflight_is_actionable(monkeypatch):
         waterbirds._setup({"data": {"root": "data", "batch_size": 1, "num_workers": 0}})
 
 
+def test_waterbirds_config_methods_are_all_recognised():
+    """Every method named in the shipped config must be a known Waterbirds method."""
+    from gradient_starvation.waterbirds import WATERBIRDS_METHODS, information_setting
+
+    config = load_config(ROOT / "configs" / "waterbirds.yaml")
+    methods = config.get("mitigation", {}).get("methods", [])
+    assert methods, "the Waterbirds config should name at least one method"
+    for method in methods:
+        assert method in WATERBIRDS_METHODS, method
+        # Every method must resolve to an information setting, so no arm can be
+        # tabulated without disclosing the supervision it consumed.
+        assert information_setting(method) in {
+            "oracle_uses_group_labels", "group_agnostic"
+        }
+
+
 def test_enl_smoke_run_writes_crossover_artifacts(tmp_path):
     run_dir = run_enl(_smoke_config("enl_smoke.yaml", tmp_path))
 
