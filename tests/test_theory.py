@@ -4,12 +4,18 @@ from gradient_starvation.data.synthetic import SyntheticTaskSpec, make_paired_ta
 from gradient_starvation.losses import training_objective
 from gradient_starvation.models.recurrent import DenseLinearRNN, build_model
 from gradient_starvation.theory import (
+    cdc_finite_step_deviation_bound,
     counterfactual_drift_correction,
     crossover_decomposition,
+    discrete_crossover_certificate,
     exact_dense_linear_geometry,
     gradient_gram,
     matched_weak_drift_decomposition,
     projected_statistics,
+    rank_one_drift_ratio,
+    transverse_hitting_time_error_bound,
+    zero_disorder_initialization_failure_bound,
+    zero_disorder_trajectory_failure_bound,
 )
 
 
@@ -167,3 +173,176 @@ def test_matching_conventions_are_distinct():
         "The two matching conventions coincided; this test can no longer detect "
         "a silent convention swap."
     )
+
+
+def test_linear_exact_realization_has_zero_mode_and_drift_residuals():
+    """The closed Gg corollary is exact on its stated linear/no-background scope."""
+    torch.manual_seed(37)
+    spec = SyntheticTaskSpec(
+        sequence_length=6,
+        n_samples=128,
+        rho=3,
+        lag_separation=2,
+        cue_noise=0.1,
+        background_noise=0.0,
+    )
+    both, _ = make_paired_task(spec, seed=19)
+    model = DenseLinearRNN(width=9, bulk_gain=0.3)
+    stats = projected_statistics(model, both, compute_direct_drift=True)
+
+    assert stats.mode_residual_rms < 2e-6
+    assert stats.projected_drift_residual is not None
+    torch.testing.assert_close(
+        stats.projected_drift_residual,
+        torch.zeros_like(stats.projected_drift_residual),
+        rtol=2e-5,
+        atol=2e-6,
+    )
+
+
+def test_nonlinear_projected_modes_expose_the_omitted_drift_residual():
+    """Nonlinear probe responses must never be silently labelled exact Gg dynamics."""
+    torch.manual_seed(41)
+    spec = SyntheticTaskSpec(
+        sequence_length=7,
+        n_samples=96,
+        rho=3,
+        lag_separation=3,
+        cue_noise=0.15,
+        background_noise=0.0,
+    )
+    both, _ = make_paired_task(spec, seed=23)
+    model = build_model({"kind": "tanh", "width": 10})
+    stats = projected_statistics(model, both, compute_direct_drift=True)
+
+    assert stats.mode_residual_rms > 1e-5
+    assert stats.projected_drift_residual is not None
+    assert torch.isfinite(stats.projected_drift_residual).all()
+    assert stats.projected_drift_residual.norm() > 1e-7
+
+
+def test_rank_one_log_ratio_factorizes_noiseless_linear_weak_drifts():
+    torch.manual_seed(43)
+    spec = SyntheticTaskSpec(
+        sequence_length=5,
+        n_samples=64,
+        rho=4,
+        lag_separation=0,
+        cue_noise=0.0,
+        background_noise=0.0,
+    )
+    both, weak = make_paired_task(spec, seed=29)
+    # At the zero-disorder/zero-lag anchor, the weak geometry factors concentrate
+    # near positive constants, satisfying Theorem C's explicit positivity premise.
+    model_both = DenseLinearRNN(width=64, bulk_gain=0.0)
+    model_weak = DenseLinearRNN(width=64, bulk_gain=0.0)
+    model_weak.load_state_dict(model_both.state_dict())
+    both_stats = projected_statistics(model_both, both, compute_direct_drift=True)
+    weak_stats = projected_statistics(model_weak, weak, compute_direct_drift=True)
+
+    certificate = rank_one_drift_ratio(both_stats, weak_stats, rho=spec.rho)
+    assert certificate.positive_drifts
+    torch.testing.assert_close(
+        certificate.both_factorization_error,
+        torch.zeros_like(certificate.both_factorization_error),
+        rtol=2e-5,
+        atol=2e-6,
+    )
+    torch.testing.assert_close(
+        certificate.weak_only_factorization_error,
+        torch.zeros_like(certificate.weak_only_factorization_error),
+        rtol=2e-5,
+        atol=2e-6,
+    )
+    assert torch.isfinite(certificate.log_drift_ratio)
+    assert torch.sign(certificate.log_drift_ratio) == torch.sign(
+        certificate.drift_difference
+    )
+
+
+def test_discrete_tail_area_certificate_distinguishes_suppression_from_starvation():
+    starved = discrete_crossover_certificate(
+        [0.0, 1.0, 2.0, 1.0, 0.0, -1.0], weak_only_learnable=True
+    )
+    assert starved.single_transfer_to_suppression
+    assert starved.drift_crossover_step == 2
+    assert starved.peak_step == 2
+    assert starved.response_equality_step == 4
+    assert starved.positive_area == 2.0
+    assert starved.negative_tail_area == 3.0
+    assert starved.tail_area_margin == 1.0
+    assert starved.strict_outcome_starvation
+    assert starved.causal_starvation_certified
+
+    suppressed_only = discrete_crossover_certificate([0.0, 1.0, 2.0, 1.5, 1.0])
+    assert suppressed_only.single_transfer_to_suppression
+    assert not suppressed_only.response_equality_reached
+    assert not suppressed_only.strict_outcome_starvation
+    assert suppressed_only.tail_area_margin == -1.0
+
+
+def test_discrete_certificate_requires_one_strict_sign_change():
+    oscillatory = discrete_crossover_certificate([0.0, 1.0, 0.5, 0.75, 0.25])
+    assert not oscillatory.single_transfer_to_suppression
+    assert not oscillatory.causal_starvation_certified
+
+
+def test_transverse_hitting_time_bound_includes_grid_resolution():
+    assert transverse_hitting_time_error_bound(
+        0.06, 0.3, grid_spacing=0.05
+    ) == 0.25
+
+
+def test_zero_disorder_probability_bounds_have_the_proved_scaling():
+    coarse = zero_disorder_initialization_failure_bound(100, 0.5)
+    wide = zero_disorder_initialization_failure_bound(400, 0.5)
+    assert coarse == 0.36
+    assert wide == 0.09
+    propagated = zero_disorder_trajectory_failure_bound(
+        width=400,
+        delta=1.0,
+        lipschitz_constant=0.5,
+        horizon=1.0,
+    )
+    assert propagated >= zero_disorder_initialization_failure_bound(400, 1.0)
+
+
+def test_cdc_finite_step_bound_controls_a_quadratic_protected_response():
+    # m_s(x)=L||x||^2/2 has exactly L-Lipschitz gradient.  The correction changes
+    # only the coordinate orthogonal to grad m_s(theta), so first-order terms cancel.
+    lipschitz = 2.0
+    eta = 0.1
+    theta = torch.tensor([1.0, 0.0], dtype=torch.float64)
+    erm_velocity = torch.tensor([0.3, 0.4], dtype=torch.float64)
+    corrected_velocity = torch.tensor([0.3, 0.6], dtype=torch.float64)
+
+    def response(value: torch.Tensor) -> torch.Tensor:
+        return 0.5 * lipschitz * value.square().sum()
+
+    observed = abs(
+        float(response(theta + eta * corrected_velocity))
+        - float(response(theta + eta * erm_velocity))
+    )
+    bound = cdc_finite_step_deviation_bound(
+        lipschitz,
+        eta,
+        float(erm_velocity.norm()),
+        float(corrected_velocity.norm()),
+    )
+    assert observed <= bound
+
+
+def test_nonlinear_probe_response_is_common_across_causal_conditions():
+    """Shared parameters must imply Delta(0)=0 for the theorem response functional."""
+    spec = SyntheticTaskSpec(
+        sequence_length=7, n_samples=64, rho=4, lag_separation=2, cue_noise=0.1
+    )
+    both, weak = make_paired_task(spec, seed=31)
+    for kind in ("tanh", "gru"):
+        torch.manual_seed(47)
+        model_both = build_model({"kind": kind, "width": 9})
+        model_weak = build_model({"kind": kind, "width": 9})
+        model_weak.load_state_dict(model_both.state_dict())
+        both_mode = projected_statistics(model_both, both).mode
+        weak_mode = projected_statistics(model_weak, weak).mode
+        torch.testing.assert_close(both_mode, weak_mode, rtol=0, atol=0)

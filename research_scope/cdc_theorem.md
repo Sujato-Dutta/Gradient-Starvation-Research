@@ -29,39 +29,46 @@ F_s = a . v,        F_w = p . v.
 
 A matched weak-only shadow model, trained in lockstep from the same
 initialization on the strong-ablated batch, supplies the *counterfactual* weak
-drift `F_w^W`. The correction is restricted to the component of `p` orthogonal to
-`a`:
+drift `F_w^W`. When `a != 0`, restrict the correction to the component of `p`
+orthogonal to `a`:
 
 ```
-q = p - (p . a / ||a||^2) a,        so   a . q = 0,   q != 0 unless p || a.
+q = p - (p . a / ||a||^2) a,        so   a . q = 0.
 ```
 
-The applied update is `v' = v + alpha q` with
+When `a=0`, define `q=p`; first-order strong preservation is then automatic. The
+uncapped update is `v' = v + alpha q` with
 
 ```
-alpha = relu(F_w^W - F_w) / ||q||^2,
+delta = relu(F_w^W - F_w),        alpha = delta / ||q||^2
 ```
 
-optionally capped at `max_alpha`. Assumptions used throughout: full-batch
-gradients, zero weight decay, no gradient clipping. The trainer rejects
-configurations violating these, because each would perturb the update after the
-correction is computed and so invalidate the algebra.
+when `delta>0` and `q!=0`, and `alpha=0` when `delta=0`. A positive deficit with
+`q=0` is infeasible. An optional `max_alpha` cap preserves the orthogonality result
+but generally loses target attainment and minimum-norm optimality over the set of
+target-attaining corrections.
+
+Assumptions used throughout: full-batch gradients, zero weight decay, no gradient
+clipping, and an actual SGD step along the corrected velocity. The trainer rejects
+configurations violating these because they perturb the update after the correction
+is computed and invalidate the algebra.
 
 ---
 
 ## Result 1 — first-order strong-drift preservation. **Proved.**
 
-**Claim.** `a . v' = a . v`, exactly, for any `alpha`.
+**Claim.** `a . v' = a . v`, exactly, for any `alpha` produced by the
+construction above.
 
-**Proof.** `a . v' = a . (v + alpha q) = a . v + alpha (a . q)`. By construction
-`q` is the residual of `p` after projection onto `a`, so
+**Proof.** If `a=0`, both sides vanish. If `a!=0`,
+`a . v' = a . (v + alpha q) = a . v + alpha (a . q)`, and
 
 ```
-a . q = a . p - (p . a / ||a||^2)(a . a) = a . p - p . a = 0,
+a . q = a . p - (p . a / ||a||^2)(a . a) = a . p - p . a = 0.
 ```
 
-hence `a . v' = a . v`. The identity is independent of `alpha`, so capping the
-coefficient does not weaken it. □
+Hence `a . v' = a . v`. The identity is independent of `alpha`, so capping the
+coefficient does not weaken this first-order preservation statement. □
 
 **Scope.** This concerns the *instantaneous first-order* strong-response drift at
 the current parameter state. It is not a statement about the strong response at
@@ -76,20 +83,23 @@ inner products rather than with a systematic effect.
 
 ## Result 2 — optimality of the correction. **Proved.**
 
-**Claim.** Among all corrections `d` satisfying `a . d = 0` and
-`p . (v + d) >= F_w^W`, the choice `d* = alpha q` with `alpha` as above is the
-unique minimiser of `||d||`.
+**Claim.** For the **uncapped** construction, among all corrections `d`
+satisfying `a . d = 0` and `p . (v + d) >= F_w^W`, the choice
+`d* = alpha q` above is the unique minimiser of `||d||` whenever the constraint is
+feasible.
 
-**Proof.** Feasibility requires `p . d >= F_w^W - F_w =: delta`. If `delta <= 0`
-then `d = 0` is feasible and trivially minimal, and `alpha = 0` by the `relu`.
-Assume `delta > 0`. Decompose `p = q + (p . a / ||a||^2) a`. For any `d` with
-`a . d = 0`,
+**Proof.** Feasibility requires `p . d >= F_w^W - F_w =: delta`. If
+`delta <= 0`, `d=0` is feasible and trivially minimal, and `alpha=0` by the
+`relu`. Assume `delta>0`. When `a=0`, `q=p` and the argument below applies on the
+whole parameter space. When `a!=0`, decompose
+`p = q + (p . a / ||a||^2) a`. For every admissible `d`,
 
 ```
 p . d = q . d,
 ```
 
-because the `a`-component of `p` is annihilated by `d`. So the problem is
+because the `a`-component of `p` is annihilated by `d`. Thus in either case the
+problem reduces to
 
 ```
 minimise ||d||   subject to   a . d = 0,   q . d >= delta.
@@ -111,37 +121,77 @@ Equivalently: `d*` maximises the strictly concave objective
 eliminating the multiplier `mu`. The two formulations agree with
 `lambda = delta / ||q||^2`.
 
-**Feasibility condition.** The construction requires `q != 0`, i.e. `grad m_w` not
-parallel to `grad m_s`. The trainer logs `protected_norm_sq = ||q||^2` and a
-`cdc_feasible` flag at every logged step; both validations report 100%
-feasibility and 100% target attainment.
+**Feasibility condition.** If `delta<=0`, `d=0` is feasible regardless of
+`q`. If `delta>0`, feasibility requires `q!=0`, i.e. `grad m_w` must have a
+nonzero component orthogonal to `grad m_s`. The trainer logs
+`protected_norm_sq=||q||^2`, `cdc_feasible`, and target attainment. Its numerical
+`feasibility_epsilon` is an implementation tolerance: exact theorem claims require
+either `a=0` or the exact projection branch, and a positive lower bound on `||q||`
+for the explicit Result 3 constant.
 
 ---
 
-## Result 3 — finite-step deviation. **Target, not proved.**
+## Result 3 — local finite-step deviation. **Proved, conditionally.**
 
-**Intended statement.** Let `m_s` have `L`-Lipschitz gradient in a neighbourhood
-containing the segment traversed by one step. Then a single gradient-descent step
-of size `eta` satisfies
+**Claim.** Fix the current state `theta`. Let `grad m_s` be `L`-Lipschitz on a
+convex neighbourhood containing both step segments
 
 ```
-| m_s(theta + eta v') - m_s(theta + eta v) | <= (L / 2) eta^2 ( ||v'||^2 + ||v||^2 ) ,
+{theta + s eta v : 0 <= s <= 1},
+{theta + s eta v' : 0 <= s <= 1}.
 ```
 
-so the one-step strong-response deviation between CDC and ERM is `O(eta^2)` with a
-constant governed by `L` and the update norms.
+Then
 
-**Why it is not yet proved.** The Taylor argument is routine, but a usable
-statement needs (i) an explicit neighbourhood on which the Lipschitz constant is
-valid, (ii) a bound on `||v'||` in terms of `||v||` and `alpha ||q||`, which
-requires controlling `1/||q||^2` away from the feasibility boundary, and (iii) a
-statement about accumulation over many steps, which is what would actually license
-a trajectory-level claim. None of these is written.
+```
+|m_s(theta + eta v') - m_s(theta + eta v)|
+    <= (L/2) eta^2 (||v'||^2 + ||v||^2).
+```
+
+If additionally `||v||<=V`, the active deficit is at most `D`, and
+`||q||>=q_min>0`, then
+
+```
+||v'|| <= V + D/q_min,
+|m_s(theta + eta v') - m_s(theta + eta v)|
+    <= (L/2) eta^2 [V^2 + (V + D/q_min)^2].
+```
+
+When smoothness is known only on the ball `B(theta,r)`, it is sufficient that
+
+```
+eta V <= r,       eta (V + D/q_min) <= r.
+```
+
+**Proof.** The Taylor remainder inequality for a function with `L`-Lipschitz
+gradient is
+
+```
+|m_s(theta+h)-m_s(theta)-grad m_s(theta).h| <= (L/2)||h||^2.
+```
+
+Apply it once with `h=eta v` and once with `h=eta v'`. Result 1 gives
+`grad m_s(theta).(v'-v)=0`, so the linear terms cancel. The triangle inequality
+gives the first bound. For the uncapped active correction,
+
+```
+v'-v = (delta/||q||^2)q,
+||v'|| <= ||v|| + delta/||q|| <= V + D/q_min,
+```
+
+which gives the explicit bound. The ball conditions ensure both segments remain in
+the neighbourhood on which smoothness was assumed. □
+
+**Scope.** This is a fixed-state, one-step theorem. It does not give a uniform
+constant as `q -> 0`, does not accumulate over a trajectory, and does not imply
+final strong-response retention. A coefficient cap preserves Result 1 and the
+Taylor bound with the actual `||v'||`, but may fail to attain the weak-drift target.
+Momentum, adaptive preconditioning, weight decay, clipping, stochastic gradients,
+or recomputing the direction inside the step require separate analyses.
 
 **Measured.** `run_e3r` sweeps `eta` and fits the log-log slope of the one-step
-strong-response deviation. A slope near 2 is consistent with the target; the fitted
-value is reported in the run's `r3_slope.json`. This is an empirical scaling
-measurement, not the bound.
+strong-response deviation. The observed slope near 2 checks the predicted order,
+but is not the proof or an estimate of the theorem's Lipschitz constant.
 
 ---
 
@@ -264,7 +314,8 @@ against `0.305` under CDC here, whereas the frozen tanh validation reported a
 reduction from `0.124` to `0.032`. The two regimes differ; neither should be quoted
 as the general behaviour.
 
-Positioning against Ger & Barak (arXiv:2605.04115) and Clark et al.
-(bioRxiv 2026.03.02.708943) is **not** written here: both are recorded as unread in
-`claim_ledger.md`, and comparative-novelty prose based on titles alone would be
-unfounded.
+Related-work positioning is maintained in `claim_ledger.md` and
+`oral_theorem_package.md`. Ger & Barak (arXiv:2605.04115) and Clark et al.
+(bioRxiv 2026.03.02.708943) have been scoped sufficiently to delimit the novelty
+and unresolved DMFT obligations; no claim here implies independent reproduction
+of their proofs or experiments.

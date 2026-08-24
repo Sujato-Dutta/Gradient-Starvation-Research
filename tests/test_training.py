@@ -16,14 +16,18 @@ def test_mse_objective_is_refused_by_the_diagnostic_pipeline():
     """CE-specific diagnostics must not be silently logged for an MSE run."""
     spec = SyntheticTaskSpec(sequence_length=5, n_samples=16, rho=2, lag_separation=1)
     both, weak = make_paired_task(spec, seed=41)
-    for paired_mode in ("sequential", "lockstep"):
+    for method, paired_mode in (
+        ("erm", "sequential"),
+        ("erm", "lockstep"),
+        ("counterfactual_drift", "sequential"),
+    ):
         with pytest.raises(NotImplementedError, match="cross-entropy specific"):
             train_paired(
                 {"kind": "dense_linear", "width": 6, "bulk_gain": 0.3},
                 both, weak,
                 {"steps": 1, "learning_rate": 0.01, "log_every": 1,
                  "full_batch": True, "paired_mode": paired_mode},
-                {"method": "erm", "objective": "mse"},
+                {"method": method, "objective": "mse"},
                 seed=42,
             )
 
@@ -271,11 +275,11 @@ def test_lockstep_logs_exact_crossover_columns():
     assert all("d_w_equal_time" not in row for row in weak_rows)
 
 
-def test_equal_time_drift_difference_is_the_response_gap_derivative():
-    """The equal-time column must differentiate m_w(both) - m_w(weak-only).
+def test_exact_equal_time_drift_difference_is_the_response_gap_derivative():
+    """The direct-autograd column differentiates the nonlinear response gap.
 
-    The matched-state column does not, and conflating them shifts the measured
-    crossover. Both are logged so the distinction is auditable.
+    The projected Gg and matched-state columns do not carry that theorem for
+    nonlinear tanh probe responses. All three are logged so the distinction is auditable.
     """
     spec = SyntheticTaskSpec(sequence_length=8, n_samples=128, rho=4, lag_separation=2,
                              cue_noise=0.1)
@@ -284,7 +288,7 @@ def test_equal_time_drift_difference_is_the_response_gap_derivative():
         {"kind": "tanh", "width": 16},
         both, weak,
         {"steps": 120, "learning_rate": 0.05, "log_every": 1, "full_batch": True,
-         "paired_mode": "lockstep"},
+         "paired_mode": "lockstep", "exact_response_drift": True},
         {"method": "erm"},
         seed=32,
     )
@@ -296,19 +300,27 @@ def test_equal_time_drift_difference_is_the_response_gap_derivative():
     )
     tau = np.array([r["tau"] for r in both_rows])
     gap = np.array([b["m_w"] - w["m_w"] for b, w in zip(both_rows, weak_rows)])
-    equal_time = np.array([r["d_w_equal_time"] for r in both_rows])
+    exact = np.array([r["d_w_equal_time_exact"] for r in both_rows])
+    projected = np.array([r["d_w_equal_time_projected"] for r in both_rows])
     matched = np.array([r["d_w_matched"] for r in both_rows])
 
-    # The equal-time column equals each condition's own drift difference exactly.
-    own_drifts = np.array([b["drift_w"] - w["drift_w"] for b, w in zip(both_rows, weak_rows)])
-    np.testing.assert_allclose(equal_time, own_drifts, rtol=1e-6, atol=1e-9)
+    own_direct_drifts = np.array(
+        [b["direct_drift_w"] - w["direct_drift_w"] for b, w in zip(both_rows, weak_rows)]
+    )
+    np.testing.assert_allclose(exact, own_direct_drifts, rtol=1e-6, atol=1e-9)
 
-    # And it tracks the numeric derivative of the gap, which the matched column does
-    # not: compare correlation against a central-difference estimate.
+    # Direct autograd tracks the finite-step numerical derivative. The projection
+    # remains close in this regime but has a real, explicitly logged residual.
     numeric = np.gradient(gap, tau)
-    assert np.corrcoef(equal_time, numeric)[0, 1] > 0.999
-    # The two conventions genuinely differ, so substituting one for the other is a bug.
-    assert np.abs(equal_time - matched).max() > 1e-3
+    assert np.corrcoef(exact, numeric)[0, 1] > 0.999
+    assert np.abs(exact - projected).max() > 1e-7
+    np.testing.assert_allclose(
+        exact - projected,
+        np.array([r["equal_time_projection_residual"] for r in both_rows]),
+        rtol=1e-6,
+        atol=1e-9,
+    )
+    assert np.abs(exact - matched).max() > 1e-3
 
 
 def test_lockstep_rejects_counterfactual_drift():

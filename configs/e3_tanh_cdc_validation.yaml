@@ -29,4 +29,3 @@ mitigation:
   spectral_coefficient: 0.01
   mode: proxy
   feasibility_epsilon: 1.0e-10
-

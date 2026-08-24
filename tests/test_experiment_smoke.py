@@ -8,7 +8,14 @@ import pandas as pd
 import pytest
 
 from gradient_starvation.config import load_config
-from gradient_starvation.experiments import run_e1, run_e2, run_e2r, run_e3, run_enl
+from gradient_starvation.experiments import (
+    _enl_summary,
+    run_e1,
+    run_e2,
+    run_e2r,
+    run_e3,
+    run_enl,
+)
 from gradient_starvation.metrics import CAUSAL_REGIMES
 from gradient_starvation.plotting import _e1_plot_tables
 
@@ -29,6 +36,10 @@ def _assert_common_outputs(run_dir: Path) -> None:
     assert (run_dir / "trajectories.csv").is_file()
     assert (run_dir / "summary.csv").is_file()
     assert (run_dir / "aggregate.csv").is_file()
+    environment = json.loads((run_dir / "environment.json").read_text())
+    assert len(environment["source_sha256"]) == 64
+    assert environment["source_file_count"] > 0
+    assert environment["source_scope"] == "run_experiment.py and src/**/*.py"
 
 
 def _assert_figure_pair(run_dir: Path, stem: str) -> None:
@@ -205,12 +216,14 @@ def test_enl_smoke_run_writes_crossover_artifacts(tmp_path):
     both = trajectories[trajectories["condition"] == "both"]
     weak = trajectories[trajectories["condition"] == "weak_only"]
     assert {
-        "d_w_matched", "d_w_equal_time", "t_geom", "s_ce",
+        "d_w_matched", "d_w_equal_time", "d_w_equal_time_projected",
+        "d_w_equal_time_exact", "equal_time_projection_residual", "t_geom", "s_ce",
         "t_geom_self", "t_geom_cross", "equal_time_cross_transport",
         "equal_time_geometry_a", "equal_time_field_a",
         "equal_time_geometry_b", "equal_time_field_b",
     } <= set(both)
-    # Both exact orderings must reconstruct the equal-time difference.
+    # Both additive orderings reconstruct the projected Gg difference.  The direct
+    # autograd column is separately required and is the primary E-NL derivative.
     for ordering in ("a", "b"):
         assert (both[f"equal_time_reconstruction_error_{ordering}"].abs() < 2e-6).all()
         reconstructed = (
@@ -221,14 +234,22 @@ def test_enl_smoke_run_writes_crossover_artifacts(tmp_path):
             rtol=2e-5, atol=2e-6,
         )
     assert summary["max_equal_time_reconstruction_error"].max() < 2e-6
-    assert both[["d_w_matched", "d_w_equal_time", "t_geom", "s_ce"]].notna().all().all()
+    assert both[
+        [
+            "d_w_matched", "d_w_equal_time", "d_w_equal_time_projected",
+            "d_w_equal_time_exact", "equal_time_projection_residual", "t_geom", "s_ce",
+        ]
+    ].notna().all().all()
     assert weak["d_w_matched"].isna().all()
     assert weak["d_w_equal_time"].isna().all()
-    # Both conventions must be reported, and which one drives tau_star_drift must be
-    # unambiguous: it is the equal-time one.
-    assert {"tau_star_drift", "tau_star_matched_state", "tau_star_convention_gap"} <= set(
-        summary
-    )
+    assert weak["d_w_equal_time_exact"].isna().all()
+    # Exact, projected, and matched conventions must all be reported. The exact
+    # direct-autograd convention drives tau_star_drift.
+    assert {
+        "tau_star_drift", "tau_star_drift_projected", "tau_star_projected_gap",
+        "tau_star_matched_state", "tau_star_convention_gap",
+        "max_equal_time_projection_residual", "max_mode_residual_rms",
+    } <= set(summary)
 
     # The reparameterization must reconstruct at every logged step.
     assert (both["decomposition_reconstruction_error"].abs() < 2e-6).all()
@@ -249,6 +270,55 @@ def test_enl_smoke_run_writes_crossover_artifacts(tmp_path):
         assert columns <= set(crossover)
         counted = crossover[list(columns)].sum(axis=1)
         assert (counted == crossover["n_seeds"]).all()
+
+    # The machine-readable starvation phase must obey the same learnability gate
+    # as the causal certificate.
+    starved = summary["phase"] == "transfer_then_starvation"
+    assert summary.loc[starved, "tail_causal_starvation_certified"].all()
+
+
+def test_enl_phase_does_not_call_an_unlearnable_outcome_crossing_starvation():
+    both = pd.DataFrame(
+        {
+            "condition": ["both"] * 3,
+            "tau": [0.0, 1.0, 2.0],
+            "m_s": [0.0, 0.1, 0.2],
+            "m_w": [0.0, 1.0, -1.0],
+            "d_w_equal_time_exact": [1.0, -1.0, -1.0],
+            "d_w_equal_time_projected": [1.0, -1.0, -1.0],
+            "d_w_matched": [1.0, -1.0, -1.0],
+            "t_geom": [1.0, -1.0, -1.0],
+            "s_ce": [0.0, 0.0, 0.0],
+            "decomposition_reconstruction_error": [0.0] * 3,
+            "equal_time_geometry_a": [0.0] * 3,
+            "equal_time_field_a": [0.0] * 3,
+            "equal_time_geometry_b": [0.0] * 3,
+            "equal_time_field_b": [0.0] * 3,
+            "equal_time_projection_residual": [0.0] * 3,
+            "mode_residual_rms": [0.0] * 3,
+            "equal_time_reconstruction_error_a": [0.0] * 3,
+            "equal_time_reconstruction_error_b": [0.0] * 3,
+            "equal_time_dominance_ordering_invariant": [True] * 3,
+            "accuracy": [1.0] * 3,
+            "gsi5": [0.0] * 3,
+        }
+    )
+    weak = pd.DataFrame(
+        {
+            "condition": ["weak_only"] * 3,
+            "tau": [0.0, 1.0, 2.0],
+            "m_w": [0.0, 0.5, 1.0],
+            "mode_residual_rms": [0.0] * 3,
+        }
+    )
+
+    result = _enl_summary(pd.concat([both, weak], ignore_index=True), beta=2.0, phase_delay=0.25)
+
+    assert result["drift_crossed"]
+    assert result["response_crossed"]
+    assert result["tail_strict_outcome_starvation"]
+    assert not result["tail_causal_starvation_certified"]
+    assert result["phase"] == "transfer_then_outcome_crossing_unlearnable"
 
 
 def test_enl_refuses_the_sequential_trainer(tmp_path):

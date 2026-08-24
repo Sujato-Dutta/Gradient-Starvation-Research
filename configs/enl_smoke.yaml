@@ -26,3 +26,4 @@ training:
   # E-NL is the only consumer of the lockstep trainer.  The default elsewhere
   # remains `sequential`, so no existing experiment changes behaviour.
   paired_mode: lockstep
+  exact_response_drift: true

@@ -1,0 +1,20 @@
+{
+  "created_utc": "2026-08-24T08:42:07.294712+00:00",
+  "python": "3.12.4 (v3.12.4:8e8a4baf65, Jun  6 2024, 17:33:18) [Clang 13.0.0 (clang-1300.0.29.30)]",
+  "platform": "macOS-26.6-arm64-arm-64bit",
+  "torch": "2.13.0",
+  "cuda_available": false,
+  "cuda_version": null,
+  "cudnn_version": null,
+  "command": [
+    "run_experiment.py",
+    "enl",
+    "--config",
+    "configs/enl_tanh_crossover.yaml"
+  ],
+  "source_sha256": "a1ce0e85a8c221a13897d18651a8d6234d5f72803c8f29b15dad3480b9729698",
+  "source_file_count": 17,
+  "source_scope": "run_experiment.py and src/**/*.py",
+  "git_commit": "2ae711e4d1f9563df438be24ea3033bb0f54c147",
+  "git_dirty": true
+}

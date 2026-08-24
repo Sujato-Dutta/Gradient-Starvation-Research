@@ -1,0 +1,37 @@
+# Exploratory E-NL search under the final theorem-aligned response definition.
+#
+# This search was introduced only after the historical rho=4, lag=2 result failed
+# to replicate under common symmetric unit-probe responses and exact direct-autograd
+# drift (3/8 tanh transfer-to-starvation; 5/8 suppressed from initialization).
+# Results from this file are HYPOTHESIS GENERATION ONLY. The completed search
+# (`results/enl_exact_regime_search-20260824-105003`) found no 4/4 condition; the
+# best cells reached 3/4 causal certificates. No cell was selected for validation.
+# Any future selected condition must be frozen and rerun on disjoint seeds before
+# it can enter the paper.
+experiment:
+  name: enl_exact_regime_search
+  output_root: results
+  device: cpu
+task:
+  sequence_length: 20
+  n_samples: 128
+  rho_values: [1.5, 2, 3, 4, 6]
+  lag_separations: [0, 1, 2, 4, 8]
+  regimes: [positive]
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 0.5
+  phase_delay: 0.25
+model:
+  kinds: [tanh]
+  width: 32
+  bulk_gain: 0.8
+training:
+  steps: 600
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 10
+  seeds: [0, 1, 2, 3]
+  weight_decay: 0.0
+  paired_mode: lockstep
+  exact_response_drift: true

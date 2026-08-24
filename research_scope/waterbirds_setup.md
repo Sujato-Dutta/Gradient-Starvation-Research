@@ -17,7 +17,7 @@ result exists. Treat every statement below as a setup instruction, not a finding
 3. **Pretrained backbone.** `model.pretrained: true` pulls ImageNet weights through
    `torchvision`. Set `false` to train from scratch, which will change the
    conclusions substantially.
-4. **Compute.** ResNet-50 on Waterbirds for 30 epochs across 5 methods and 3 seeds
+4. **Compute.** ResNet-18 on Waterbirds for 30 epochs across 5 methods and 3 seeds
    is a GPU job. `experiment.device: auto` will pick CUDA when present.
 
 ## The two CDC variants, and why the names matter

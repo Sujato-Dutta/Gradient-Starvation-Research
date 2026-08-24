@@ -22,7 +22,12 @@ from .metrics import (
 )
 from .plotting import plot_e1, plot_e1_regions, plot_e2, plot_e2r, plot_e3, plot_enl
 from .models.recurrent import DenseLinearRNN
-from .theory import exact_dense_linear_geometry, gradient_gram, integrate_projected_flow
+from .theory import (
+    discrete_crossover_certificate,
+    exact_dense_linear_geometry,
+    gradient_gram,
+    integrate_projected_flow,
+)
 from .training import train_paired
 from .utils import create_run_directory, resolve_device, seed_everything
 
@@ -189,10 +194,11 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
     Two crossing times are reported and they are *not* the same quantity.
 
     ``tau_star_drift``
-        First ``+ -> -`` sign change of the **equal-time** weak-drift difference,
-        ``d/dtau [ m_w(both) - m_w(weak-only) ]``.  This is the drift-level
-        crossover: when the strong feature stops helping the weak mode and begins
-        suppressing it.
+        First ``+ -> -`` sign change of the **exact direct-autograd equal-time**
+        weak-drift difference, ``d/dtau[m_w(both)-m_w(weak-only)]``. This is the
+        drift-level crossover. ``tau_star_drift_projected`` separately reports the
+        sign change of the two-mode ``Gg`` projection; for tanh/GRU it is a
+        diagnostic, not the theorem derivative.
 
     ``tau_star_response``
         First ``+ -> -`` sign change of ``m_w(both) - m_w(weak-only)`` itself.
@@ -204,9 +210,9 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
         integrate down through zero, i.e. the accumulated negative drift after ``tau*``
         must exceed the gap's value at ``tau*``.  A run can therefore cross in drift
         and never cross in response, in which case the strong feature suppressed the
-        weak mode's *rate* without the weak response ever falling behind.  On the tanh
-        regime both crossings occur in 8/8 seeds and the lead is positive throughout,
-        but that is an observation about this run.
+        weak mode's *rate* without the weak response ever falling behind.  Under the
+        final common-probe/direct-autograd run, this complete pattern occurs in 3/8
+        tanh seeds; that is conditional empirical evidence, not a theorem.
 
     ``tau_star_matched_state``
         Sign change of the matched-state deficit from
@@ -231,20 +237,26 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
     weak = frame[frame.condition == "weak_only"].sort_values("tau")
     if not np.allclose(both.tau.to_numpy(), weak.tau.to_numpy()):
         raise RuntimeError("Paired trajectories do not share the same optimization-time grid.")
-    if "d_w_equal_time" not in both:
+    if "d_w_equal_time_exact" not in both:
         raise RuntimeError(
-            "E-NL requires the crossover columns; run with training.paired_mode: lockstep."
+            "E-NL requires exact direct-autograd crossover columns; set "
+            "training.paired_mode: lockstep and training.exact_response_drift: true."
         )
 
     tau = both.tau.to_numpy()
-    # The equal-time difference is the derivative of the response gap, so it is what
-    # the drift-versus-response comparison must use.
-    d_w_equal_time = both.d_w_equal_time.to_numpy()
+    d_w_equal_time = both.d_w_equal_time_exact.to_numpy(dtype=float)
+    if not np.isfinite(d_w_equal_time).all():
+        raise RuntimeError(
+            "E-NL exact drift contains non-finite values; publication crossover "
+            "timing cannot fall back to the projected Gg diagnostic."
+        )
+    d_w_projected = both.d_w_equal_time_projected.to_numpy(dtype=float)
     d_w_matched = both.d_w_matched.to_numpy()
     decomposition = both.t_geom.to_numpy() - both.s_ce.to_numpy()
     response_gap = both.m_w.to_numpy() - weak.m_w.to_numpy()
 
     tau_star_drift = sign_crossing_time(tau, d_w_equal_time)
+    tau_star_projected = sign_crossing_time(tau, d_w_projected)
     tau_star_matched = sign_crossing_time(tau, d_w_matched)
     tau_star_check = sign_crossing_time(tau, decomposition)
     tau_star_response = sign_crossing_time(tau, response_gap)
@@ -267,9 +279,39 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
     )
 
     causal = causal_metrics(tau, both.m_w.to_numpy(), weak.m_w.to_numpy(), beta)
+    weak_only_learnable = bool(
+        math.isfinite(causal.weak_hitting_time)
+        and causal.weak_hitting_time > float(tau[0])
+    )
+    finite_step_certificate = discrete_crossover_certificate(
+        response_gap,
+        weak_only_learnable=weak_only_learnable,
+        tolerance=1e-10,
+    )
     return {
         **causal.__dict__,
+        "tail_single_transfer_to_suppression": (
+            finite_step_certificate.single_transfer_to_suppression
+        ),
+        "tail_positive_area": finite_step_certificate.positive_area,
+        "tail_negative_area": finite_step_certificate.negative_tail_area,
+        "tail_area_margin": finite_step_certificate.tail_area_margin,
+        "tail_response_equality_reached": (
+            finite_step_certificate.response_equality_reached
+        ),
+        "tail_strict_outcome_starvation": (
+            finite_step_certificate.strict_outcome_starvation
+        ),
+        "tail_causal_starvation_certified": (
+            finite_step_certificate.causal_starvation_certified
+        ),
         "tau_star_drift": tau_star_drift,
+        "tau_star_drift_projected": tau_star_projected,
+        "tau_star_projected_gap": (
+            tau_star_drift - tau_star_projected
+            if math.isfinite(tau_star_drift) and math.isfinite(tau_star_projected)
+            else float("nan")
+        ),
         "tau_star_matched_state": tau_star_matched,
         "tau_star_convention_gap": convention_gap,
         "tau_star_decomposition_check": tau_star_check,
@@ -285,6 +327,8 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
         ),
         "initial_d_w": float(d_w_equal_time[0]),
         "final_d_w": float(d_w_equal_time[-1]),
+        "initial_d_w_projected": float(d_w_projected[0]),
+        "final_d_w_projected": float(d_w_projected[-1]),
         "initial_d_w_matched": float(d_w_matched[0]),
         "final_d_w_matched": float(d_w_matched[-1]),
         "mean_t_geom": float(both.t_geom.mean()),
@@ -293,6 +337,15 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
         "final_equal_time_field_a": float(both.iloc[-1].equal_time_field_a),
         "final_equal_time_geometry_b": float(both.iloc[-1].equal_time_geometry_b),
         "final_equal_time_field_b": float(both.iloc[-1].equal_time_field_b),
+        "max_equal_time_projection_residual": float(
+            both.equal_time_projection_residual.abs().max()
+        ),
+        "mean_equal_time_projection_residual": float(
+            both.equal_time_projection_residual.mean()
+        ),
+        "max_mode_residual_rms": float(
+            pd.concat([both.mode_residual_rms, weak.mode_residual_rms]).max()
+        ),
         "max_equal_time_reconstruction_error": float(
             np.maximum(
                 both.equal_time_reconstruction_error_a.abs(),
@@ -313,11 +366,15 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
         "final_accuracy": float(both.iloc[-1].accuracy),
         "final_gsi5": float(both.iloc[-1].gsi5),
         # A drift crossing alone establishes suppression of the weak mode's *rate*.
-        # Calling it starvation requires the outcome to follow, so the label is only
-        # promoted when the response gap crosses too.
+        # A response crossing is outcome suppression; the causal starvation label is
+        # reserved for runs that also pass the weak-only learnability gate.
         "phase": (
             (
-                "transfer_then_starvation"
+                (
+                    "transfer_then_starvation"
+                    if weak_only_learnable
+                    else "transfer_then_outcome_crossing_unlearnable"
+                )
                 if math.isfinite(tau_star_response)
                 else "transfer_then_suppression"
             )
@@ -344,6 +401,21 @@ def _write_enl_crossover_report(summary: pd.DataFrame, run_dir: Path) -> None:
         key_values = keys if isinstance(keys, tuple) else (keys,)
         row = dict(zip(group_columns, key_values))
         row["n_seeds"] = int(group.seed.nunique())
+        row["n_tail_single_crossover"] = int(
+            group.tail_single_transfer_to_suppression.sum()
+        )
+        row["n_tail_response_equality"] = int(
+            group.tail_response_equality_reached.sum()
+        )
+        row["n_tail_strict_starvation"] = int(
+            group.tail_strict_outcome_starvation.sum()
+        )
+        row["n_tail_causal_starvation_certified"] = int(
+            group.tail_causal_starvation_certified.sum()
+        )
+        row["max_abs_projection_residual"] = float(
+            group.max_equal_time_projection_residual.max()
+        )
         for label, column in (("drift", "tau_star_drift"), ("response", "tau_star_response")):
             values = group[column].to_numpy(dtype=float)
             row[f"n_{label}_crossed"] = int(np.isfinite(values).sum())
@@ -367,10 +439,10 @@ def _write_enl_crossover_report(summary: pd.DataFrame, run_dir: Path) -> None:
 def run_enl(config: dict[str, Any]) -> Path:
     """E-NL: measure the transfer-to-starvation crossover mechanism.
 
-    Requires the lockstep paired trainer, which is the only path that can form the
-    matched crossover decomposition at every logged step.  Produces empirical
-    support for Corollary A; it does not prove the corollary's sufficient
-    conditions, which remain open.
+    Requires the lockstep paired trainer and computes the universal direct-autograd
+    response drift at every logged point. Produces an empirical trajectory
+    certificate for Theorems B/C; it does not independently prove the rank-one
+    derivative bounds or the general DMFT conjecture.
     """
     run_dir = create_run_directory(config)
     device = resolve_device(str(config.get("experiment", {}).get("device", "auto")))
@@ -381,7 +453,11 @@ def run_enl(config: dict[str, Any]) -> Path:
             "E-NL requires training.paired_mode: lockstep; the sequential trainer "
             f"cannot form the paired crossover decomposition (received {requested_mode!r})."
         )
-    training = {**training, "paired_mode": "lockstep"}
+    training = {
+        **training,
+        "paired_mode": "lockstep",
+        "exact_response_drift": True,
+    }
     kinds = model_config.get("kinds", [model_config.get("kind", "tanh")])
     trajectories: list[dict[str, Any]] = []
     summaries: list[dict[str, Any]] = []
@@ -420,7 +496,9 @@ def run_enl(config: dict[str, Any]) -> Path:
     _write_aggregate(
         summary, ["model_kind", "rho", "lag_separation", "regime"],
         [
-            "tau_star_drift", "tau_star_response", "drift_leads_response_by",
+            "tau_star_drift", "tau_star_drift_projected", "tau_star_response",
+            "drift_leads_response_by", "tail_positive_area", "tail_negative_area",
+            "tail_area_margin", "max_equal_time_projection_residual",
             "weak_auc_gap", "final_both_m_s", "final_both_m_w", "final_weak_m_w",
             "final_accuracy", "final_gsi5",
         ],

@@ -27,6 +27,48 @@ class ProjectedStatistics:
     margins: torch.Tensor
     sigmoid_weights: torch.Tensor
     loss: torch.Tensor
+    # ``predicted_drift`` is the closed ``Gg`` component.  It is the exact response
+    # drift only when the signed logits have an exact, parameter-independent
+    # two-mode realization.  For nonlinear probe responses, direct autograd is
+    # the universal cross-kernel drift and this residual quantifies what ``Gg`` omits.
+    mode_residual_rms: torch.Tensor
+    projected_drift_residual: torch.Tensor | None
+
+
+@dataclass(frozen=True)
+class DiscreteCrossoverCertificate:
+    """Exact finite-step analogue of the transfer/suppression tail-area theorem."""
+
+    single_transfer_to_suppression: bool
+    drift_crossover_step: int | None
+    peak_step: int | None
+    response_equality_step: int | None
+    positive_area: float
+    negative_tail_area: float
+    tail_area_margin: float
+    response_equality_reached: bool
+    strict_outcome_starvation: bool
+    weak_only_learnable: bool
+    causal_starvation_certified: bool
+
+
+@dataclass
+class RankOneDriftRatio:
+    """Ordering-invariant noiseless rank-one weak-drift factorization."""
+
+    both_gate: torch.Tensor
+    weak_only_gate: torch.Tensor
+    both_geometry_factor: torch.Tensor
+    weak_only_geometry_factor: torch.Tensor
+    both_factorized_drift: torch.Tensor
+    weak_only_factorized_drift: torch.Tensor
+    projected_both_drift: torch.Tensor
+    projected_weak_only_drift: torch.Tensor
+    both_factorization_error: torch.Tensor
+    weak_only_factorization_error: torch.Tensor
+    log_drift_ratio: torch.Tensor
+    drift_difference: torch.Tensor
+    positive_drifts: bool
 
 
 @dataclass
@@ -53,8 +95,10 @@ class CrossoverDecomposition:
         d_w = t_geom - s_ce
 
     where ``d_w > 0`` means the strong feature *helps* weak learning at this
-    optimization time (transfer) and ``d_w < 0`` means it causally suppresses it
-    (starvation).  The crossover time ``tau*`` is a zero of ``d_w``.
+    optimization time (transfer) and ``d_w < 0`` means it causally suppresses the
+    weak learning *rate*.  A zero is a transfer-to-suppression crossover.  Calling
+    the outcome starvation additionally requires a weak-response crossing and the
+    weak-only learnability gate.
     """
 
     d_w: torch.Tensor
@@ -133,7 +177,14 @@ def projected_statistics(
     compute_direct_drift: bool = False,
     create_graph: bool = False,
 ) -> ProjectedStatistics:
-    """Compute the exact two-mode CE field and empirical parameter geometry.
+    """Compute CE mode diagnostics and finite-width response drifts.
+
+    ``direct_drift`` is the universal response/logit cross-kernel derivative from
+    Theorem A.1 when requested. ``predicted_drift = Gg`` is exact only when signed
+    logits are exactly realized by the two parameter-independent coordinates, as in
+    the linear synthetic model with zero background noise. For nonlinear unit-probe
+    tanh/GRU responses it is a projected component; ``projected_drift_residual`` and
+    ``mode_residual_rms`` expose rather than hide that distinction.
 
     **Cross-entropy only.** The field ``g_a = E[z_a sigma(-margin)]``, the sensitivity
     ``A``, the margin statistics and GSI-5 are all defined by the logistic loss.  Under
@@ -148,14 +199,20 @@ def projected_statistics(
     loss = F.binary_cross_entropy_with_logits(logits, batch.y.float())
     weights = torch.sigmoid(-margins)
     curvature = torch.sigmoid(margins) * weights
-    coordinates = torch.stack((batch.z_s, batch.z_w), dim=1)
+    effective_z_s = (
+        batch.z_s if batch.condition == "both" else torch.zeros_like(batch.z_s)
+    )
+    coordinates = torch.stack((effective_z_s, batch.z_w), dim=1)
     field = (coordinates * weights[:, None]).mean(dim=0)
     sensitivity = torch.einsum("ni,nj,n->ij", coordinates, coordinates, curvature) / len(coordinates)
     mode = differentiable_mode_responses(model, batch)
+    projected_margins = coordinates @ mode
+    mode_residual_rms = (margins - projected_margins).square().mean().sqrt()
     geometry, mode_gradients = gradient_gram(mode, model, create_graph=create_graph)
     predicted = geometry @ field
 
     direct = None
+    projected_drift_residual = None
     if compute_direct_drift:
         parameters = _trainable_parameters(model)
         loss_gradients = _scalar_gradients(
@@ -167,6 +224,7 @@ def projected_statistics(
                 for mode_gradient in mode_gradients
             ]
         )
+        projected_drift_residual = direct - predicted
 
     return ProjectedStatistics(
         mode=mode,
@@ -178,6 +236,8 @@ def projected_statistics(
         margins=margins,
         sigmoid_weights=weights,
         loss=loss,
+        mode_residual_rms=mode_residual_rms,
+        projected_drift_residual=projected_drift_residual,
     )
 
 
@@ -239,18 +299,20 @@ def matched_weak_drift_decomposition(
 
 @dataclass
 class EqualTimeDriftDifference:
-    """Difference of the two conditions' own weak drifts at equal optimization time.
+    """Difference of the two conditions' weak drifts at equal optimization time.
 
-    This is exactly ``d/dtau [ m_w(both) - m_w(weak-only) ]``: each condition's drift
-    is evaluated with *its own* field at *its own* weak response.  It is therefore the
-    quantity whose sign change can be compared against the crossing of the response
-    gap, and the only one for which "drift leads response" is meaningful.
+    ``d_w_equal_time`` is the difference of the two projected ``Gg`` drifts. It is
+    exactly ``d/dtau[m_w(both)-m_w(weak-only)]`` only under exact two-mode logit
+    realization. When both inputs carry ``direct_drift``,
+    ``exact_d_w_equal_time`` is the universal direct-autograd derivative and
+    ``projection_residual`` records the difference. Nonlinear crossover claims must
+    use the exact field.
 
     It is **not** the matched-state deficit of :func:`crossover_decomposition`, which
     recomputes the weak-only field at the both-feature ``m_w`` and so does not
-    differentiate the equal-time gap.  The two cross at different times -- on the
-    saved tanh run, means of ``1.741`` (matched) versus ``1.611`` (equal-time) -- so
-    they must never be substituted for one another.
+    differentiate the equal-time gap.  Historical projected runs crossed at
+    different times under the two conventions, which is why neither may be
+    substituted for the universal direct-autograd response-gap derivative.
 
     Attribution between geometry and field is **not unique**, and this class does not
     pretend otherwise.  Splitting a product difference ``G_B g_B - G_W g_W`` requires
@@ -277,6 +339,15 @@ class EqualTimeDriftDifference:
     field_difference_b: torch.Tensor
     reconstruction_error_a: torch.Tensor
     reconstruction_error_b: torch.Tensor
+    # The additive product decompositions above reconstruct the projected ``Gg``
+    # difference.  When direct autograd drifts are present, these fields expose the
+    # exact derivative of the response gap and the omitted projection residual.
+    exact_d_w_equal_time: torch.Tensor | None = None
+    projection_residual: torch.Tensor | None = None
+
+    @property
+    def exact_drift_available(self) -> bool:
+        return self.exact_d_w_equal_time is not None
 
     @property
     def dominance_is_ordering_invariant(self) -> bool:
@@ -300,10 +371,10 @@ def equal_time_drift_difference(
 
         d_w = [G_ws^B g_s^B + G_ww^B g_w^B] - [G_ww^W g_w^W]
 
-    The strong channel contributes only through the both-feature condition, because the
-    weak-only mode response is identically zero and so ``grad(m_s) = 0`` there, making
-    ``G_ws^W = 0``.  That term is returned separately as ``cross_transport`` and added
-    to the geometry channel in each ordering.
+    The strong channel contributes only through the both-feature condition because
+    the weak-only intervention sets its effective coordinate to zero. The common
+    strong probe response may be nonzero in the weak-only model, but its CE field
+    component is exactly zero, so it contributes no weak-only loss drift.
 
     The remaining product difference ``G_ww^B g_w^B - G_ww^W g_w^W`` admits two exact
     splits, and **both are computed** because they can disagree about which channel
@@ -331,6 +402,12 @@ def equal_time_drift_difference(
     geometry_b = geometry_gap * both.field[1] + cross_transport
     field_b = weak_only.geometry[1, 1] * field_gap
 
+    exact_difference = None
+    projection_residual = None
+    if both.direct_drift is not None and weak_only.direct_drift is not None:
+        exact_difference = both.direct_drift[1] - weak_only.direct_drift[1]
+        projection_residual = exact_difference - difference
+
     return EqualTimeDriftDifference(
         d_w_equal_time=difference,
         both_drift=both_drift,
@@ -342,6 +419,221 @@ def equal_time_drift_difference(
         field_difference_b=field_b,
         reconstruction_error_a=(geometry_a + field_a) - difference,
         reconstruction_error_b=(geometry_b + field_b) - difference,
+        exact_d_w_equal_time=exact_difference,
+        projection_residual=projection_residual,
+    )
+
+
+def rank_one_drift_ratio(
+    both: ProjectedStatistics,
+    weak_only: ProjectedStatistics,
+    rho: float,
+) -> RankOneDriftRatio:
+    """Evaluate Theorem C's noiseless rank-one weak-drift factorization.
+
+    The caller is responsible for the theorem hypotheses: deterministic positive
+    cues ``z^B=(rho,1)``, ``z^W=(0,1)``, and exact two-mode realization.  The
+    returned factorization errors make violations numerically visible.  A finite
+    log ratio is emitted only when both factorized weak drifts are strictly positive.
+    """
+    if not np.isfinite(rho) or rho <= 0:
+        raise ValueError("rho must be finite and positive.")
+
+    rho_tensor = both.mode.new_tensor(float(rho))
+    both_gate = torch.sigmoid(-(rho_tensor * both.mode[0] + both.mode[1]))
+    weak_gate = torch.sigmoid(-weak_only.mode[1])
+    both_factor = rho_tensor * both.geometry[1, 0] + both.geometry[1, 1]
+    weak_factor = weak_only.geometry[1, 1]
+    both_drift = both_gate * both_factor
+    weak_drift = weak_gate * weak_factor
+    positive = bool((both_drift.detach() > 0) and (weak_drift.detach() > 0))
+    log_ratio = (
+        torch.log(both_drift / weak_drift)
+        if positive
+        else both_drift.new_tensor(float("nan"))
+    )
+    return RankOneDriftRatio(
+        both_gate=both_gate,
+        weak_only_gate=weak_gate,
+        both_geometry_factor=both_factor,
+        weak_only_geometry_factor=weak_factor,
+        both_factorized_drift=both_drift,
+        weak_only_factorized_drift=weak_drift,
+        projected_both_drift=both.predicted_drift[1],
+        projected_weak_only_drift=weak_only.predicted_drift[1],
+        both_factorization_error=both_drift - both.predicted_drift[1],
+        weak_only_factorization_error=weak_drift - weak_only.predicted_drift[1],
+        log_drift_ratio=log_ratio,
+        drift_difference=both_drift - weak_drift,
+        positive_drifts=positive,
+    )
+
+
+def discrete_crossover_certificate(
+    response_gap: Iterable[float],
+    *,
+    weak_only_learnable: bool = False,
+    tolerance: float = 0.0,
+) -> DiscreteCrossoverCertificate:
+    """Certify the exact finite-step tail-area criterion from realized responses.
+
+    For values ``Delta_k``, the increments ``Delta_(k+1)-Delta_k`` replace the
+    continuous drift integral exactly.  The strict certificate requires one block
+    of positive increments followed by one block of negative increments.  It does
+    not infer behaviour between logged points and does not label causal starvation
+    unless ``weak_only_learnable`` is supplied by the preregistered target gate.
+    """
+    values = np.asarray(list(response_gap), dtype=np.float64)
+    if values.ndim != 1 or len(values) < 3:
+        raise ValueError("response_gap must contain at least three scalar values.")
+    if not np.isfinite(values).all():
+        raise ValueError("response_gap must contain only finite values.")
+    if not np.isfinite(tolerance) or tolerance < 0:
+        raise ValueError("tolerance must be finite and non-negative.")
+
+    increments = np.diff(values)
+    negative = np.flatnonzero(increments < -tolerance)
+    if len(negative) == 0:
+        return DiscreteCrossoverCertificate(
+            single_transfer_to_suppression=False,
+            drift_crossover_step=None,
+            peak_step=None,
+            response_equality_step=None,
+            positive_area=float("nan"),
+            negative_tail_area=float("nan"),
+            tail_area_margin=float("nan"),
+            response_equality_reached=False,
+            strict_outcome_starvation=False,
+            weak_only_learnable=bool(weak_only_learnable),
+            causal_starvation_certified=False,
+        )
+
+    crossover = int(negative[0])
+    strict_pattern = bool(
+        crossover > 0
+        and np.all(increments[:crossover] > tolerance)
+        and np.all(increments[crossover:] < -tolerance)
+    )
+    if not strict_pattern:
+        return DiscreteCrossoverCertificate(
+            single_transfer_to_suppression=False,
+            drift_crossover_step=crossover,
+            peak_step=crossover,
+            response_equality_step=None,
+            positive_area=float("nan"),
+            negative_tail_area=float("nan"),
+            tail_area_margin=float("nan"),
+            response_equality_reached=False,
+            strict_outcome_starvation=False,
+            weak_only_learnable=bool(weak_only_learnable),
+            causal_starvation_certified=False,
+        )
+
+    initial = float(values[0])
+    peak = float(values[crossover])
+    positive_area = peak - initial
+    negative_tail = peak - float(values[-1])
+    margin = negative_tail - positive_area
+    post_peak = values[crossover + 1 :]
+    reached_positions = np.flatnonzero(post_peak <= initial + tolerance)
+    equality_step = (
+        crossover + 1 + int(reached_positions[0])
+        if len(reached_positions)
+        else None
+    )
+    equality_reached = bool(margin >= -tolerance)
+    strict_starvation = bool(np.any(post_peak < initial - tolerance))
+    return DiscreteCrossoverCertificate(
+        single_transfer_to_suppression=True,
+        drift_crossover_step=crossover,
+        peak_step=crossover,
+        response_equality_step=equality_step,
+        positive_area=positive_area,
+        negative_tail_area=negative_tail,
+        tail_area_margin=margin,
+        response_equality_reached=equality_reached,
+        strict_outcome_starvation=strict_starvation,
+        weak_only_learnable=bool(weak_only_learnable),
+        causal_starvation_certified=bool(strict_starvation and weak_only_learnable),
+    )
+
+
+def transverse_hitting_time_error_bound(
+    uniform_trajectory_error: float,
+    crossing_slope_lower_bound: float,
+    *,
+    grid_spacing: float = 0.0,
+) -> float:
+    """Return Corollary D's deterministic first-hitting-time error bound."""
+    if not np.isfinite(uniform_trajectory_error) or uniform_trajectory_error < 0:
+        raise ValueError("uniform_trajectory_error must be finite and non-negative.")
+    if not np.isfinite(crossing_slope_lower_bound) or crossing_slope_lower_bound <= 0:
+        raise ValueError("crossing_slope_lower_bound must be finite and positive.")
+    if not np.isfinite(grid_spacing) or grid_spacing < 0:
+        raise ValueError("grid_spacing must be finite and non-negative.")
+    return float(
+        uniform_trajectory_error / crossing_slope_lower_bound + grid_spacing
+    )
+
+
+def zero_disorder_initialization_failure_bound(width: int, epsilon: float) -> float:
+    """Return Theorem E.2's Chebyshev/union initialization bound.
+
+    For the six initial scalars, the sum of coordinate variances is ``9/N``.
+    The returned value is therefore ``min(1, 9/(N epsilon^2))``.
+    """
+    if width < 1:
+        raise ValueError("width must be positive.")
+    if not np.isfinite(epsilon) or epsilon <= 0:
+        raise ValueError("epsilon must be finite and positive.")
+    return float(min(1.0, 9.0 / (float(width) * epsilon**2)))
+
+
+def zero_disorder_trajectory_failure_bound(
+    width: int,
+    delta: float,
+    lipschitz_constant: float,
+    horizon: float,
+) -> float:
+    """Propagate Theorem E.2's initialization bound through Gronwall.
+
+    The caller must establish that ``lipschitz_constant`` is valid on a common
+    compact tube containing both trajectories over ``[0,horizon]``.
+    """
+    if not np.isfinite(delta) or delta <= 0:
+        raise ValueError("delta must be finite and positive.")
+    if not np.isfinite(lipschitz_constant) or lipschitz_constant < 0:
+        raise ValueError("lipschitz_constant must be finite and non-negative.")
+    if not np.isfinite(horizon) or horizon < 0:
+        raise ValueError("horizon must be finite and non-negative.")
+    initial_epsilon = delta * np.exp(-lipschitz_constant * horizon)
+    return zero_disorder_initialization_failure_bound(width, initial_epsilon)
+
+
+def cdc_finite_step_deviation_bound(
+    lipschitz_constant: float,
+    learning_rate: float,
+    erm_velocity_norm: float,
+    corrected_velocity_norm: float,
+) -> float:
+    """Return CDC Result 3's local one-step strong-response bound.
+
+    This evaluates ``L eta^2 (||v||^2+||v'||^2)/2``.  The caller must establish
+    local ``L``-smoothness of the protected response on both step segments.
+    """
+    values = {
+        "lipschitz_constant": lipschitz_constant,
+        "learning_rate": learning_rate,
+        "erm_velocity_norm": erm_velocity_norm,
+        "corrected_velocity_norm": corrected_velocity_norm,
+    }
+    if any(not np.isfinite(value) or value < 0 for value in values.values()):
+        raise ValueError(f"bound inputs must be finite and non-negative: {values}")
+    return float(
+        0.5
+        * lipschitz_constant
+        * learning_rate**2
+        * (erm_velocity_norm**2 + corrected_velocity_norm**2)
     )
 
 
@@ -425,9 +717,17 @@ def counterfactual_drift_correction(
     strong_gradient, weak_gradient = mode_gradients
     strong_norm_sq = inner(strong_gradient, strong_gradient)
     weak_strong_inner = inner(weak_gradient, strong_gradient)
+    # Project for every mathematically nonzero strong gradient.  The feasibility
+    # tolerance applies to the *rescue* norm, not to this orthogonality identity;
+    # switching the projection off for a small-but-nonzero ``a`` would invalidate
+    # exact first-order preservation.
+    strong_is_nonzero = strong_norm_sq > 0
+    safe_strong_norm_sq = torch.where(
+        strong_is_nonzero, strong_norm_sq, torch.ones_like(strong_norm_sq)
+    )
     projection_scale = torch.where(
-        strong_norm_sq > feasibility_epsilon,
-        weak_strong_inner / strong_norm_sq.clamp_min(feasibility_epsilon),
+        strong_is_nonzero,
+        weak_strong_inner / safe_strong_norm_sq,
         strong_norm_sq.new_zeros(()),
     )
     protected_direction = [
@@ -633,9 +933,11 @@ def drift_correction(
         vector: list[torch.Tensor], direction: list[torch.Tensor]
     ) -> list[torch.Tensor]:
         norm_sq = inner(direction, direction)
+        is_nonzero = norm_sq > 0
+        safe_norm_sq = torch.where(is_nonzero, norm_sq, torch.ones_like(norm_sq))
         scale = torch.where(
-            norm_sq > feasibility_epsilon,
-            inner(vector, direction) / norm_sq.clamp_min(feasibility_epsilon),
+            is_nonzero,
+            inner(vector, direction) / safe_norm_sq,
             norm_sq.new_zeros(()),
         )
         return [v - scale * d for v, d in zip(vector, direction)]

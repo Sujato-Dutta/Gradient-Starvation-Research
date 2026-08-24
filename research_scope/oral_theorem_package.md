@@ -1,222 +1,214 @@
-# Oral-level theorem package: implementation status
+# Paper theorem package — current authoritative summary
 
-This note separates implemented finite-dimensional identities from theorems
-that still require mathematical proofs. It is not itself a proof.
+This document is the paper-facing map of what is proved, what is measured, and
+what remains open. `claim_ledger.md` is the statement-level authority;
+`e2_theorem.md` and `cdc_theorem.md` contain the proofs.
 
-## Implemented: exact causal weak-drift decomposition
+## 1. Headline theorem package
 
-For the both-feature projected drift
+The paper no longer presents a general paired CE-RNN DMFT as an established
+result. Its rigorous contribution is a finite-width causal package.
 
-`F_w^B = G_ws^B g_s(m_s,m_w) + G_ww^B g_w(m_s,m_w)`
+### Theorem A: exact finite-width CE response flow
 
-and the weak-only geometry evaluated at matched weak state,
+For any differentiable response, full-batch logistic gradient flow induces the
+exact response/logit cross-kernel dynamics. If signed logits are exactly linear in
+parameter-independent feature coordinates, this reduces to `dot m=Gg`. The dense
+linear recurrent geometry has a closed finite-width expression including readout,
+input, and recurrent parameter blocks.
 
-`F_w^W = G_ww^W g_w(0,m_w)`,
+**Scope:** the closed two-mode form is exact for the linear synthetic model with
+zero background noise. Tanh/GRU modes are common symmetric unit-probe responses,
+not exact additive logit coordinates; their exact response
+drift must be computed by the universal cross-kernel/direct-autograd form, with the
+`Gg` residual reported.
 
-the code verifies the exact identity
+### Theorem B: when rate suppression becomes outcome starvation
 
-`F_w^W - F_w^B = CE gating + geometry shift + cross transport`,
+For `Delta=m_w^B-m_w^W` and exact equal-time derivative `d=Delta'`, assume one
+`+ -> -` drift crossing at `tau_d`. Then the response later reaches equality iff
+the accumulated post-crossover negative area reaches the positive area stored at
+the peak. Strict starvation requires strict excess negative area. This condition is
+necessary and sufficient, and quantitative drift bounds yield explicit upper bounds
+on the response crossing time.
 
-where
+This is the exact correction to the retracted statement that a drift crossing
+necessarily causes a response crossing.
 
-- `CE gating = G_ww^B [g_w(0,m_w) - g_w(m_s,m_w)]`;
-- `geometry shift = (G_ww^W - G_ww^B) g_w(0,m_w)`;
-- `cross transport = -G_ws^B g_s(m_s,m_w)`.
+### Theorem C: ordering-invariant noiseless rank-one criterion
 
-The implementation is `matched_weak_drift_decomposition` in `theory.py` and
-has a numerical reconstruction test.
+For deterministic cues `z^B=(rho,1)` and `z^W=(0,1)`, positive weak drifts factor
+as `F_w^B=s_B H_B` and `F_w^W=s_W H_W`. The log ratio
 
-## Implemented: Counterfactual Drift Correction
+```
+Psi = log(F_w^B/F_w^W)
+```
 
-Let `v_ERM` be the both-feature parameter velocity, and let `F_w^W` be the
-instantaneous weak drift of a matched weak-only shadow model. The correction
-uses the part of `grad(m_w)` orthogonal to `grad(m_s)` and chooses the smallest
-coefficient that removes a positive weak-drift deficit.
+has an exact derivative separating total geometry-ratio growth from margin-gate
+contraction without choosing either non-canonical additive decomposition. A positive
+`Psi` followed by a uniform negative derivative produces one rate crossover and an
+explicit time bound. Outcome starvation still requires Theorem B.
 
-When that protected direction is nonzero and the correction is not capped:
+**Prediction discipline:** independently proved bounds on `Psi'` predict a
+crossover. Evaluating `Psi` on a completed trajectory certifies it but is not an
+independent prediction.
 
-1. the corrected weak drift is at least `F_w^W`;
-2. the instantaneous strong drift is unchanged;
-3. the correction is the minimum-norm vector satisfying 1 and 2.
+### Corollary D: hitting-time stability
 
-The trainer records feasibility and target attainment at every logged step.
+Uniform trajectory convergence plus an isolated transverse target crossing implies
+hitting-time convergence, with error at most trajectory error divided by crossing
+slope, plus grid resolution. This licenses hitting-time limits only after a
+trajectory limit has independently been proved.
 
-### Corrected-scaling validation result
+### Theorem E: exactly solvable recurrent anchor
 
-The eight-seed width-96 validation in `configs/e3_cdc_validation.yaml` produced:
+At zero recurrent disorder and zero cue lag, the dense linear dynamics close at
+every width on six scalar inner products. Gaussian initialization obeys the explicit
+Chebyshev bound `9/(N epsilon^2)`; finite-horizon ODE stability propagates this into
+uniform convergence in probability to deterministic initial data. This is a genuine
+large-width theorem at a singular solvable point, not a general DMFT.
 
-- ERM weak-trajectory AUC gap: `3.115968`;
-- fixed-susceptibility interaction gap: `3.115618`;
-- Spectral Decoupling gap: `3.038149`;
-- Counterfactual Drift Correction gap: `0.000001`;
-- final accuracy: `1.0` for every method;
-- correction feasibility and target attainment: `100%` of logged steps;
-- maximum absolute instantaneous strong-drift change: `7.63e-6`.
+### CDC Results 1–3
 
-The paired CDC-versus-ERM gap reduction was `-3.115966`, with a 95% confidence
-interval of `[-3.707183, -2.524750]`. CDC reduced the final strong-mode response
-by about `0.258`, so publication experiments must report both the exact
-instantaneous preservation guarantee and the longer-horizon strong-feature
-tradeoff caused by following a different parameter trajectory.
+1. CDC preserves the current strong-feature drift exactly at first order.
+2. The uncapped feasible correction is the unique minimum-norm correction attaining
+   the weak-only drift target under that constraint.
+3. Under local smoothness and a nondegenerate projected weak direction, one CDC step
+   differs from the corresponding ERM strong response by an explicit `O(eta^2)`
+   bound.
 
-### Nonlinear regime discovery
+Result 3 is now proved as a local one-step theorem. No trajectory-level or final
+strong-retention theorem follows.
 
-A short-horizon tanh/GRU scan found no positive causal AUC gap. The strong cue
-initially accelerates weak-mode learning in both architectures. Extending tanh
-training revealed a later crossover: weak-only learning continues while the
-both-feature response plateaus. At `rho=4`, lag 2, and optimization horizon 10,
-the two-seed search produced a mean AUC gap of `12.956939`, with final weak
-responses `1.208475` (both) and `4.340887` (weak-only).
+## 2. Explicitly open theory
 
-The four-seed nonlinear mitigation pilot at horizon 7.5 produced:
+The following are not paper theorems:
 
-- ERM gap: `7.560667`;
-- interaction gap: `7.220363`;
-- Spectral Decoupling gap: `7.669840`;
-- Counterfactual Drift Correction gap: `-2.182139`;
-- final accuracy: `1.0` for every method;
-- CDC feasibility and target attainment: `100%` of logged steps.
+- the positive-disorder/positive-lag joint CE-RNN optimization-time DMFT;
+- an independently predicted tanh or GRU crossover time;
+- an analytic learnability/starvation boundary `rho_c`;
+- a general noisy-cue rank-one factorization;
+- a trajectory-level CDC guarantee.
 
-The frozen width-64 confirmation in `configs/e3_tanh_cdc_validation.yaml`
-then used eight independent seeds and produced:
+All general solver paths remain blocked. The former five DMFT obligations remain:
+derive the effective process, enumerate visible and loss-invisible closure variables,
+prove existence/uniqueness, prove joint quenched concentration, and combine the
+limit with hitting-time/discretization control.
 
-- ERM gap: `19.728794`, 95% CI `[18.811261, 20.646327]`;
-- interaction gap: `19.431932`;
-- Spectral Decoupling gap: `16.942663`;
-- Counterfactual Drift Correction gap: `-1.933250`, 95% CI
-  `[-2.204207, -1.662293]`;
-- paired CDC-minus-ERM change: `-21.662044`, 95% CI
-  `[-22.337681, -20.986407]`;
-- final accuracy: `1.0` for every run;
-- CDC feasibility and target attainment: `100%` over all 808 logged checks;
-- maximum absolute instantaneous strong-drift change: `7.45e-8`.
+## 3. Empirical package that can be quoted
 
-A matched-seed width check at widths 32, 64, and 96 gave paired CDC-minus-ERM
-changes of `-17.846010`, `-21.852428`, and `-22.091320`, respectively. Every
-seed improved at every width, and target attainment remained `100%`. This is
-strong evidence that the mitigation effect is not a single-width artifact.
+Use only final-scale artifacts named in `claim_ledger.md`.
 
-Together these runs establish a two-phase nonlinear phenomenon: early positive
-transfer followed by late causal starvation. A trajectory theorem must
-therefore allow the drift-deficit sign to change over time; an instantaneous
-positive-susceptibility condition is not sufficient. The current GRU setup
-remains an explicit negative result and should not be used as a mitigation
-benchmark until a positive-starvation GRU regime is found.
+### Controlled causal phase grid
 
-### Corrected E1 phase-grid validation
+`results/e1_dense_rerun-20260823-085142`
 
-The width-96, eight-seed grid in `configs/e1_corrected_validation.yaml`
-completed all 136 paired runs. Every positive-regime cell through lag 4 had a
-positive causal weak-trajectory AUC gap for every seed. Mean gaps ranged from
-`11.937663` to `23.326406` at lag 0, from `8.170996` to `9.363293` at lag 2,
-and from `1.451338` to `1.517044` at lag 4. The matched negative control had a
-mean gap of `-0.750387` with a 95% interval of `[-0.876793, -0.623980]`.
+- positive weak AUC gap in 32/32 seeds at lags 0, 2, and 4;
+- negative-control transfer in 8/8 seeds;
+- lag 8 is unlearnable under the preregistered target and therefore not labelled
+  starved;
+- AUC gap is monotone in `rho` at every measured lag.
 
-Lag 8 is deliberately classified as indeterminate: its weak-only final
-response was only `0.001643`, so there was no meaningful counterfactual weak
-learning to suppress. The theorem statement must therefore include a
-**counterfactual learnability condition**, such as the weak-only trajectory
-reaching a preregistered response by the evaluation horizon. Without this
-condition, an arbitrarily small positive AUC difference could be mislabeled as
-starvation even though neither condition learns the weak feature.
+### Nonlinear crossover
 
-## Proof targets not yet implemented
+The final theorem-aligned artifact is
+`paper/artifacts/enl_tanh_crossover-20260824-141207`. It uses common symmetric unit-probe
+responses and the universal direct-autograd response drift at every logged point.
 
-1. **Trajectory comparison and hitting-time bound.** Convert the pointwise
-   drift guarantee into a continuous-time weak-trajectory and hitting-time
-   guarantee under explicit smoothness, monotonicity, and feasibility
-   assumptions; quantify discrete-step error.
-2. **Paired causal DMFT/concentration.** Prove joint finite-horizon convergence
-   of both-feature and weak-only order parameters under shared quenched
-   disorder, including the order parameters required by the drift
-   decomposition.
-3. **Starvation phase boundary.** Derive and prove the existence and location
-   of `rho_c(lag, bulk_gain)` inside the counterfactually learnable region,
-   characterize the separate learnability boundary, then establish
-   finite-width boundary consistency.
-4. **Non-identifiability of observational GSI.** Construct systems with the
-   same both-feature margin-weight statistic but different weak-only causal
-   effects, proving that GSI alone cannot identify starvation.
+- tanh: exact drift crossings, response crossings, and causal tail-area
+  certificates in **3/8** seeds; the remaining **5/8** are suppressed from
+  initialization. Conditional on crossing, mean exact drift `tau*=0.1942` and mean
+  response crossing `0.3890`.
+- GRU: exact drift and response crossings in **5/8** seeds, but weak-only reaches
+  neither the preregistered `beta=0.5` target nor causal learnability in any seed;
+  therefore causal starvation is certified in **0/8**.
+- maximum direct-versus-projected drift residual: `0.02197` for tanh and
+  `0.002986` for GRU. Projected and matched-state quantities remain diagnostics.
 
-Publication-scale claims must wait for these proofs and for independent
-width-convergence experiments; empirical particle averaging is not a proof or
-an independent DMFT solver.
+The old tanh 8/8 result and `tau*=1.6112` are invalid under the final response
+definition. Crossing-time means above are conditional descriptive statistics and
+must be reported with their denominators.
 
----
+The post-hoc exploratory grid
+`results/enl_exact_regime_search-20260824-105003` found no condition with 4/4
+causal certificates. Its best cells reached 3/4, so it is a negative search audit,
+not confirmatory evidence and not a basis for selecting a paper result.
 
-## Update, 2026-08-23
+### Width evidence
 
-`research_scope/claim_ledger.md` is now the authoritative per-statement record.
-This section notes only what changed for the four proof targets above, plus the
-results in this file that no longer hold.
+`results/e2_corrected_validation-*` is convergence toward a held-out finite-network
+`closure_reference`, not DMFT validation. `results/e2r_solver_checks-20260823-084911`
+validates only the exact zero-disorder and frozen-geometry special cases; its general
+acceptance remains false by construction.
 
-### Proof targets
+### CDC ablation
 
-1. **Trajectory comparison and hitting-time bound.** Partially addressed.
-   `cdc_theorem.md` writes Results 1 and 2 as proofs and states Result 3 as a target
-   with its three missing pieces named. The `O(η²)` scaling is *measured* — fitted
-   log-log slope `2.0000` for the linear families, `1.9961` for tanh — but a
-   measurement is not the bound, and the trajectory-level claim remains open.
-2. **Paired causal DMFT / concentration.** No advance, deliberately. See
-   `e2_theorem.md` § "Status of these obligations".
-3. **Starvation phase boundary.** No advance. One input improved: under the
-   corrected dense parameterization the AUC gap is now monotone increasing in `ρ` at
-   every lag, which a `ρ_c` derivation needs and the superseded run did not provide.
-4. **Non-identifiability of observational GSI.** No advance.
+`results/e3_cdc_dense_ablation-20260823-090702`
 
-### Results in this file that no longer hold
+- all shadow-based methods are numerically similar on weak rescue, but not
+  statistically equivalent;
+- CDC uniquely preserves instantaneous strong drift (rounding-scale residual);
+- CDC does not have the best final strong response;
+- the paper must disclose the weak-only shadow model and roughly doubled cost.
 
-- **The linear CDC numbers above are superseded.** They predate the input-scaling
-  correction. The rerun is `results/e3_cdc_dense_ablation-20260823-090702`. Note also that the five shadow
-  methods are *numerically similar* rather than statistically indistinguishable: 9 of
-  10 direct pairwise tests are significant.
-- **The corrected E1 per-lag magnitudes are superseded.** The rerun under the final
-  parameterization peaks at lag 2 rather than decaying monotonically with lag. The
-  directional claims survive; the magnitudes do not. See
-  `results/e1_dense_rerun-20260823-085142`.
-- **The claim that CDC is the strongest mitigation is withdrawn.** A five-way
-  ablation sharing one causal target found all shadow-based methods statistically
-  indistinguishable on the causal weak gap (every paired interval overlapping, all `p = 1.48e-08` against ERM). CDC's unique property is exact instantaneous strong-drift
-  preservation, `4.77e-07` against `1.5e-01`–`3.8e-01`. But `unconstrained_rescue`
-  and `pcgrad` finish with a *higher* final strong response than CDC (`1.295` versus
-  `1.042`), so the first-order guarantee does not translate into better retention.
-  The defensible claim is narrower than this document previously implied.
+### Waterbirds
 
-### Newly measured, and newly available
+The adapter is an unrun surrogate probe. The weak coordinate is an intercept, not
+an identified bird-shape feature. No Waterbirds result belongs in the main result
+table until the pilot is run.
 
-- The transfer-to-starvation crossover is now instrumented rather than inferred.
-  `t_geom`, `s_ce`, `d_w` and their two geometry channels are logged per step by an
-  opt-in lockstep trainer whose equivalence to the sequential path is asserted at
-  `rtol=0` on final parameters.
-- On 8 unseen seeds, tanh crosses in 8/8 runs at `τ* = 1.6112`, 95% CI
-  `[1.3248, 1.8977]`, with exactly one sign change per seed. GRU does not cross in any
-  of 8.
-- **No mechanism attribution is claimed for tanh.** An earlier version of this note
-  said late suppression was geometry-driven. That rested on the matched-state
-  decomposition, which is not the derivative of the equal-time response gap, and on a
-  split that did not reconstruct. Under the corrected equal-time difference the
-  attribution is **ordering-dependent**: splitting a product difference admits two
-  exact orderings, and at the final point only 1/8 tanh seeds agree on which channel
-  dominates (trajectory-wide agreement `0.355`). The claim is withdrawn; see
-  `claim_ledger.md` R9.
-- **GRU's transfer is geometry-sustained, and that attribution does survive.** Both
-  orderings agree in 8/8 seeds: geometry positive, field negative. Only the sign
-  attribution transfers -- the magnitudes differ greatly between orderings.
-- **The drift-before-response ordering is empirical, not necessary.** A `+ → −`
-  derivative crossing gives a local maximum of the response gap, not a guarantee that
-  the gap reaches zero. It holds in 8/8 tanh seeds here. The phase label reflects the
-  distinction: a drift crossing alone yields `transfer_then_suppression`.
-- The learnability gate is implemented and replayed against a completed run. It
-  required a fifth outcome, `degenerate`, for runs whose target was met at
-  initialization — 8 of 136 rows in the superseded E1 grid, and 0 of 136 after the
-  scaling correction.
+## 4. Novelty boundary after reading the 2026 literature
 
-### Superseded run identifiers
+Ger and Barak (2026) derive exact/asymptotic low-rank overlap learning equations and
+show that loss-invisible overlaps can govern learning. This substantially narrows
+any claim that projected geometry or hidden closure variables are new.
 
-Quote only these. Earlier E-NL directories used a drift convention that does not
-differentiate the response gap, and a decomposition that did not reconstruct.
+Clark et al. (2026) derive a task-trained RNN DMFT for a long-time
+Langevin/Gibbs equilibrium and explicitly state that it does not track noiseless
+optimization-time gradient flow. Their theory covers structure/disorder and learned
+representations, but not this paired CE causal weak-feature trajectory.
 
-- E-NL: `results/enl_tanh_crossover-20260823-104702`
-- E1: `results/e1_dense_rerun-20260823-085142`
-- E-CDC: `results/e3_cdc_dense_ablation-20260823-090702`
-- E2-R: `results/e2r_solver_checks-20260823-084911`
+Accordingly, the defensible novelty is the causal paired intervention, the exact
+rate-versus-outcome theorem, the ordering-invariant rank-one drift criterion, and
+the theorem-aligned recurrent experiments—not “the first theory of learning in
+RNNs” and not a completed general recurrent DMFT. The nonlinear evidence is
+seed-dependent and cannot support a claim of a universal recurrent crossover.
+
+Sources: [Ger and Barak (2026)](https://arxiv.org/html/2605.04115v1) and
+[Clark et al. (2026)](https://www.biorxiv.org/content/10.64898/2026.03.02.708943v1.full-text).
+Content was rephrased for compliance with licensing restrictions.
+
+## 5. Required paper language
+
+Allowed:
+
+> We prove exact finite-width response dynamics and show that a rate crossover
+> becomes outcome starvation exactly when its negative tail area exhausts the
+> earlier transfer advantage. In a noiseless rank-one cue model, an
+> ordering-invariant log drift ratio gives sufficient conditions for a unique rate
+> crossover. Under a theorem-aligned nonlinear protocol, tanh crossover is
+> seed-dependent (3/8 causal certificates), while GRU outcome crossings fail the
+> causal learnability gate; general optimization-time DMFT prediction remains open.
+
+Not allowed:
+
+- “We prove that recurrent networks generally undergo transfer-to-starvation.”
+- “The DMFT predicts `tau*` or `rho_c`.”
+- “A drift crossing necessarily implies starvation.”
+- “Late tanh suppression is geometry-dominated.”
+- “CDC preserves the final strong feature or beats its ablations.”
+- “Tests prove the theorem.”
+
+## 6. Readiness status
+
+The theorem package and theorem-aligned nonlinear rerun are complete, including
+figures. The rerun is tracked with its resolved configuration and a content hash
+over all executable Python source. That makes the project scientifically
+defensible, not automatically oral-ready. Historical E1, E2, E2-R, exploratory
+E-NL, and E3 runs remain dirty and cannot be reconstructed exactly because they
+predate content fingerprinting. Paper readiness also requires verification of the
+external baseline implementations and external review. The corrected nonlinear
+crossover is seed-dependent, which materially weakens an oral-level empirical
+headline. Waterbirds is optional only if the paper is explicitly framed as a
+controlled synthetic/theory paper; if it is included, the mandatory pilot must
+precede any full run.

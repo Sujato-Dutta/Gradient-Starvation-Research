@@ -115,30 +115,40 @@ def _linear_probe_responses(
 def differentiable_mode_responses(
     model: RecurrentBinaryClassifier, batch: SyntheticBatch, ridge: float = 1e-6
 ) -> torch.Tensor:
-    """Return strong/weak signed-margin coefficients without detaching gradients."""
-    if hasattr(model, "mode_responses") and batch.spec.background_noise == 0:
-        values = model.mode_responses(batch.spec)  # type: ignore[attr-defined]
-        if batch.condition == "weak_only":
-            return torch.stack((values[0] * 0.0, values[1]))
-        return values
+    """Return common strong/weak response functionals for both causal conditions.
 
-    margin = model(batch.x) * batch.signed_labels
-    if batch.condition == "weak_only":
-        denominator = batch.z_w.square().mean() + ridge
-        weak = (batch.z_w * margin).mean() / denominator
-        return torch.stack((weak * 0.0, weak))
-    design = torch.stack((batch.z_s, batch.z_w), dim=1)
-    gram = design.T @ design / len(design)
-    rhs = design.T @ margin / len(design)
-    return torch.linalg.solve(gram + ridge * torch.eye(2, device=gram.device), rhs)
+    Linear models use their exact channel-localized impulse responses. Nonlinear
+    models use an odd symmetric unit-probe contrast, ``[f(+probe)-f(-probe)]/2``.
+    Crucially, the functional depends on the model and task specification but not on
+    whether the current training batch is ``both`` or ``weak_only``. Shared
+    parameters therefore imply an exactly shared initial weak response, as required
+    by the causal crossover theorem.
+
+    ``ridge`` is retained for API compatibility with older callers; ridge-fitted,
+    condition-dependent coefficients are deliberately no longer used.
+    """
+    del ridge
+    if hasattr(model, "mode_responses"):
+        return model.mode_responses(batch.spec)  # type: ignore[attr-defined]
+
+    probes = batch.x.new_zeros(4, batch.spec.sequence_length, model.input_size)
+    probes[0, batch.spec.strong_time, 0] = 1.0
+    probes[1, batch.spec.strong_time, 0] = -1.0
+    probes[2, batch.spec.weak_time, 1] = 1.0
+    probes[3, batch.spec.weak_time, 1] = -1.0
+    outputs = model(probes)
+    return torch.stack(
+        (0.5 * (outputs[0] - outputs[1]), 0.5 * (outputs[2] - outputs[3]))
+    )
 
 
 def synthetic_logits(
     model: RecurrentBinaryClassifier, batch: SyntheticBatch
 ) -> torch.Tensor:
-    if hasattr(model, 'mode_responses') and batch.spec.background_noise == 0:
+    if hasattr(model, "mode_responses") and batch.spec.background_noise == 0:
         mode = differentiable_mode_responses(model, batch)
-        margin = mode[0] * batch.z_s + mode[1] * batch.z_w
+        effective_z_s = batch.z_s if batch.condition == "both" else torch.zeros_like(batch.z_s)
+        margin = mode[0] * effective_z_s + mode[1] * batch.z_w
         return batch.signed_labels * margin
     return model(batch.x)
 

@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-08-24T08:42:07.294712+00:00",
+  "authoritative_source_fingerprinted_run": {
+    "run_id": "enl_tanh_crossover-20260824-141207",
+    "claim_family": "final nonlinear crossover",
+    "git_commit": "2ae711e4d1f9563df438be24ea3033bb0f54c147",
+    "git_dirty": true,
+    "source_sha256": "a1ce0e85a8c221a13897d18651a8d6234d5f72803c8f29b15dad3480b9729698",
+    "source_file_count": 17,
+    "source_scope": "run_experiment.py and src/**/*.py",
+    "resolved_config_archived": true,
+    "tracked_files": [
+      "enl_tanh_crossover-20260824-141207/config.resolved.yaml",
+      "enl_tanh_crossover-20260824-141207/environment.json",
+      "enl_tanh_crossover-20260824-141207/summary.csv",
+      "enl_tanh_crossover-20260824-141207/crossover.csv",
+      "enl_tanh_crossover-20260824-141207/aggregate.csv",
+      "enl_tanh_crossover-20260824-141207/enl_crossover.pdf"
+    ]
+  },
+  "historical_runs_without_content_fingerprints": [
+    {
+      "run_id": "e1_dense_rerun-20260823-085142",
+      "git_commit": "b3b1ee9897ba6705375b40611e6b255f41fffed5"
+    },
+    {
+      "run_id": "e2_corrected_validation-20260821-224630",
+      "git_commit": "3607991fadd8d49578a4a7b5b47520b256518692"
+    },
+    {
+      "run_id": "e2r_solver_checks-20260823-084911",
+      "git_commit": "7795a298fb2caa6ba7d86f7d8e26cdcf79fa100b"
+    },
+    {
+      "run_id": "enl_tanh_crossover-20260824-104726",
+      "git_commit": "2ae711e4d1f9563df438be24ea3033bb0f54c147",
+      "status": "superseded by source-fingerprinted rerun"
+    },
+    {
+      "run_id": "enl_exact_regime_search-20260824-105003",
+      "git_commit": "2ae711e4d1f9563df438be24ea3033bb0f54c147"
+    },
+    {
+      "run_id": "e3_cdc_dense_ablation-20260823-090702",
+      "git_commit": "86a35b4ac47abf1c61a242d3b5a4d60a23263718"
+    }
+  ],
+  "historical_figure_archives": [
+    {
+      "run_id": "e1_dense_rerun-20260823-085142",
+      "tracked_file": "historical/e1_dense_rerun-20260823-085142/e1_causal_regions.pdf"
+    },
+    {
+      "run_id": "e2_corrected_validation-20260821-224630",
+      "tracked_file": "historical/e2_corrected_validation-20260821-224630/e2_field_agreement.pdf"
+    },
+    {
+      "run_id": "e3_cdc_dense_ablation-20260823-090702",
+      "tracked_file": "historical/e3_cdc_dense_ablation-20260823-090702/e3_mitigation.pdf"
+    }
+  ],
+  "historical_figure_note": "These tracked PDFs make the manuscript source compile without ignored results directories. They preserve the displayed historical outputs but do not reconstruct the dirty executable source that generated them.",
+  "historical_limitation": "Every listed historical run recorded git_dirty=true and omitted a content-addressed source fingerprint. The exact executed source cannot be reconstructed retroactively from its commit. Local results directories were ignored by Git and are not part of a clean checkout; their empirical claims therefore retain a disclosed provenance limitation.",
+  "interpretation": "The archived E-NL rerun content-addresses executable Python source and preserves its resolved configuration and compact outputs. This repairs E-NL source identity but does not repair provenance for E1, E2, E2-R, the exploratory E-NL grid, or E3."
+}

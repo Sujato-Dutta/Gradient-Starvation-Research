@@ -1,17 +1,25 @@
-# E-NL: mechanistic measurement of the transfer-to-starvation crossover.
+# E-NL: theorem-aligned transfer/suppression/outcome certificate.
 #
-# Regime chosen to match the long-horizon tanh scan that first revealed the
-# crossover (rho=4, lag 2, ~1000 steps), so the mechanistic columns are measured
-# where the phenomenon is known to occur.
+# Tanh/GRU responses are common odd symmetric unit-probe contrasts, so paired
+# models with shared parameters have exactly the same weak response at tau=0.
+# Their logits are not assumed additive in those two responses. The publication
+# drift is therefore the universal direct-autograd cross-kernel derivative; the
+# projected Gg and matched-state decompositions are retained only as separately
+# named diagnostics with an explicit residual.
+#
+# Regime chosen to match the long-horizon tanh scan that first revealed a projected
+# crossover (rho=4, lag 2, ~1000 steps). This rerun determines whether the phenomenon
+# survives the corrected common response and exact drift definitions.
 #
 # Seeds 20-27 are disjoint from every seed already spent on tanh CDC work:
 # frozen validation used 6-13 and the width-robustness check used 14-17.  This
 # keeps the crossover measurement independent of the mitigation results.
 #
-# The GRU arm is a mechanistic architecture contrast, not a failed experiment.
-# The long-horizon GRU scan showed transfer rather than starvation; the question
-# here is whether its geometry term stays large enough that S_CE never overtakes
-# T_geom.  A "no sign change observed" outcome is a reportable result.
+# The GRU arm is an architecture contrast, not a failed experiment. A no-crossing
+# result is reported as finite-horizon transfer or suppression, never extrapolated.
+# Additive geometry/field terms are projected diagnostics; no dominance claim is
+# permitted unless it is ordering-invariant, and neither ordering replaces the
+# exact direct-autograd drift.
 experiment:
   name: enl_tanh_crossover
   output_root: results
@@ -38,3 +46,8 @@ training:
   seeds: [20, 21, 22, 23, 24, 25, 26, 27]
   weight_decay: 0.0
   paired_mode: lockstep
+  # Required by the finite-width theorem: tanh/GRU responses are common
+  # symmetric unit-probe contrasts, not exact additive logit coordinates, so
+  # crossover timing uses the universal direct-autograd response drift rather
+  # than silently treating the projected Gg component as exact.
+  exact_response_drift: true

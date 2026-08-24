@@ -1,5 +1,13 @@
 # Implementation plan: remaining theory, proofs, and experiments
 
+> **Historical plan; superseded in part.** This file records the original build
+> sequence and must not be used as the current claim status. The implementation it
+> proposed now exists for causal gating, crossover logging, CDC ablations, MSE
+> infrastructure, and E2-R blocking. The authoritative current sources are
+> `claim_ledger.md`, `e2_theorem.md`, `cdc_theorem.md`, and
+> `oral_theorem_package.md`. The general positive-disorder/positive-lag DMFT remains
+> blocked; the established replacement is the finite-width causal theorem package.
+
 Derived from `Gradient Starvation ICLR'27.docx` (the "note"), cross-checked
 against `a.md`, `research_scope/e2_theorem.md`,
 `research_scope/oral_theorem_package.md`, and the actual source tree on
@@ -61,21 +69,21 @@ but is **non-monotone** (0.0476 at N=64 rises to 0.0515 at N=128). Report the
 non-monotonicity; the acceptance JSON only checks end-to-end decrease plus a
 negative log-log slope.
 
-### 0.2 Two citations resolve, but remain unread (AMENDED)
+### 0.2 Two citations scoped for the final novelty boundary (AMENDED)
 
-Both references exist and are recorded with full identifiers:
+Both references exist and were reviewed sufficiently to delimit the paper's scope:
 
 - Ger & Barak, "Learning reveals invisible structure in low-rank RNNs",
-  arXiv:2605.04115 — <https://arxiv.org/abs/2605.04115>
+  arXiv:2605.04115 — <https://arxiv.org/html/2605.04115v1>
 - Clark et al., "Structure, disorder, and dynamics in task-trained recurrent
   neural circuits", bioRxiv 2026.03.02.708943 —
-  <https://www.biorxiv.org/content/10.64898/2026.03.02.708943v1>
+  <https://www.biorxiv.org/content/10.64898/2026.03.02.708943v1.full-text>
 
-Status: **unread — not usable for novelty or theorem-positioning claims until
-read by the author.** They are load-bearing for the "loss-invisible overlaps"
-argument (Ger & Barak) and for scoping the DMFT contribution (Clark et al.).
-Titles alone do not license comparative-novelty prose. Both are logged with this
-flag in `research_scope/claim_ledger.md`.
+Status: **scoped, not independently reproduced.** Their overlap/hidden-state and
+equilibrium-DMFT results narrow the novelty claim and sharpen the blocked proof
+obligations; they do not establish the paired noiseless optimization-time theory.
+See `research_scope/claim_ledger.md` for the current authority. Content was
+rephrased for compliance with licensing restrictions.
 
 ### 0.3 The note's 2-term decomposition already exists as a 3-term identity
 

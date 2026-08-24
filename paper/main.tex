@@ -1,0 +1,936 @@
+\documentclass[10pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs,multirow}
+\usepackage{graphicx}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\ip}[2]{\left\langle #1,#2\right\rangle}
+\newcommand{\norm}[1]{\left\lVert #1\right\rVert}
+\newcommand{\given}{\,\middle|\,}
+\newcommand{\sigm}{\sigma}
+\newcommand{\ind}{\mathbf{1}}
+\newcommand{\Bcond}{\mathrm{B}}
+\newcommand{\Wcond}{\mathrm{W}}
+\newcommand{\dd}{\,\mathrm{d}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\newcommand{\artifactfigure}[3]{%
+\begin{figure}[t]
+  \centering
+  \IfFileExists{#1}{\includegraphics[width=0.97\linewidth]{#1}}{%
+    \fbox{\parbox{0.92\linewidth}{\centering Figure artifact not found while
+    compiling this source. Expected path: \texttt{\detokenize{#1}}.}}}
+  \caption{#2}
+  \label{#3}
+\end{figure}}
+
+\title{From Rate Suppression to Outcome Starvation:\\
+A Finite-Width Causal Theory of Recurrent Learning}
+\author{Anonymous authors}
+\date{ICLR 2027 submission draft --- 24 August 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A strong predictive cue can accelerate optimization while preventing a weaker but
+independently predictive cue from being learned.  We study this gradient-starvation
+question in recurrent binary classifiers using a paired causal intervention: a
+both-feature trajectory is compared with a same-initialization trajectory in which
+only the strong input channel is ablated.  Our contribution is a finite-width
+package rather than a claimed general dynamical mean-field theory (DMFT).  First,
+we derive the exact cross-entropy response flow through a response--logit
+cross-kernel and identify the additional assumption under which it reduces to a
+closed two-mode equation $\dot M=Gg$.  Second, after a transfer-to-suppression
+rate crossing, we prove that outcome starvation occurs if and only if the negative
+post-crossing drift area exhausts the earlier transfer advantage.  Third, for a
+noiseless rank-one cue law, an ordering-invariant log drift ratio gives sufficient
+conditions for a unique rate crossing.  We also prove transverse hitting-time
+stability and an exact six-scalar, zero-disorder/zero-lag wide limit with an explicit
+$9/(N\epsilon^2)$ initialization bound.  Finally, we derive Counterfactual Drift
+Correction (CDC), the unique uncapped minimum-norm correction that matches a
+weak-only drift target while preserving instantaneous strong-response drift, and
+prove a local $O(\eta^2)$ one-step deviation bound.
+
+Controlled dense-linear experiments exhibit positive weak-learning AUC gaps in
+32/32 seeds at lags 0, 2, and 4.  Under the final direct-autograd nonlinear
+protocol, however, tanh transfer-to-starvation is seed-dependent (3/8 causal
+certificates), while GRU has 5/8 response crossings but 0/8 causal certificates
+because the weak-only model never passes the learnability gate.  CDC uniquely
+preserves instantaneous strong drift, but does not improve weak rescue or final
+strong retention over all shadow-based ablations.  These corrected results delimit
+the claim: the causal and finite-width theorems are established; a general
+positive-disorder/positive-lag optimization-time DMFT, an analytic phase boundary,
+and universal nonlinear crossover remain open.
+\end{abstract}
+
+\section{Introduction}
+Cross-entropy training can favor a subset of predictive features strongly enough
+that other useful features are learned slowly or not at all.  This phenomenon was
+formalized as gradient starvation by \citet{pezeshki2021gradient}.  Recurrent
+networks add a temporal geometry: cue strength, lag, shared recurrent parameters,
+and evolving feature response geometry all affect which signal receives gradient.
+The resulting mechanism is easy to overstate.  A weak-feature drift can decline
+without changing sign; its relative drift can change sign without the weak response
+falling behind; and a response gap is not evidence of causal starvation if the
+weak-only counterfactual is itself unable to learn.
+
+We address these distinctions with a paired intervention.  The both-feature and
+weak-only models share initialization, labels, samples, weak coordinates, and
+noise; only the strong input channel is set to zero in the weak-only condition.  We
+track common feature-response functionals in both trajectories.  This setup
+separates three statements:
+\begin{enumerate}[leftmargin=*,nosep]
+  \item \emph{relative transfer}: the strong cue initially increases the weak
+  response rate;
+  \item \emph{rate suppression}: the both-feature weak response later grows more
+  slowly than its counterfactual;
+  \item \emph{causal outcome starvation}: the both-feature weak response falls
+  behind and the weak-only counterfactual demonstrably learns.
+\end{enumerate}
+The distinction is both mathematical and empirical: the final GRU experiment has
+response crossings but fails the causal learnability gate in every seed.
+
+\paragraph{Contributions.}
+\begin{enumerate}[leftmargin=*]
+  \item We prove an exact finite-width response-flow identity for logistic gradient
+  flow.  A closed projected equation $\dot M=Gg$ follows only under exact,
+  parameter-independent logit realization; nonlinear probe responses carry an
+  explicit residual.
+  \item We give a necessary-and-sufficient negative-tail-area criterion converting
+  a unique rate crossover into an outcome crossing, together with quantitative
+  crossing-time bounds.
+  \item For noiseless rank-one cues, we derive an ordering-invariant log drift
+  ratio and sufficient conditions for a unique rate crossover.  Unlike a
+  non-canonical additive geometry/field split, the ratio has a fixed meaning.
+  \item We prove stability of transverse first hitting times and an exact
+  zero-disorder, zero-lag six-scalar closure with finite-horizon convergence in
+  probability and explicit constants.
+  \item We prove three local CDC results: exact instantaneous strong-drift
+  preservation, unique uncapped minimum-norm optimality when feasible, and a local
+  $O(\eta^2)$ one-step strong-response deviation bound.
+  \item We provide executable theorem contracts and a claim-audited experiment
+  suite.  The corrected nonlinear evidence is reported as seed-dependent and the
+  unsuccessful exploratory search is retained as a negative result.
+\end{enumerate}
+
+\paragraph{Claim boundary.}
+We do not claim that recurrent networks universally undergo transfer-to-starvation,
+that a general joint CE-RNN optimization-time DMFT has been solved, or that a
+crossover time or analytic $\rho_c$ is independently predicted.  The general DMFT
+solver remains deliberately unimplemented where its proof obligations are unmet.
+
+\section{Related work}
+\paragraph{Gradient starvation.}
+\citet{pezeshki2021gradient} identify feature starvation under cross-entropy and
+motivate Spectral Decoupling.  Our focus is different: recurrent temporal features,
+a paired strong-channel intervention, exact finite-width response dynamics, and the
+logical gap between rate suppression and outcome starvation.
+
+\paragraph{Learning dynamics in recurrent networks.}
+\citet{ger2026invisible} derive low-dimensional overlap learning dynamics for
+low-rank RNNs and show that overlaps invisible to the loss can retain training
+history.  This directly cautions against closing a recurrent learning theory using
+only visible response coordinates.  \citet{clark2026structure} develop a
+mean-field account of structure and disorder in task-trained recurrent circuits in
+a long-time Langevin/Gibbs setting.  That equilibrium construction is distinct from
+the paired, noiseless optimization-time gradient flow studied here.  Accordingly,
+we claim neither the first learning theory for RNNs nor a completed general RNN
+DMFT; our novelty lies in the causal pairing and finite-width rate-to-outcome
+results.\footnote{The descriptions of the 2026 sources were paraphrased from the
+linked public sources. Content was rephrased for compliance with licensing
+restrictions.}
+
+\paragraph{Gradient surgery.}
+PCGrad projects conflicting task gradients \citep{yu2020pcgrad}; Bloop stabilizes
+an auxiliary projection using an exponential moving average
+\citep{hsieh2024bloop}.  Projection itself is not our novelty.  CDC protects the
+gradient of a theory-defined strong-feature response and takes its target from a
+matched causal weak-only shadow.  This stronger information setting must be
+reported: CDC requires a constructible ablation, a second model, lockstep training,
+and full-batch gradients.
+
+\section{Causal setup and definitions}
+\subsection{Paired logistic gradient flow}
+For condition $C\in\{\Bcond,\Wcond\}$, let $\theta_C(\tau)\in\R^P$ follow
+full-batch gradient flow on signed logits $r_i^C(\theta)=y_i f_C(x_i;\theta)$:
+\begin{equation}
+  L_C(\theta)=\frac1{n_C}\sum_{i=1}^{n_C}\log(1+e^{-r_i^C(\theta)}),
+  \qquad \dot\theta_C=-\nabla L_C(\theta_C).
+  \label{eq:gradient-flow}
+\end{equation}
+The two conditions share initialization and all data except that the strong channel
+is zeroed under $\Wcond$.  Let $M_s^C,M_w^C$ be common differentiable strong and
+weak response functionals.  Shared initialization gives
+\begin{equation}
+  \Delta(0)=0,\qquad
+  \Delta(\tau)=M_w^{\Bcond}(\tau)-M_w^{\Wcond}(\tau).
+  \label{eq:gap}
+\end{equation}
+Optimization time $\tau$ is distinct from sequence index $k$.
+
+The controlled dense linear RNN is
+\begin{equation}
+ h_{k+1}=Wh_k+Bx_k,\qquad f(x)=c^\top h_T,
+ \label{eq:linear-rnn}
+\end{equation}
+with $W_{ij}(0)\sim\mathcal N(0,g^2/N)$,
+$B_{ia}(0)\sim\mathcal N(0,1/N)$, and
+$c_i(0)\sim\mathcal N(0,1/N)$.  The width scaling of $B$ is essential for a
+non-divergent projected metric.  We additionally study tanh RNNs and GRUs.  For
+nonlinear models the two responses are common odd symmetric unit-probe contrasts,
+$[f(x_a^+)-f(x_a^-)]/2$, not assumed additive coordinates of every data logit.
+
+\subsection{Causal labels and metrics}
+Let
+\begin{equation}
+ d(\tau)=\Delta'(\tau)=F_w^{\Bcond}(\tau)-F_w^{\Wcond}(\tau).
+ \label{eq:equal-time-drift}
+\end{equation}
+We call $d>0$ relative transfer and $d<0$ relative rate suppression.  An outcome
+crossing occurs when $\Delta$ reaches zero after a positive excursion and then
+becomes negative.  We reserve \emph{causal starvation} for outcome suppression
+when the weak-only trajectory also reaches a preregistered target $\beta$ within
+horizon $H$.  If the weak-only model does not reach $\beta$, the result is
+indeterminate rather than starvation.
+
+We report first-hitting-time delay when both hits are observed.  The horizon-wide
+weak AUC gap is
+\begin{equation}
+  \mathcal A_w=\int_0^H
+  \left(M_w^{\Wcond}(\tau)-M_w^{\Bcond}(\tau)\right)\dd\tau,
+  \label{eq:auc-gap}
+\end{equation}
+computed by the logged-grid trapezoid rule.  GSI-5 is retained as a margin-weight
+diagnostic, not as the definition of starvation.
+
+\section{Exact finite-width response dynamics}
+\begin{theorem}[Universal response--logit cross-kernel flow]
+\label{thm:cross-kernel}
+At every finite width and every optimization time at which $M_a^C$ is
+differentiable,
+\begin{equation}
+ \dot M_a^C=\frac1{n_C}\sum_i K_{ai}^C\sigm(-r_i^C),
+ \qquad K_{ai}^C=\ip{\nabla M_a^C}{\nabla r_i^C}.
+ \label{eq:cross-kernel}
+\end{equation}
+No width limit or two-mode realization is required.
+\end{theorem}
+
+\begin{corollary}[Closed projected flow under exact realization]
+\label{cor:projected}
+If the signed logits admit the exact parameter-independent representation
+$r_i^C=\sum_b z_{ib}^C M_b^C$, then
+\begin{equation}
+ \dot M_a^C=\sum_bG_{ab}^C g_b^C,\quad
+ G_{ab}^C=\ip{\nabla M_a^C}{\nabla M_b^C},\quad
+ g_b^C=\frac1{n_C}\sum_i z_{ib}^C\sigm(-z_i^C\!\cdot M^C).
+ \label{eq:Gg}
+\end{equation}
+If $r_i^C=z_i^C\cdot M^C+r_i^\perp$, the exact equation instead contains
+\begin{equation}
+ R_a^C=\frac1{n_C}\sum_i\sigm(-r_i^C)
+       \ip{\nabla M_a^C}{\nabla r_i^\perp},
+ \qquad \dot M_a^C=(G^Cg^C)_a+R_a^C.
+ \label{eq:projection-residual}
+\end{equation}
+\end{corollary}
+
+For channel-localized modes of the dense linear RNN, differentiation across the
+disjoint $(c,B,W)$ blocks gives the exact finite-width geometry
+\begin{equation}
+ G_{ab}=p_a^\top p_b+
+ \ind\{\operatorname{ch}(a)=\operatorname{ch}(b)\}q_a^\top q_b+
+ \ip{S_a}{S_b}_F,
+ \label{eq:dense-geometry}
+\end{equation}
+where $p_a=W^{\ell_a}b_a$, $q_a=(W^{\ell_a})^\top c$, and
+\begin{equation}
+ S_a=\sum_{j=0}^{\ell_a-1}(W^j)^\top c
+                 (W^{\ell_a-1-j}b_a)^\top.
+\end{equation}
+The proofs are in Appendix~\ref{app:finite-proofs}.  Equation~\eqref{eq:Gg} is
+exact for the zero-background-noise linear synthetic model.  For tanh/GRU probes,
+we use Theorem~\ref{thm:cross-kernel}'s direct autograd drift as primary and report
+$R$; projected and matched-state decompositions are diagnostics only.
+
+\section{From rate suppression to outcome starvation}
+\begin{theorem}[Necessary and sufficient tail-area criterion]
+\label{thm:tail-area}
+Let $\Delta$ be absolutely continuous on $[0,H]$, with $\Delta(0)=0$.  Suppose
+there is $\tau_d\in(0,H)$ such that $d>0$ almost everywhere on $(0,\tau_d)$ and
+$d<0$ almost everywhere on $(\tau_d,H)$.  Define
+\begin{equation}
+ A_+=\int_0^{\tau_d}d(u)\dd u=\Delta(\tau_d)>0,\qquad
+ N(t)=\int_{\tau_d}^{t}-d(u)\dd u.
+\end{equation}
+Then $\Delta(t)=A_+-N(t)$ for $t\ge\tau_d$.  Hence equality is reached by $H$
+if and only if $N(H)\ge A_+$, and strict outcome starvation occurs by $H$ if and
+only if $N(H)>A_+$.  If $d<0$ on each nontrivial post-crossing interval, the later
+equality is unique whenever it exists.
+\end{theorem}
+
+This result blocks a common but false inference: a $+\to-$ drift crossing locates a
+local maximum of $\Delta$; it does not force $\Delta$ to return to zero.  The
+post-crossing negative area must repay the positive area already accumulated.
+Causal starvation further requires weak-only learnability.
+
+\begin{corollary}[Response-crossing bounds]
+\label{cor:crossing-bounds}
+Under Theorem~\ref{thm:tail-area}, if $d(t)\le-\kappa<0$ on $[t_0,H]$ with
+$t_0>\tau_d$, then, when the right side lies within the horizon,
+\begin{equation}
+ \tau_{\mathrm{response}}\le
+ t_0+\frac{[A_+-N(t_0)]_+}{\kappa}
+ \le t_0+\frac{A_+}{\kappa}.
+\end{equation}
+If $d(\tau_d)=0$ and $d'(t)\le-\lambda<0$ on
+$[\tau_d,\tau_d+r]$, then
+$N(t)\ge\lambda(t-\tau_d)^2/2$; when
+$A_+\le\lambda r^2/2$,
+\begin{equation}
+ \tau_{\mathrm{response}}\le\tau_d+\sqrt{2A_+/\lambda}.
+\end{equation}
+\end{corollary}
+
+\subsection{An ordering-invariant rank-one criterion}
+Assume deterministic positive cues $z^{\Bcond}=(\rho,1)$,
+$z^{\Wcond}=(0,1)$, $\rho>0$, and exact two-mode realization.  Define
+\begin{align}
+ u_B&=\rho M_s^{\Bcond}+M_w^{\Bcond},& s_B&=\sigm(-u_B),\\
+ u_W&=M_w^{\Wcond},&s_W&=\sigm(-u_W),\\
+ H_B&=\rho G_{ws}^{\Bcond}+G_{ww}^{\Bcond},&
+ H_W&=G_{ww}^{\Wcond},\\
+ Q_B&=\rho^2G_{ss}^{\Bcond}+2\rho G_{sw}^{\Bcond}+G_{ww}^{\Bcond}\ge0.
+\end{align}
+
+\begin{theorem}[Log drift-ratio identity]
+\label{thm:log-ratio}
+The weak drifts factor as $F_w^{\Bcond}=s_BH_B$ and
+$F_w^{\Wcond}=s_WH_W$.  Where $H_B,H_W>0$, define
+\begin{equation}
+ \Psi=\log\frac{F_w^{\Bcond}}{F_w^{\Wcond}}
+ =\log\frac{s_B}{s_W}+\log\frac{H_B}{H_W}.
+\end{equation}
+Then $\operatorname{sign}(d)=\operatorname{sign}(\Psi)$ and
+\begin{equation}
+ \Psi'=-s_B(1-s_B)Q_B+s_W(1-s_W)H_W
+       +\left(\log\frac{H_B}{H_W}\right)'.
+ \label{eq:Psi-prime}
+\end{equation}
+\end{theorem}
+
+\begin{corollary}[Unique rate crossing]
+\label{cor:unique-rate-crossing}
+Suppose on $[t_0,H]$ that $H_B,H_W>0$, $\Psi(t_0)>0$,
+$\Psi'(t)\le-\kappa<0$, and $H-t_0\ge\Psi(t_0)/\kappa$.  Then exactly one
+rate crossing occurs in $(t_0,H]$ and
+\begin{equation}
+ \tau_d\le t_0+\Psi(t_0)/\kappa.
+\end{equation}
+A sufficient primitive condition is
+\begin{equation}
+ s_B(1-s_B)Q_B\ge a,\quad s_W(1-s_W)H_W\le b,\quad
+ (\log(H_B/H_W))'\le c,\quad a-b-c\ge\kappa>0.
+\end{equation}
+\end{corollary}
+
+The bounds must be established independently to be predictive.  Evaluating
+$\Psi$ on a completed trajectory is certification, not prediction.  Noisy cues
+generally break the rank-one factorization, and even a rate crossing still requires
+Theorem~\ref{thm:tail-area} for an outcome crossing.
+
+\subsection{Hitting-time stability}
+\begin{corollary}[Transverse first-hit stability]
+\label{cor:hitting}
+Let continuous $x_N,x$ on $[0,H]$ satisfy
+$\norm{x_N-x}_\infty\le\epsilon_N$.  Let $\tau\in(0,H)$ be the first upward
+crossing of $\beta$, separated from earlier times, and suppose
+$x'(t)\ge\kappa>0$ on $[\tau-r,\tau+r]$.  For sufficiently small $\epsilon_N$,
+\begin{equation}
+ |\tau_N-\tau|\le\epsilon_N/\kappa.
+\end{equation}
+A logged grid of spacing $h_N$ adds $h_N$.  For paired delays,
+\begin{equation}
+ |\Delta\tau_N-\Delta\tau|
+ \le \epsilon_{B,N}/\kappa_B+\epsilon_{W,N}/\kappa_W+2h_N.
+\end{equation}
+\end{corollary}
+This transfers an independently proved uniform trajectory limit; it does not prove
+that limit.
+
+\section{A solvable zero-disorder wide limit}
+Set recurrent gain $g=0$, lag separation zero, and background noise zero in the
+dense linear model.  Write the input columns as $b_s,b_w$.  The recurrent block is
+inert, $M_a=c\cdot b_a$.  Let $u_{ab}=b_a\cdot b_b$ and $w=c\cdot c$.
+
+\begin{theorem}[Every-width six-scalar closure]
+\label{thm:six-scalar}
+At every width,
+\begin{align}
+ \dot M_a&=g_aw+\sum_b g_bu_{ab},&
+ \dot u_{ab}&=g_aM_b+g_bM_a,\\
+ \dot w&=2\sum_bg_bM_b,&
+ G_{ab}&=u_{ab}+\delta_{ab}w.
+ \label{eq:six-scalar}
+\end{align}
+\end{theorem}
+
+\begin{theorem}[Finite-horizon deterministic wide limit]
+\label{thm:wide-limit}
+Let all coordinates of $b_s,b_w,c$ be mutually independent
+$\mathcal N(0,1/N)$ and
+\begin{equation}
+ q_N=(M_s,M_w,u_{ss},u_{sw},u_{ww},w),\qquad
+ q_0=(0,0,1,0,1,1).
+\end{equation}
+For every $\epsilon>0$,
+\begin{equation}
+ \Prob\!\left(\norm{q_N(0)-q_0}_\infty>\epsilon\right)
+ \le \min\left\{1,\frac{9}{N\epsilon^2}\right\}.
+ \label{eq:init-concentration}
+\end{equation}
+On every fixed horizon $[0,H]$, let $L_H$ be a vector-field Lipschitz constant on
+a common compact tube containing the finite- and infinite-width trajectories.  Then
+\begin{equation}
+ \sup_{\tau\le H}\norm{q_N(\tau)-q(\tau)}_\infty
+ \le e^{L_HH}\norm{q_N(0)-q_0}_\infty,
+ \label{eq:gronwall}
+\end{equation}
+and
+\begin{equation}
+ \Prob\!\left(\sup_{\tau\le H}\norm{q_N(\tau)-q(\tau)}_\infty>\delta\right)
+ \le\min\left\{1,\frac{9e^{2L_HH}}{N\delta^2}\right\}.
+ \label{eq:trajectory-concentration}
+\end{equation}
+Thus $q_N\to q$ uniformly on fixed horizons in probability, with initialization
+scale $O_{\Prob}(N^{-1/2})$.
+\end{theorem}
+
+This theorem is intentionally singular: it is a genuine large-width result only at
+zero disorder and zero lag.  It is not a positive-disorder DMFT.
+
+\section{Counterfactual Drift Correction}
+At a both-feature state $\theta$, let
+\begin{equation}
+ a=\nabla m_s(\theta),\quad p=\nabla m_w(\theta),\quad
+ v=-\nabla L(\theta),\quad F_s=a\cdot v,\quad F_w=p\cdot v.
+\end{equation}
+A same-initialization weak-only shadow supplies $F_w^{\Wcond}$.  Define
+\begin{equation}
+ q=\begin{cases}
+ p-\dfrac{p\cdot a}{\norm a^2}a,&a\ne0,\\
+ p,&a=0,
+ \end{cases}
+ \quad
+ \delta=[F_w^{\Wcond}-F_w]_+,
+ \quad
+ \alpha=\begin{cases}\delta/\norm q^2,&\delta>0,\ q\ne0,\\0,&\delta=0.
+ \end{cases}
+ \label{eq:cdc}
+\end{equation}
+The corrected velocity is $v'=v+\alpha q$.  A positive deficit with $q=0$ is
+infeasible.  The theorems assume full-batch gradients, plain SGD, zero weight
+decay, and no clipping.  A coefficient cap preserves orthogonality but can lose
+target attainment and uncapped optimality.
+
+\begin{theorem}[CDC local guarantees]
+\label{thm:cdc}
+The construction in Eq.~\eqref{eq:cdc} has the following properties.
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Instantaneous preservation:} $a\cdot v'=a\cdot v$ exactly,
+  including when $\alpha$ is capped.
+  \item \textbf{Minimum norm:} for the feasible uncapped problem, $d^*=\alpha q$
+  is the unique minimum-norm correction satisfying
+  $a\cdot d=0$ and $p\cdot(v+d)\ge F_w^{\Wcond}$.
+  \item \textbf{Local finite-step bound:} if $\nabla m_s$ is $L$-Lipschitz on a
+  convex neighborhood containing both step segments, then
+  \begin{equation}
+  |m_s(\theta+\eta v')-m_s(\theta+\eta v)|
+  \le\frac L2\eta^2(\norm{v'}^2+\norm v^2).
+  \label{eq:cdc-step}
+  \end{equation}
+  If $\norm v\le V$, $\delta\le D$, and $\norm q\ge q_{\min}>0$, the right side
+  is at most
+  \begin{equation}
+  \frac L2\eta^2\left[V^2+(V+D/q_{\min})^2\right].
+  \end{equation}
+\end{enumerate}
+\end{theorem}
+The result is one-step and local.  It is not a trajectory guarantee and does not
+imply final strong-response retention.
+
+\section{Executable theorem contracts}
+The implementation makes theorem scope observable rather than silently extending
+it.  Table~\ref{tab:contracts} lists the primary contracts.  Unit tests check these
+software identities and edge cases; tests are not mathematical proofs.
+
+\begin{table}[t]
+\centering
+\caption{Executable contracts in \code{src/gradient\_starvation/theory.py}.}
+\label{tab:contracts}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lll}
+\toprule
+Contract & Mathematical object & Scope guard \\
+\midrule
+\code{projected\_statistics} & direct Eq.~\eqref{eq:cross-kernel}, $Gg$, residual & direct drift primary for nonlinear probes \\
+\code{equal\_time\_drift\_difference} & $\Delta'$ and two projected product orderings & exposes non-canonical attribution \\
+\code{rank\_one\_drift\_ratio} & Theorem~\ref{thm:log-ratio} factors and $\Psi$ & caller supplies noiseless/exact hypotheses \\
+\code{discrete\_crossover\_certificate} & telescoping finite-step tail areas & learnability gate required for causal label \\
+\code{transverse\_hitting\_time\_error\_bound} & $\epsilon/\kappa+h$ & caller supplies uniform error/transversality \\
+\code{zero\_disorder\_*\_failure\_bound} & Eqs.~\eqref{eq:init-concentration}, \eqref{eq:trajectory-concentration} & caller supplies valid common-tube $L_H$ \\
+\code{cdc\_finite\_step\_deviation\_bound} & Eq.~\eqref{eq:cdc-step} & caller supplies local smoothness \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Every general positive-disorder/positive-lag solver path that would require an
+unproved closure raises \code{NotImplementedError}.  This is a scientific guard,
+not missing numerical polish.
+
+\section{Experimental protocol}
+\subsection{Synthetic task and pairing}
+Sequences have two input channels.  A strong cue of scale $\rho$ and a unit weak
+cue appear at controlled sequence positions separated by a lag.  Positive tasks
+align the cues with the label; the negative control reverses the strong cue.  Data
+and initialization are paired across both-feature and weak-only conditions.
+Training is deterministic full-batch cross-entropy with zero weight decay.  Except
+for E-NL, the two conditions can be run sequentially because deterministic
+full-batch updates preserve the same trajectories; E-NL uses lockstep models so
+both exact drifts are available at each logged time.
+
+\begin{table}[t]
+\centering
+\caption{Final synthetic experiment configurations.  ``Shadow'' methods train a
+second weak-only model and therefore use roughly twice the model memory and
+per-step compute.}
+\label{tab:protocol}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lllllll}
+\toprule
+Experiment & Model / width & Task grid & Samples & Steps / LR & Seeds & Primary purpose \\
+\midrule
+E1 & dense linear / 96 & $\rho\in\{1,2,4,8\}$, lag $\in\{0,2,4,8\}$ & 256 & 500 / .01 & 4--11 & causal phase grid \\
+E2 & dense linear / 32--256 & $(1,0),(2,2),(4,4),(8,8)$ & 1024 & 400 / .01 & 0--7 & held-out closure convergence \\
+E-NL & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & 20--27 & direct-drift crossover certificate \\
+E3 & dense linear / 96 & $\rho=4$, lag 2 & 256 & 500 / .01 & 40--47 & eight-method CDC ablation \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+E1 uses gain $0.5$, $\beta=0.25$, horizon $H=5$, and a single eight-seed
+negative-control cell $(\rho,\mathrm{lag})=(4,4)$.  E2 uses gain $0.5$ and a
+held-out empirical closure reference with width 384, seeds 100--115, 16 particles,
+and 32,768 field samples.  E-NL uses gain $0.8$, cue noise $0.1$, zero background
+noise, $\beta=0.5$, and direct autograd drift at every logged point.  E3 compares
+ERM, Spectral Decoupling, an interaction penalty, CDC, loss-gradient projection,
+unconstrained rescue, Bloop-style, and PCGrad-style methods.  The five rescue
+methods share the same weak-only shadow target and differ in what they protect.
+
+\paragraph{Statistics and censoring.}
+Seeds are the unit of replication.  Reported confidence intervals are the
+repository's 95\% seed-level intervals.  Hitting times beyond the horizon are
+right-censored and never converted into finite delays.  Conditional crossing-time
+means are reported only with their number of crossing seeds.  The exploratory E-NL
+$5\times5$ grid uses seeds 0--3 and is explicitly post-hoc; it is not used to select
+a confirmatory condition.
+
+\paragraph{Reproducibility.}
+Each run writes a resolved YAML, environment record, trajectories, summary,
+aggregate tables, and vector/raster figures.  The final E-NL rerun is tracked with
+its resolved configuration and SHA-256 fingerprint over \code{run\_experiment.py}
+and \code{src/**/*.py}; its compact outputs and provenance manifest are under
+\code{paper/artifacts}.  Historical E1, E2, E2-R, exploratory E-NL, and E3
+artifacts record dirty Git states but no source fingerprint, so their exact
+executed source cannot be reconstructed retroactively from their commit hashes.
+
+\section{Results}
+\subsection{Controlled dense-linear phase grid}
+At lags 0, 2, and 4, all 32 condition--seed pairs per lag have positive weak AUC
+gaps.  Averaged across $\rho$, the lag-wise gaps are 5.76, 8.93, and 6.11,
+respectively; the effect peaks at lag 2 rather than decreasing monotonically with
+lag.  At every fixed lag, the gap increases monotonically over the measured $\rho$
+grid.  The negative-control cell is transfer in 8/8 seeds, with mean gap $-4.038$
+and 95\% CI $[-4.498,-3.578]$.  Every lag-8 cell is weak-only unlearnable, so these
+32 rows are not labeled starvation.  Final accuracy is 1.0 throughout, and no row
+meets the target at initialization.
+
+\artifactfigure{../paper/artifacts/historical/e1_dense_rerun-20260823-085142/e1_causal_regions.pdf}
+{Controlled dense-linear causal regions.  The learnability gate prevents lag-8
+points from being mislabeled as starvation.}{fig:e1}
+
+\subsection{Finite-width agreement and exact special cases}
+E2 compares finite networks with a disjoint-seed empirical
+\emph{closure reference}; it is not an independently derived theory.  Overall
+both-condition trajectory NRMSE is $0.09084,0.04761,0.05149,0.02958$ at widths
+$32,64,128,256$.  Weak-only NRMSE is
+$1.56931,0.38792,0.40201,0.20024$.  Both improve end-to-end but are non-monotone at
+$N=128$.  All 32 point--condition--diagnostic combinations improve end-to-end;
+large normalized weak-only values at difficult points have near-zero denominators.
+The exact finite-width geometry check has zero recorded relative error and the
+maximum projected-identity error is $2.86\times10^{-6}$.
+
+In the exact zero-disorder solver check, the time-discretization residual scales as
+$O(\eta)$ with fitted slope 1.0115.  A frozen-geometry integrator agrees with the
+projected-flow integrator to $1.91\times10^{-15}$.  The general solver acceptance
+record remains false by construction because all general-DMFT checks are blocked.
+
+\artifactfigure{../paper/artifacts/historical/e2_corrected_validation-20260821-224630/e2_field_agreement.pdf}
+{Finite-width agreement with a held-out empirical finite-network closure reference.
+This is not DMFT validation.}{fig:e2}
+
+\subsection{Nonlinear crossover is seed-dependent}
+Table~\ref{tab:enl} is the authoritative nonlinear result.  Tanh has a complete
+exact-drift/response/tail-area causal certificate in 3/8 seeds; the other five have
+negative exact relative drift from initialization and therefore do not exhibit
+transfer-to-starvation.  GRU has exact drift and response crossings in 5/8 seeds,
+but the weak-only trajectory fails to reach $\beta=0.5$ in all eight seeds; its
+causal count is therefore zero.  The nonzero direct-versus-projected residuals
+empirically confirm that $Gg$ cannot be silently treated as the exact nonlinear
+probe derivative.
+
+\begin{table}[t]
+\centering
+\caption{Final E-NL result at $\rho=4$, lag 2, eight seeds.  Crossing times and
+confidence intervals are conditional on crossing and must not be read as
+eight-seed estimates.}
+\label{tab:enl}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Model & exact drift & response & causal & mean $\tau_d$ & mean $\tau_r$ & max $|R_w^B-R_w^W|$ \\
+\midrule
+tanh & 3/8 & 3/8 & 3/8 & 0.194 & 0.389 & 0.02197 \\
+GRU  & 5/8 & 5/8 & 0/8 & 3.846 & 7.200 & 0.002986 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The post-hoc tanh search over $\rho\in\{1.5,2,3,4,6\}$ and
+lags $\{0,1,2,4,8\}$ found no cell with 4/4 causal certificates; the best cells
+reached 3/4.  We retain this as a negative search audit and do not select a searched
+cell for a paper claim.  In particular, the superseded 8/8 tanh result and its
+$\tau^*=1.6112$ used a different response convention and are not valid under the
+final definition.
+
+\artifactfigure{../paper/artifacts/enl_tanh_crossover-20260824-141207/enl_crossover.pdf}
+{Theorem-aligned nonlinear trajectories.  Direct-autograd drift is primary;
+projected and matched-state quantities are separately styled diagnostics.}{fig:enl}
+
+\subsection{CDC has the local guarantee, not the best final tradeoff}
+All five shadow-based methods reduce the causal weak AUC gap from ERM's 10.5155 to
+approximately zero and attain their shared weak-drift target at every logged step.
+Their weak outcomes are numerically similar to roughly four decimal places, but
+not statistically equivalent: 9/10 direct paired comparisons are significant at
+0.05, while the differences are practically tiny relative to the roughly 10.5
+change from ERM.  CDC alone preserves instantaneous strong drift to rounding scale,
+$4.77\times10^{-7}$, versus $1.48\times10^{-1}$ to $3.75\times10^{-1}$ for the
+alternative shadow constraints.  This local property does not yield the best final
+strong response: unconstrained rescue and the PCGrad-style arm end at 1.295,
+compared with CDC's 1.042 and ERM's 1.364.
+
+\begin{table}[t]
+\centering
+\caption{Dense CDC ablation, eight paired seeds.  Shadow-based arms have access to
+a matched weak-only model; the other arms do not.  ``Strong change'' is the maximum
+absolute instantaneous strong-drift perturbation.}
+\label{tab:cdc}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+Method & Shadow & Weak AUC gap & Strong change & Final $m_s$ \\
+\midrule
+ERM & no & 10.5155 & --- & 1.364 \\
+Spectral Decoupling & no & 9.0229 & --- & 0.829 \\
+Interaction & no & 10.5145 & --- & 1.365 \\
+CDC & yes & $-0.0005$ & $4.77\times10^{-7}$ & 1.042 \\
+Loss-gradient projection & yes & $-0.0002$ & $3.75\times10^{-1}$ & 0.371 \\
+Unconstrained rescue & yes & $-0.0007$ & $1.48\times10^{-1}$ & 1.295 \\
+Bloop-style & yes & $0.0002$ & $3.75\times10^{-1}$ & 0.370 \\
+PCGrad-style & yes & $-0.0007$ & $1.48\times10^{-1}$ & 1.295 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\artifactfigure{../paper/artifacts/historical/e3_cdc_dense_ablation-20260823-090702/e3_mitigation.pdf}
+{Eight-method dense-linear mitigation ablation.  CDC's established distinction is
+instantaneous first-order preservation, not superior weak rescue or final strong
+retention.}{fig:e3}
+
+\section{Discussion and limitations}
+\paragraph{What is proved.}
+The finite-width cross-kernel identity, exact-realization corollary, dense-linear
+geometry, tail-area equivalence, conditional rank-one crossover criterion,
+transverse hitting-time bound, singular zero-disorder wide limit, and local CDC
+results are mathematical statements with proofs.  Executable contracts reproduce
+their algebra and reject scope violations.
+
+\paragraph{What the experiments establish.}
+The controlled dense model shows robust positive AUC gaps in the learnable region.
+The nonlinear experiment does not establish a universal crossover: tanh is
+seed-dependent, and GRU fails causal learnability despite response crossings.  The
+exploratory search did not find a 4/4 robust cell.  CDC demonstrates its exact local
+constraint but not a superior practical tradeoff.
+
+\paragraph{Open mean-field theory.}
+For positive recurrent disorder or positive lag, a joint optimization-time DMFT
+would need (i) an effective single-site process and covariance/response kernels,
+(ii) all visible and loss-invisible closure variables, (iii) finite-horizon
+existence and uniqueness, (iv) joint quenched concentration under shared disorder,
+and (v) discretization and hitting-time control.  None is supplied by fitting an
+empirical closure reference.  We therefore leave an analytic $\rho_c$ and
+independent tanh/GRU $\tau^*$ prediction open.
+
+\paragraph{Data and external validity.}
+All citable results are controlled synthetic experiments.  A Waterbirds adapter
+exists but has not been run.  Its proposed weak coordinate is an intercept rather
+than an identified bird-shape response, and no exact background ablation exists;
+we make no Waterbirds claim.  If pursued, the preregistered sensitivity pilot must
+precede a full run and oracle/group-agnostic information settings must be separated.
+
+\paragraph{Reproducibility and baselines.}
+The final E-NL rerun is content-addressed and compactly archived, but historical
+E1, E2, E2-R, exploratory E-NL, and E3 runs retain a disclosed dirty-source
+provenance limitation.  The Bloop-style and PCGrad-style baselines are repository
+implementations motivated by the cited methods, not yet independently audited
+replicas.  CDC also has a stronger supervision and compute setting than ERM,
+Spectral Decoupling, and the interaction penalty.
+
+\paragraph{Submission readiness.}
+The package is scientifically defensible as a controlled theory paper, but the
+seed-dependent nonlinear headline, lack of real-data evidence, historical
+dirty-run provenance, and unaudited external baselines limit its present empirical
+strength. No theorem or experiment can guarantee an oral acceptance outcome.
+
+\section{Conclusion}
+Gradient starvation requires more than a decreasing weak-feature rate.  In a paired
+causal comparison, a rate crossover becomes an outcome crossing exactly when its
+negative tail area repays the earlier transfer advantage, and a causal label also
+requires weak-only learnability.  This distinction turns an ambiguous mechanism
+into a theorem and an executable certificate.  The same discipline narrows the
+rest of the paper: $\dot M=Gg$ is exact only under explicit realization assumptions;
+the rank-one criterion predicts only when its bounds are independently established;
+the wide limit is singular; and CDC's exact guarantee is local.  The corrected
+nonlinear results are correspondingly modest.  Establishing a general recurrent
+optimization-time theory remains an open problem rather than a numerical placeholder.
+
+\appendix
+\section{Proofs for the finite-width theorem package}
+\label{app:finite-proofs}
+
+\subsection{Proof of Theorem~\ref{thm:cross-kernel} and
+Corollary~\ref{cor:projected}}
+For $\ell(r)=\log(1+e^{-r})$, $\ell'(r)=-\sigm(-r)$.  Therefore
+\begin{equation}
+ \dot\theta_C=-\nabla L_C
+ =\frac1{n_C}\sum_i\sigm(-r_i^C)\nabla r_i^C.
+\end{equation}
+The chain rule gives
+\begin{equation}
+ \dot M_a^C=\ip{\nabla M_a^C}{\dot\theta_C}
+ =\frac1{n_C}\sum_i\ip{\nabla M_a^C}{\nabla r_i^C}\sigm(-r_i^C),
+\end{equation}
+which proves Theorem~\ref{thm:cross-kernel}.  Under exact realization,
+$\nabla r_i^C=\sum_bz_{ib}^C\nabla M_b^C$.  Substitution and exchange of finite
+sums yield Eq.~\eqref{eq:Gg}.  If an orthogonal residual logit term is present,
+substitution of
+$\nabla r_i^C=\sum_bz_{ib}^C\nabla M_b^C+\nabla r_i^\perp$ instead yields
+Eq.~\eqref{eq:projection-residual}.  \qed
+
+\subsection{Proof of the dense-linear geometry}
+For a unit response mode in channel $a$ at lag $\ell_a$, write $b_a$ for the
+corresponding input column.  Direct differentiation of
+$c^\top W^{\ell_a}b_a$ gives gradient $p_a=W^{\ell_a}b_a$ with respect to $c$,
+gradient $q_a=(W^{\ell_a})^\top c$ with respect to column $b_a$, and recurrent
+gradient
+\begin{equation}
+ S_a=\sum_{j=0}^{\ell_a-1}(W^j)^\top c
+       (W^{\ell_a-1-j}b_a)^\top.
+\end{equation}
+The parameter blocks are disjoint, so their gradient inner products add.  Input
+columns contribute only when the channels coincide, giving
+Eq.~\eqref{eq:dense-geometry}.  \qed
+
+\subsection{Proof of Theorem~\ref{thm:tail-area} and
+Corollary~\ref{cor:crossing-bounds}}
+Absolute continuity and the fundamental theorem of calculus give
+\begin{equation}
+ \Delta(\tau_d)=\Delta(0)+\int_0^{\tau_d}d=A_+,
+ \qquad
+ \Delta(t)=\Delta(\tau_d)+\int_{\tau_d}^{t}d=A_+-N(t).
+\end{equation}
+The sign assumption makes $N$ continuous and strictly increasing on every
+nontrivial post-crossing interval.  Equality, strict negativity, and uniqueness
+are therefore respectively equivalent to $N(H)\ge A_+$, $N(H)>A_+$, and strict
+post-crossing growth of $N$.
+
+If $d\le-\kappa$ after $t_0$, then
+$N(t)-N(t_0)\ge\kappa(t-t_0)$; solve for the time needed to cover the remaining
+area.  If $d'(t)\le-\lambda$ and $d(\tau_d)=0$, integration gives
+$d(t)\le-\lambda(t-\tau_d)$ and then
+$N(t)\ge\lambda(t-\tau_d)^2/2$.  Applying the theorem proves both stated bounds.
+\qed
+
+\subsection{Proof of Theorem~\ref{thm:log-ratio} and
+Corollary~\ref{cor:unique-rate-crossing}}
+The deterministic cue law gives
+$g^{\Bcond}=s_B(\rho,1)$ and $g^{\Wcond}=s_W(0,1)$.  Equation~\eqref{eq:Gg}
+therefore gives $F_w^{\Bcond}=s_BH_B$, $F_w^{\Wcond}=s_WH_W$,
+$u_B'=s_BQ_B$, and $u_W'=s_WH_W$.  Since
+\begin{equation}
+ \frac{\dd}{\dd u}\log\sigm(-u)=-(1-\sigm(-u)),
+\end{equation}
+differentiating $\Psi$ yields Eq.~\eqref{eq:Psi-prime}.  When both drifts are
+positive, monotonicity of the logarithm gives
+$\operatorname{sign}(F_w^{\Bcond}-F_w^{\Wcond})=\operatorname{sign}(\Psi)$.
+
+Under $\Psi'\le-\kappa$, integration gives
+$\Psi(t)\le\Psi(t_0)-\kappa(t-t_0)$.  Continuity forces a zero by
+$t_0+\Psi(t_0)/\kappa\le H$, while strict decrease gives uniqueness.  The
+primitive inequalities imply the derivative bound term by term.  \qed
+
+\subsection{Proof of Corollary~\ref{cor:hitting}}
+Transversality implies locally before $\tau$ that
+$x(t)\le\beta-\kappa(\tau-t)$ and after $\tau$ that
+$x(t)\ge\beta+\kappa(t-\tau)$.  Uniform error excludes an $x_N$ crossing before
+$\tau-\epsilon_N/\kappa$ and forces one by
+$\tau+\epsilon_N/\kappa$.  Separation excludes a spurious earlier crossing.  A
+sampling grid adds at most one spacing, and the paired bound follows by the triangle
+inequality.  \qed
+
+\subsection{Proof of Theorems~\ref{thm:six-scalar} and
+\ref{thm:wide-limit}}
+At zero recurrent gain and lag, gradient flow gives
+$\dot b_a=g_ac$ and $\dot c=\sum_bg_bb_b$.  Differentiating
+$M_a=c\cdot b_a$, $u_{ab}=b_a\cdot b_b$, and $w=c\cdot c$ proves
+Eq.~\eqref{eq:six-scalar}.  The mode gradient has one component in the $c$ block
+and one in its own $b_a$ block, yielding $G_{ab}=u_{ab}+\delta_{ab}w$.
+
+At initialization, the variances of $M_s,M_w,u_{sw}$ are $1/N$ and those of
+$u_{ss}-1,u_{ww}-1,w-1$ are $2/N$.  Coordinatewise Chebyshev bounds and a union
+bound sum to $1+1+1+2+2+2=9$, proving
+Eq.~\eqref{eq:init-concentration}.
+
+For bounded second cue moments the CE field is locally Lipschitz.  Define the Gram
+energy $R=w+\operatorname{tr}(u)$.  Along the six-scalar flow,
+\begin{equation}
+ R'=4g\cdot M=4\E[X\sigm(-X)],\qquad X=z\cdot M.
+\end{equation}
+The scalar $x\sigm(-x)$ is bounded above and $R\ge0$, so $R$ cannot blow up on a
+finite horizon.  Cauchy--Schwarz bounds all coordinates by $R$, yielding a compact
+forward set and a finite local Lipschitz constant on a common tube.  Gronwall's
+inequality gives Eq.~\eqref{eq:gronwall}.  Substitute
+$\epsilon=\delta e^{-L_HH}$ into Eq.~\eqref{eq:init-concentration} to obtain
+Eq.~\eqref{eq:trajectory-concentration}.  The shared-initialization paired result
+uses the larger of the two finite-horizon Lipschitz constants.  \qed
+
+\section{Proofs for Counterfactual Drift Correction}
+\label{app:cdc-proofs}
+\subsection{Instantaneous preservation}
+If $a=0$, both strong drifts vanish.  Otherwise,
+\begin{equation}
+ a\cdot q=a\cdot p-\frac{p\cdot a}{\norm a^2}(a\cdot a)=a\cdot p-p\cdot a=0,
+\end{equation}
+so $a\cdot v'=a\cdot v+\alpha a\cdot q=a\cdot v$.  This argument is independent
+of $\alpha$, hence survives a cap.  \qed
+
+\subsection{Unique minimum-norm correction}
+If $\delta\le0$, $d=0$ is feasible and uniquely norm-minimal.  Suppose
+$\delta>0$.  Any feasible $d$ obeys $a\cdot d=0$ and $p\cdot d\ge\delta$.
+Because $p=q+(p\cdot a/\norm a^2)a$ when $a\ne0$ (and $q=p$ when $a=0$),
+$p\cdot d=q\cdot d$.  Cauchy--Schwarz on the subspace orthogonal to $a$ gives
+\begin{equation}
+ \delta\le q\cdot d\le\norm q\norm d,
+ \qquad \norm d\ge\delta/\norm q.
+\end{equation}
+Equality requires a nonnegative multiple of $q$; the unique target-attaining choice
+is $d^*=(\delta/\norm q^2)q$.  A positive deficit is feasible exactly when
+$q\ne0$.  \qed
+
+\subsection{Local finite-step deviation}
+For an $L$-Lipschitz gradient on both segments, the smoothness remainder satisfies
+\begin{equation}
+ |m_s(\theta+h)-m_s(\theta)-\nabla m_s(\theta)\cdot h|
+ \le\frac L2\norm h^2.
+\end{equation}
+Apply this at $h=\eta v$ and $h=\eta v'$.  Instantaneous preservation cancels the
+linear terms and the triangle inequality yields Eq.~\eqref{eq:cdc-step}.  For
+active uncapped CDC,
+\begin{equation}
+ \norm{v'}\le\norm v+\frac{\delta}{\norm q}\le V+D/q_{\min},
+\end{equation}
+which gives the explicit bound.  If smoothness is known only on
+$B(\theta,r)$, sufficient segment conditions are
+$\eta V\le r$ and $\eta(V+D/q_{\min})\le r$.  \qed
+
+\section{Discrete certificate and experiment audit}
+For logged values $\Delta_k$, increments telescope exactly:
+\begin{equation}
+ \Delta_K-\Delta_0=\sum_{k=0}^{K-1}(\Delta_{k+1}-\Delta_k).
+\end{equation}
+The executable certificate requires one strict block of positive increments followed
+by one strict block of negative increments.  The peak-minus-initial value is its
+positive area; peak-minus-final is its negative tail area.  It certifies causal
+starvation only if the final trajectory is strictly below the initial gap and the
+external weak-only learnability flag is true.  This finite-step certificate makes
+no assertion between logged points.
+
+\begin{table}[h]
+\centering
+\caption{Authoritative artifact map.  Paths are relative to the repository root.}
+\label{tab:artifacts}
+\small
+\begin{tabular}{ll}
+\toprule
+Claim family & Artifact directory \\
+\midrule
+Controlled dense phase grid & \code{results/e1\_dense\_rerun-20260823-085142} \\
+Finite-width empirical closure & \code{results/e2\_corrected\_validation-20260821-224630} \\
+Exact special solver checks & \code{results/e2r\_solver\_checks-20260823-084911} \\
+Final nonlinear crossover & \code{paper/artifacts/enl\_tanh\_crossover-20260824-141207} \\
+Exploratory nonlinear audit & \code{results/enl\_exact\_regime\_search-20260824-105003} \\
+Dense CDC ablation & \code{results/e3\_cdc\_dense\_ablation-20260823-090702} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Reproduction commands.}
+From the repository root in the project environment:
+\begin{verbatim}
+python run_experiment.py e1  --config configs/e1_dense_rerun.yaml
+python run_experiment.py e2  --config configs/e2_corrected_validation.yaml
+python run_experiment.py e2r --config configs/e2r_solver_checks.yaml
+python run_experiment.py enl --config configs/enl_tanh_crossover.yaml
+python run_experiment.py e3  --config configs/e3_cdc_dense_ablation.yaml
+\end{verbatim}
+The exploratory E-NL command is deliberately omitted from the confirmatory list;
+its complete configuration and negative result remain archived in the repository.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

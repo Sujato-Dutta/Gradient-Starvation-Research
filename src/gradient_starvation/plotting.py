@@ -150,37 +150,44 @@ def plot_e3(summary: pd.DataFrame, run_dir: Path) -> None:
 def plot_enl(trajectories: pd.DataFrame, summary: pd.DataFrame, run_dir: Path) -> None:
     """Plot the competing crossover terms per architecture.
 
-    Left: the two competing contributions ``T_geom`` and ``S_CE`` against
-    optimization time.  Right: their difference ``d_w`` with the zero line and the
-    measured drift-level crossing.  A series that never crosses is annotated as
-    such rather than being left to look like a crossing just outside the axis.
+    Left: the matched-state projected terms ``T_geom`` and ``S_CE``. Right: the
+    exact direct-autograd equal-time derivative used by the theorem, alongside the
+    projected and matched-state diagnostics. A series that never crosses is
+    annotated rather than extrapolated beyond the observed horizon.
     """
     if trajectories.empty or summary.empty:
         return
     both = trajectories[trajectories["condition"] == "both"]
-    if both.empty or "d_w_equal_time" not in both:
+    if both.empty or "d_w_equal_time_exact" not in both:
         return
     kinds = sorted(both["model_kind"].unique())
     fig, axes = plt.subplots(
         len(kinds), 2, figsize=(11.5, 3.6 * len(kinds)), squeeze=False, constrained_layout=True
     )
-    columns = ["t_geom", "s_ce", "d_w_matched", "d_w_equal_time"]
+    columns = [
+        "t_geom", "s_ce", "d_w_matched", "d_w_equal_time_projected",
+        "d_w_equal_time_exact",
+    ]
     for row, kind in enumerate(kinds):
         subset = both[both["model_kind"] == kind]
         averaged = subset.groupby("tau", as_index=False)[columns].mean()
         left, right = axes[row][0], axes[row][1]
         left.plot(averaged.tau, averaged.t_geom, label=r"$T_{geom}$ (transfer)")
         left.plot(averaged.tau, averaged.s_ce, label=r"$S_{CE}$ (suppression)")
-        left.set(xlabel="Optimization time", ylabel="Drift contribution",
-                 title=f"{kind}: competing terms (matched state)")
+        left.set(xlabel="Optimization time", ylabel="Projected drift contribution",
+                 title=f"{kind}: matched-state projected identity")
         left.legend(fontsize=8)
 
         right.axhline(0.0, color="0.5", linewidth=1.0, linestyle="--")
-        # Both conventions are drawn, because they cross at different times and only
-        # the equal-time one differentiates the response gap.
+        # Direct autograd is the theorem derivative for nonlinear probe responses.
+        # Projected and matched diagnostics remain visible under distinct styles.
         right.plot(
-            averaged.tau, averaged.d_w_equal_time, color="C3",
-            label=r"$d_w$ equal-time $=\frac{d}{d\tau}[m_w^B-m_w^W]$",
+            averaged.tau, averaged.d_w_equal_time_exact, color="C3",
+            label=r"$d_w$ exact cross-kernel $=\frac{d}{d\tau}[m_w^B-m_w^W]$",
+        )
+        right.plot(
+            averaged.tau, averaged.d_w_equal_time_projected, color="C1", linestyle="--",
+            label=r"$d_w$ projected $Gg$",
         )
         right.plot(
             averaged.tau, averaged.d_w_matched, color="C7", linestyle=":",
@@ -199,7 +206,7 @@ def plot_enl(trajectories: pd.DataFrame, summary: pd.DataFrame, run_dir: Path) -
                 ha="center", fontsize=9, color="0.3",
             )
         right.set(xlabel="Optimization time", ylabel="Causal weak-drift difference",
-                  title=f"{kind}: transfer above zero, starvation below")
+                  title=f"{kind}: transfer above zero, rate suppression below")
         right.legend(fontsize=8)
     _save_all(fig, run_dir / "enl_crossover")
 

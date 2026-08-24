@@ -110,6 +110,11 @@ def _row_from_statistics(
         if stats.direct_drift is not None
         else np.full(2, np.nan)
     )
+    projection_residual = (
+        stats.projected_drift_residual.detach().cpu().numpy()
+        if stats.projected_drift_residual is not None
+        else np.full(2, np.nan)
+    )
     with torch.no_grad():
         logits = synthetic_logits(model, batch)
         accuracy = ((logits >= 0).long() == batch.y).float().mean().item()
@@ -133,6 +138,9 @@ def _row_from_statistics(
         "drift_w": float(drift[1]),
         "direct_drift_s": float(direct[0]),
         "direct_drift_w": float(direct[1]),
+        "projected_drift_residual_s": float(projection_residual[0]),
+        "projected_drift_residual_w": float(projection_residual[1]),
+        "mode_residual_rms": float(stats.mode_residual_rms.detach()),
         "projected_identity_absolute_error": identity_absolute_error,
         "projected_identity_relative_error": identity_error,
         "g_s": float(field[0]),
@@ -180,7 +188,10 @@ def train_single(
                 batch,
                 step,
                 learning_rate,
-                compute_direct_drift=step <= identity_steps,
+                compute_direct_drift=(
+                    bool(training.get("exact_response_drift", False))
+                    or step <= identity_steps
+                ),
             )
             row["wall_seconds"] = time.perf_counter() - started
             history.append(row)
@@ -311,7 +322,10 @@ def train_paired_lockstep(
         should_log = step % log_every == 0 or step == steps
         if should_log:
             elapsed = time.perf_counter() - started
-            direct = step <= identity_steps
+            direct = (
+                bool(training.get("exact_response_drift", False))
+                or step <= identity_steps
+            )
             both_stats = projected_statistics(
                 both_model, both, compute_direct_drift=direct, create_graph=False
             )
@@ -340,9 +354,26 @@ def train_paired_lockstep(
                         crossover.reconstruction_error.detach()
                     ),
                     "matched_weak_only_m_w": float(weak_stats.mode[1].detach()),
-                    # Equal-time family: this one IS d/dtau of the response gap, so it
-                    # is the quantity to use for any drift-versus-response comparison.
+                    # Equal-time projected family.  The two additive orderings
+                    # reconstruct this ``Gg`` difference exactly.  For nonlinear
+                    # common nonlinear probe modes it need not equal the true gap derivative.
                     "d_w_equal_time": float(equal_time.d_w_equal_time.detach()),
+                    "d_w_equal_time_projected": float(
+                        equal_time.d_w_equal_time.detach()
+                    ),
+                    # Universal direct-autograd derivative from Theorem A.1. E-NL
+                    # publication configurations require this finite value and use
+                    # it, rather than the projected value, for crossover timing.
+                    "d_w_equal_time_exact": (
+                        float(equal_time.exact_d_w_equal_time.detach())
+                        if equal_time.exact_d_w_equal_time is not None
+                        else float("nan")
+                    ),
+                    "equal_time_projection_residual": (
+                        float(equal_time.projection_residual.detach())
+                        if equal_time.projection_residual is not None
+                        else float("nan")
+                    ),
                     "equal_time_cross_transport": float(
                         equal_time.cross_transport.detach()
                     ),
@@ -402,11 +433,15 @@ def _train_paired_counterfactual_drift(
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, torch.Tensor]]]:
     """Train a both-feature model against a simultaneous weak-only shadow.
 
-    The both-feature update is the minimum-norm correction of the ERM update
-    that matches the shadow model's instantaneous weak drift while preserving
-    the both-feature strong drift.  Weight decay and gradient clipping are
-    rejected because they would invalidate that guarantee after correction.
+    When feasible and uncapped, the both-feature update is the unique minimum-norm
+    correction of the ERM update that matches the shadow model's instantaneous weak
+    drift while preserving the both-feature strong drift. Infeasible directions and
+    binding caps are logged and may fail target attainment; instantaneous strong-
+    drift preservation still holds. Cross-entropy diagnostics, zero weight decay,
+    and no gradient clipping are required because post-correction transformations
+    would invalidate the stated contract.
     """
+    _reject_mismatched_diagnostics(mitigation)
     method = str(mitigation.get("method", "counterfactual_drift"))
     constraint = _SHADOW_METHODS[method]
     if not bool(training.get("full_batch", True)):
