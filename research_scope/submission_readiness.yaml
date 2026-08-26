@@ -1,0 +1,231 @@
+{
+  "schema_version": "submission-readiness-v1",
+  "format_note": "This file uses the JSON subset of YAML 1.2 so it can be validated with the Python standard library.",
+  "allowed_statuses": ["pass", "fail", "blocked", "unknown", "not_applicable"],
+  "target_venue": "ICLR 2027",
+  "claim_set": "research_scope/submission_claim_set.yaml",
+  "validated_environment": {
+    "python_version": "3.12.4",
+    "python_version_path": ".python-version",
+    "lock_path": "requirements-lock-py312.txt",
+    "lock_sha256": "6f4c33c33b01104270197a14cbafd83145c8b3706839d7e6b7c03ac0d6e9c52b",
+    "direct_requirements_path": "requirements.txt",
+    "package_count": 31,
+    "waterbirds_extras_included": false,
+    "scope_note": "This lock records the exact versions in the validated synthetic Python environment; optional unrun Waterbirds dependencies remain outside the claim-bearing environment, and clean-clone installation is a separate blocked gate."
+  },
+  "overall_submission_ready": false,
+  "overall_decision": "no_go",
+  "decision_reason": "Scientific scope is frozen and official rules are now sourced, but mandatory format/disclosure, clean-source replay, empirical breadth, certificate/reframing, benchmark, audit, and independent-review gates remain non-passing.",
+  "gates": [
+    {
+      "id": "claims_frozen",
+      "category": "scientific_scope",
+      "status": "pass",
+      "required_for_submission": true,
+      "criterion": "Included, blocked, failed, restricted, and non-promotable claims are machine-readable before new outcomes.",
+      "evidence": "research_scope/submission_claim_set.yaml"
+    },
+    {
+      "id": "official_2027_requirements_sourced",
+      "category": "venue",
+      "status": "pass",
+      "required_for_submission": true,
+      "criterion": "Current requirements are taken from official ICLR 2027 pages rather than inferred from prior years.",
+      "evidence": "Official URLs recorded in research_scope/submission_claim_set.yaml"
+    },
+    {
+      "id": "official_style_package_integrated",
+      "category": "venue",
+      "status": "fail",
+      "required_for_submission": true,
+      "criterion": "The manuscript uses the official ICLR 2027 style package.",
+      "evidence": "paper/main.tex still uses article plus geometry; the official ZIP is not stored or checksummed."
+    },
+    {
+      "id": "submission_main_text_at_most_9_pages",
+      "category": "venue",
+      "status": "unknown",
+      "required_for_submission": true,
+      "criterion": "Main text is at most 9 pages in the official submission style.",
+      "evidence": "The current 19-page generic rendering is not an official-style page-count measurement."
+    },
+    {
+      "id": "double_blind_anonymity_audit",
+      "category": "venue",
+      "status": "unknown",
+      "required_for_submission": true,
+      "criterion": "Main paper, appendix, supplementary material, metadata, links, code, and artifacts reveal no author identity.",
+      "evidence": "The title block is anonymous, but a repository-wide and PDF-metadata audit has not been completed."
+    },
+    {
+      "id": "mandatory_ai_use_statement",
+      "category": "venue",
+      "status": "fail",
+      "required_for_submission": true,
+      "criterion": "The manuscript contains the ICLR-required AI-use disclosure and the submission form is prepared consistently.",
+      "evidence": "paper/main.tex currently has no AI-use disclosure section."
+    },
+    {
+      "id": "reproducibility_statement",
+      "category": "venue",
+      "status": "fail",
+      "required_for_submission": false,
+      "criterion": "The recommended reproducibility statement points to assumptions, proofs, data generation, code, and artifact checks.",
+      "evidence": "No dedicated reproducibility statement is present."
+    },
+    {
+      "id": "author_openreview_profiles_and_order",
+      "category": "author_action",
+      "status": "unknown",
+      "required_for_submission": true,
+      "criterion": "All authors have current OpenReview profiles and the genuine author list is frozen by the abstract deadline.",
+      "evidence": "Author identities and profile state are intentionally unavailable in this anonymous workspace."
+    },
+    {
+      "id": "coauthor_quota_and_reciprocal_reviewing",
+      "category": "author_action",
+      "status": "unknown",
+      "required_for_submission": true,
+      "criterion": "Every author satisfies the ICLR 2027 paper quota and the submission satisfies reciprocal-reviewing rules or an applicable exemption.",
+      "evidence": "Cannot be evaluated without author publication and submission records."
+    },
+    {
+      "id": "dual_submission_compliance",
+      "category": "author_action",
+      "status": "unknown",
+      "required_for_submission": true,
+      "criterion": "No identical or substantially similar archival submission is under review or already published contrary to policy.",
+      "evidence": "Cannot be evaluated from repository content alone."
+    },
+    {
+      "id": "clean_git_source_release",
+      "category": "reproducibility",
+      "status": "blocked",
+      "required_for_submission": true,
+      "criterion": "The reviewed executable source, configs, claim manifests, tests, and artifact verifier are all tracked in one clean commit and optional release tag.",
+      "evidence": "The working tree is heavily dirty and commit/tag creation requires explicit user authorization."
+    },
+    {
+      "id": "exact_environment_lock",
+      "category": "reproducibility",
+      "status": "pass",
+      "required_for_submission": true,
+      "criterion": "The canonical validated environment has an exact, reviewed, content-addressed version manifest; clean-clone installation is evaluated separately.",
+      "evidence": "Python 3.12.4 is pinned in .python-version; requirements-lock-py312.txt contains 31 exact package pins from the validated environment and is bound by SHA-256 in this manifest. Optional unrun Waterbirds extras are explicitly excluded."
+    },
+    {
+      "id": "historical_empirical_replayability",
+      "category": "reproducibility",
+      "status": "fail",
+      "required_for_submission": true,
+      "criterion": "Claim-bearing confirmatory outcomes can be replayed from exact source and environment bytes.",
+      "evidence": "E19/E20 exact dirty source snapshots and large sealed inputs are unavailable; compact outcomes are auditable but not replayable."
+    },
+    {
+      "id": "compact_archive_integrity_verifier",
+      "category": "reproducibility",
+      "status": "pass",
+      "required_for_submission": true,
+      "criterion": "A dependency-free read-only verifier checks compact archive paths, sizes, hashes, seals, provenance classes, and optional Git tracking.",
+      "evidence": "python verify_release_artifacts.py verified 2 studies, 21 files, and 135950 bytes; tests/test_release_artifacts.py passed 9 tamper/path/duplicate/acceptance/provenance checks. Git-tracking mode separately failed closed on the current untracked tree, as intended."
+    },
+    {
+      "id": "evaluator_fail_closed_regression_tests",
+      "category": "software",
+      "status": "pass",
+      "required_for_submission": true,
+      "criterion": "Regression tests prove E-NL evaluation rejects non-lockstep or non-exact-response training before creating outputs.",
+      "evidence": "tests/test_enl_evaluation_contract.py passed 2 dedicated public-entry-point checks; the existing E-NL preflight/evaluation smoke subset passed 4 checks."
+    },
+    {
+      "id": "post_change_full_test_suite",
+      "category": "software",
+      "status": "pass",
+      "required_for_submission": true,
+      "criterion": "The full test suite passes after readiness/release changes.",
+      "evidence": "PYTHONPATH=src MPLBACKEND=Agg .venv-test/bin/python -m pytest -q: 240 passed, 4 warnings."
+    },
+    {
+      "id": "fresh_breadth_preregistration",
+      "category": "empirical",
+      "status": "blocked",
+      "required_for_submission": true,
+      "criterion": "A resource-budgeted multi-cell validation and crossed-seed analysis are frozen before outcomes.",
+      "evidence": "Blocked until a clean source/environment state can be referenced."
+    },
+    {
+      "id": "fresh_breadth_validation",
+      "category": "empirical",
+      "status": "blocked",
+      "required_for_submission": true,
+      "criterion": "Fresh untouched cells and seeds support or falsify the restricted crossing-event claim under preregistered gates.",
+      "evidence": "No new outcome generation is allowed before the source and preregistration gates pass."
+    },
+    {
+      "id": "kernel_certificate_or_empirical_reframing",
+      "category": "theory_scope",
+      "status": "blocked",
+      "required_for_submission": true,
+      "criterion": "Either a nonvacuous initialization-time movement certificate is established or all frozen-kernel language is explicitly framed as an empirical event heuristic.",
+      "evidence": "T16 currently depends on caller-supplied movement bounds; no tanh/GRU certificate exists."
+    },
+    {
+      "id": "sequential_benchmark",
+      "category": "empirical",
+      "status": "blocked",
+      "required_for_submission": true,
+      "criterion": "A semi-real or real sequential benchmark has an exact strong-cue intervention and an identified weak response.",
+      "evidence": "Waterbirds currently exposes only an unrun intercept-based surrogate and cannot satisfy this gate."
+    },
+    {
+      "id": "baseline_parity_audit",
+      "category": "scientific_review",
+      "status": "blocked",
+      "required_for_submission": true,
+      "criterion": "Baselines, supervision, compute, hyperparameters, and CDC theorem scope are independently audited.",
+      "evidence": "PCGrad/Bloop primary-algorithm fidelity and parity remain unaudited."
+    },
+    {
+      "id": "clean_clone_artifact_reproduction",
+      "category": "reproducibility",
+      "status": "blocked",
+      "required_for_submission": true,
+      "criterion": "An independent clean clone installs, verifies, tests, builds the PDF, and reproduces designated current-source outcomes.",
+      "evidence": "Requires an authorized tracked release state and replacement current-source study."
+    },
+    {
+      "id": "independent_scientific_and_statistical_review",
+      "category": "scientific_review",
+      "status": "blocked",
+      "required_for_submission": true,
+      "criterion": "A reviewer independent of implementation checks proofs, statistics, claim scope, failures, and artifact instructions.",
+      "evidence": "No external review record exists."
+    }
+  ],
+  "go_no_go": {
+    "new_confirmatory_outcomes": {
+      "decision": "no_go",
+      "blocking_gate_ids": [
+        "clean_git_source_release",
+        "fresh_breadth_preregistration"
+      ]
+    },
+    "claim_promotion": {
+      "decision": "no_go",
+      "allowed_current_empirical_scope": "E20 restricted drift/response crossing classification only",
+      "prohibited_until_new_evidence": [
+        "phase prediction",
+        "causal-starvation prediction",
+        "learnability prediction",
+        "calibrated crossing-time prediction",
+        "kernel stability",
+        "universal prevalence or architecture generalization"
+      ]
+    },
+    "submission": {
+      "decision": "no_go",
+      "rule": "Every required gate must be pass or explicitly not_applicable; unknown, blocked, and fail all stop submission."
+    }
+  }
+}

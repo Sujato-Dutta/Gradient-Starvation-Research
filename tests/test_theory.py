@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from gradient_starvation.data.synthetic import SyntheticTaskSpec, make_paired_task
@@ -10,7 +11,11 @@ from gradient_starvation.theory import (
     discrete_crossover_certificate,
     exact_dense_linear_geometry,
     gradient_gram,
+    initial_frozen_empirical_kernel,
+    integrate_frozen_logistic_sgd,
+    frozen_kernel_discrete_error_bound,
     matched_weak_drift_decomposition,
+    paired_initial_response_jet,
     projected_statistics,
     rank_one_drift_ratio,
     transverse_hitting_time_error_bound,
@@ -289,8 +294,56 @@ def test_discrete_certificate_requires_one_strict_sign_change():
 
 def test_transverse_hitting_time_bound_includes_grid_resolution():
     assert transverse_hitting_time_error_bound(
-        0.06, 0.3, grid_spacing=0.05
+        0.06,
+        0.3,
+        prehit_separation=0.1,
+        transversality_radius=0.25,
+        grid_spacing=0.05,
     ) == 0.25
+
+
+@pytest.mark.parametrize("prehit_separation", [0.0, -1.0, float("nan"), float("inf")])
+def test_transverse_hitting_time_bound_requires_valid_prehit_separation(
+    prehit_separation,
+):
+    with pytest.raises(ValueError, match="prehit_separation"):
+        transverse_hitting_time_error_bound(
+            0.01,
+            1.0,
+            prehit_separation=prehit_separation,
+            transversality_radius=1.0,
+        )
+
+
+@pytest.mark.parametrize("transversality_radius", [0.0, -1.0, float("nan"), float("inf")])
+def test_transverse_hitting_time_bound_requires_valid_transversality_radius(
+    transversality_radius,
+):
+    with pytest.raises(ValueError, match="transversality_radius"):
+        transverse_hitting_time_error_bound(
+            0.01,
+            1.0,
+            prehit_separation=0.1,
+            transversality_radius=transversality_radius,
+        )
+
+
+def test_transverse_hitting_time_bound_enforces_local_hypotheses():
+    with pytest.raises(ValueError, match="strictly smaller"):
+        transverse_hitting_time_error_bound(
+            0.1,
+            1.0,
+            prehit_separation=0.1,
+            transversality_radius=1.0,
+        )
+    with pytest.raises(ValueError, match="exceeds transversality_radius"):
+        transverse_hitting_time_error_bound(
+            0.06,
+            0.3,
+            prehit_separation=0.1,
+            transversality_radius=0.24,
+            grid_spacing=0.05,
+        )
 
 
 def test_zero_disorder_probability_bounds_have_the_proved_scaling():
@@ -303,8 +356,39 @@ def test_zero_disorder_probability_bounds_have_the_proved_scaling():
         delta=1.0,
         lipschitz_constant=0.5,
         horizon=1.0,
+        tube_radius=2.0,
     )
     assert propagated >= zero_disorder_initialization_failure_bound(400, 1.0)
+
+
+def test_zero_disorder_trajectory_bound_saturates_at_the_tube_radius():
+    radius_limited = zero_disorder_trajectory_failure_bound(
+        width=1000,
+        delta=2.0,
+        lipschitz_constant=0.2,
+        horizon=3.0,
+        tube_radius=0.5,
+    )
+    delta_limited = zero_disorder_trajectory_failure_bound(
+        width=1000,
+        delta=0.5,
+        lipschitz_constant=0.2,
+        horizon=3.0,
+        tube_radius=2.0,
+    )
+    assert radius_limited == delta_limited
+
+
+@pytest.mark.parametrize("tube_radius", [0.0, -1.0, float("nan"), float("inf")])
+def test_zero_disorder_trajectory_bound_requires_a_valid_tube_radius(tube_radius):
+    with pytest.raises(ValueError, match="tube_radius"):
+        zero_disorder_trajectory_failure_bound(
+            width=400,
+            delta=1.0,
+            lipschitz_constant=0.5,
+            horizon=1.0,
+            tube_radius=tube_radius,
+        )
 
 
 def test_cdc_finite_step_bound_controls_a_quadratic_protected_response():
@@ -346,3 +430,94 @@ def test_nonlinear_probe_response_is_common_across_causal_conditions():
         both_mode = projected_statistics(model_both, both).mode
         weak_mode = projected_statistics(model_weak, weak).mode
         torch.testing.assert_close(both_mode, weak_mode, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize("kind", ["tanh", "gru"])
+def test_full_empirical_ntk_reconstructs_exact_initial_response_drift(kind):
+    spec = SyntheticTaskSpec(
+        sequence_length=5, n_samples=12, rho=2, lag_separation=2, cue_noise=0.1
+    )
+    both, weak = make_paired_task(spec, seed=71)
+    torch.manual_seed(72)
+    both_model = build_model({"kind": kind, "width": 6}, kind=kind)
+    weak_model = build_model({"kind": kind, "width": 6}, kind=kind)
+    weak_model.load_state_dict(both_model.state_dict())
+    before = {
+        name: value.detach().clone() for name, value in both_model.state_dict().items()
+    }
+
+    both_kernel = initial_frozen_empirical_kernel(both_model, both)
+    weak_kernel = initial_frozen_empirical_kernel(weak_model, weak)
+    jet = paired_initial_response_jet(both_model, weak_model, both, weak)
+
+    torch.testing.assert_close(
+        both_kernel.signed_ntk,
+        both_kernel.signed_logit_jacobian @ both_kernel.signed_logit_jacobian.T,
+    )
+    torch.testing.assert_close(
+        both_kernel.response_cross_kernel,
+        both_kernel.signed_logit_jacobian @ both_kernel.response_jacobian,
+    )
+    torch.testing.assert_close(
+        both_kernel.signed_ntk, both_kernel.signed_ntk.T, rtol=0, atol=0
+    )
+    both_drift = (
+        both_kernel.response_cross_kernel @ torch.sigmoid(-both_kernel.signed_logits)
+        / spec.n_samples
+    )
+    weak_drift = (
+        weak_kernel.response_cross_kernel @ torch.sigmoid(-weak_kernel.signed_logits)
+        / spec.n_samples
+    )
+    torch.testing.assert_close(both_drift - weak_drift, jet.d_0, rtol=2e-5, atol=2e-6)
+    assert all(parameter.grad is None for parameter in both_model.parameters())
+    for name, value in before.items():
+        assert torch.equal(value, both_model.state_dict()[name]), name
+
+
+def test_frozen_logistic_sgd_uses_experiment_time_and_initial_drift():
+    spec = SyntheticTaskSpec(sequence_length=5, n_samples=12, rho=2, lag_separation=2)
+    both, _ = make_paired_task(spec, seed=73)
+    torch.manual_seed(74)
+    model = build_model({"kind": "tanh", "width": 6})
+    kernel = initial_frozen_empirical_kernel(model, both)
+    trajectory = integrate_frozen_logistic_sgd(
+        kernel, steps=5, learning_rate=0.02, log_every=2
+    )
+
+    assert trajectory.steps.tolist() == [0, 2, 4, 5]
+    torch.testing.assert_close(
+        trajectory.tau, torch.tensor([0.0, 0.04, 0.08, 0.10], dtype=torch.float64)
+    )
+    expected = (
+        kernel.response_cross_kernel @ torch.sigmoid(-kernel.signed_logits)
+        / spec.n_samples
+    )
+    torch.testing.assert_close(
+        trajectory.response_drift[0], expected.to(torch.float64), rtol=2e-6, atol=1e-9
+    )
+
+
+def test_frozen_kernel_discrete_bound_vanishes_when_secant_kernels_do_not_move():
+    exact = frozen_kernel_discrete_error_bound(
+        step=100,
+        learning_rate=0.01,
+        n_samples=32,
+        initial_kernel_norm=4.0,
+        initial_cross_kernel_norm=2.0,
+        secant_kernel_drift_bound=0.0,
+        secant_cross_kernel_drift_bound=0.0,
+    )
+    perturbed = frozen_kernel_discrete_error_bound(
+        step=100,
+        learning_rate=0.01,
+        n_samples=32,
+        initial_kernel_norm=4.0,
+        initial_cross_kernel_norm=2.0,
+        secant_kernel_drift_bound=0.1,
+        secant_cross_kernel_drift_bound=0.1,
+    )
+    assert exact.logit_error == 0.0
+    assert exact.response_error == 0.0
+    assert perturbed.logit_error > 0.0
+    assert perturbed.response_error > 0.0

@@ -23,6 +23,90 @@ not exact additive logit coordinates; their exact response
 drift must be computed by the universal cross-kernel/direct-autograd form, with the
 `Gg` residual reported.
 
+### Exact signed-logit/response empirical-NTK flow
+
+For one finite training set, let `r(theta)` be the vector of signed logits, let
+`J_r(theta)` have rows `grad r_i`, define the full signed-logit empirical NTK
+`K(theta)=J_r J_r^T`, and define the response cross-kernel
+`C_i(theta)=<grad r_i,grad M(theta)>`. With `w(r)=sigma(-r)`, Theorem A.1 applied
+also to each `r_i` gives the exact coupled finite-width flow
+
+```text
+dot r = K(theta) w(r)/n,
+dot M = C(theta)^T w(r)/n.
+```
+
+This uses the complete sample-level kernels. The two-probe Gram matrix `G` cannot
+replace `K` or `C` for nonlinear tanh/GRU responses.
+
+### Initialization-frozen nonlinear logistic surrogate
+
+Freeze `K_0=K(theta_0)` and `C_0=C(theta_0)`. The tangent surrogate
+
+```text
+dot r_bar = K_0 sigma(-r_bar)/n,
+dot M_bar = C_0^T sigma(-r_bar)/n
+```
+
+is still nonlinear in its logits. It is an exact ODE for the initialization-frozen
+surrogate. Under full-batch SGD with learning rate `eta`,
+`integrate_frozen_logistic_sgd` exactly applies its explicit-Euler recursion
+
+```text
+r_bar_(k+1) = r_bar_k + eta K_0 sigma(-r_bar_k)/n,
+M_bar_(k+1) = M_bar_k + eta C_0^T sigma(-r_bar_k)/n,
+tau_k = eta k.
+```
+
+Neither exactness statement makes this the exact trained tanh/GRU trajectory.
+
+### Conditional continuous/discrete secant-kernel comparison
+
+Use Euclidean/operator norms, `b>=sup ||sigma(-r)||_2` (one may take `b=sqrt(n)`),
+`a=||K_0||_2/(4n)`, and `c_0=||C_0||_2`. If a true continuous trajectory on
+`[0,t]` satisfies uniform bounds
+
+```text
+||K(theta_s)-K_0||_2 <= delta_K,
+||C(theta_s)-C_0||_2 <= delta_C,
+```
+
+then the true-versus-frozen errors obey
+
+```text
+||r(t)-r_bar(t)||_2 <= delta_K b Phi(t)/n,
+|M(t)-M_bar(t)| <= t delta_C b/n
+  + c_0 delta_K b Psi(t)/(4n^2),
+Phi(t)=(exp(a t)-1)/a,
+Psi(t)=(exp(a t)-1-a t)/a^2,
+```
+
+with continuous limits `Phi(t)=t` and `Psi(t)=t^2/2` when `a=0`.
+For nonlinear SGD, apply the same argument to the exact segment-secant logit and
+response kernels. If their distances from `K_0,C_0` are uniformly at most
+`delta_K,delta_C` through step `k`, set
+
+```text
+Phi_k=((1+eta a)^k-1)/a,
+Psi_k=(((1+eta a)^k-1)/(eta a)-k)/a.
+```
+
+Then
+
+```text
+||r_k-r_bar_k||_2 <= delta_K b Phi_k/n,
+|M_k-M_bar_k| <= k eta delta_C b/n
+  + eta c_0 delta_K b Psi_k/(4n^2),
+```
+
+with limits `Phi_k=k eta` and `Psi_k=eta k(k-1)/2` at `a=0`.
+Subtracting the exact and frozen equations, using the `1/4` Lipschitz constant of
+`sigma(-x)`, and applying Grönwall (continuous) or induction (discrete) proves the
+bounds. `theory.frozen_kernel_discrete_error_bound` evaluates the discrete formula
+from caller-supplied constants; it does not establish them. No uniform
+instantaneous or secant-kernel movement bound has been proved for the tanh or GRU
+experiments, so their frozen-surrogate agreement is empirical and conditional.
+
 ### Theorem B: when rate suppression becomes outcome starvation
 
 For `Delta=m_w^B-m_w^W` and exact equal-time derivative `d=Delta'`, assume one
@@ -49,43 +133,63 @@ contraction without choosing either non-canonical additive decomposition. A posi
 `Psi` followed by a uniform negative derivative produces one rate crossover and an
 explicit time bound. Outcome starvation still requires Theorem B.
 
-**Prediction discipline:** independently proved bounds on `Psi'` predict a
-crossover. Evaluating `Psi` on a completed trajectory certifies it but is not an
-independent prediction.
+**Prediction discipline:** bounds on `Psi'` proved before outcomes can prospectively
+bound a crossover. Evaluating `Psi` on a completed trajectory certifies it but is
+not a certified or quantitatively accurate held-out time prediction.
 
 ### Corollary D: hitting-time stability
 
-Uniform trajectory convergence plus an isolated transverse target crossing implies
-hitting-time convergence, with error at most trajectory error divided by crossing
-slope, plus grid resolution. This licenses hitting-time limits only after a
-trajectory limit has independently been proved.
+For continuous trajectories, an absolutely continuous reference with an interior
+first upward hit, an a.e. slope lower bound on a radius-`r` neighborhood, and a
+positive quantitative prehistory margin has first-hit error at most
+`epsilon/kappa` when `epsilon<eta` and `epsilon/kappa<=r`. A logged grid adds at
+most its maximum mesh when the enlarged window remains inside `r`. Paired delays
+require two finite hits satisfying their own assumptions; otherwise they are
+censored. Descending response-gap crossings must be sign-reversed and localized
+after a point where `Delta>0`, because `Delta(0)=0`. This licenses hitting-time
+limits only after uniform trajectory convergence and the directional first-entry
+hypotheses have independently been proved.
 
 ### Theorem E: exactly solvable recurrent anchor
 
-At zero recurrent disorder and zero cue lag, the dense linear dynamics close at
-every width on six scalar inner products. Gaussian initialization obeys the explicit
-Chebyshev bound `9/(N epsilon^2)`; finite-horizon ODE stability propagates this into
-uniform convergence in probability to deterministic initial data. This is a genuine
-large-width theorem at a singular solvable point, not a general DMFT.
+At zero recurrent disorder, zero cue lag, and zero background noise, the dense
+linear dynamics close at every width on six scalar inner products. Gaussian
+initialization obeys the explicit Chebyshev bound `9/(N epsilon^2)`. For each fixed
+cue law, the reference energy obeys `R<=3+4 W(e^-1)H`; a deterministic radius `r`
+gives `L=4(A+(R_H+r)C)` and the bootstrapped trajectory failure bound
+`9 exp(2LH)/(N min(r,delta)^2)`. Thus finite-horizon ODE stability yields uniform
+convergence in probability. This is a genuine large-width theorem at a singular
+solvable point, not a positive-disorder or positive-lag DMFT.
 
 ### CDC Results 1–3
 
-1. CDC preserves the current strong-feature drift exactly at first order.
-2. The uncapped feasible correction is the unique minimum-norm correction attaining
-   the weak-only drift target under that constraint.
-3. Under local smoothness and a nondegenerate projected weak direction, one CDC step
-   differs from the corresponding ERM strong response by an explicit `O(eta^2)`
-   bound.
+All CDC gradients, projections, norms, and smoothness balls use the fixed
+implemented tensor coordinates with the product Euclidean/Frobenius metric; there
+is no reparameterization-invariance or natural-gradient claim.
 
-Result 3 is now proved as a local one-step theorem. No trajectory-level or final
-strong-retention theorem follows.
+1. CDC preserves the current strong-feature drift exactly at first order.
+2. The uncapped feasible correction is the unique minimum Euclidean-norm,
+   lower-bound-attaining correction in those coordinates. Exact positive-deficit
+   feasibility is the nonvanishing tangent restriction represented by `q!=0`;
+   `q`, its norm/tolerance, and the selected minimizer are metric/scale-dependent.
+3. Under same-chart local smoothness on both straight step segments and a
+   nondegenerate projected weak direction, one CDC step differs from the
+   corresponding ERM strong response by an explicit `O(eta^2)` bound.
+
+A nonbinding cap leaves Result 2 unchanged. A binding cap preserves Result 1 and
+the actual-velocity Result 3 bound but generally misses the weak target, so no
+target-attaining optimality claim applies. Result 3 is a local one-step theorem;
+no trajectory-level or final strong-retention theorem follows.
 
 ## 2. Explicitly open theory
 
 The following are not paper theorems:
 
 - the positive-disorder/positive-lag joint CE-RNN optimization-time DMFT;
-- an independently predicted tanh or GRU crossover time;
+- certified or quantitatively accurate tanh/GRU drift- or response-crossing times;
+  the initialization-frozen surrogate is an empirical event classifier whose time
+  predictions remain uncalibrated;
+- uniform tanh/GRU instantaneous or secant-kernel stability on the training horizon;
 - an analytic learnability/starvation boundary `rho_c`;
 - a general noisy-cue rank-one factorization;
 - a trajectory-level CDC guarantee.
@@ -108,6 +212,81 @@ Use only final-scale artifacts named in `claim_ledger.md`.
 - lag 8 is unlearnable under the preregistered target and therefore not labelled
   starved;
 - AUC gap is monotone in `rho` at every measured lag.
+
+### Initialization-frozen empirical-NTK prediction
+
+The two-stage commands and checked-in configs are:
+
+```bash
+python run_experiment.py enl-preflight --config configs/enl_ntk_pilot_preflight.yaml
+python run_experiment.py enl-evaluate --config configs/enl_ntk_pilot_evaluate.yaml
+python run_experiment.py enl-preflight --config configs/enl_ntk_crossing_factorial_preflight.yaml
+python run_experiment.py enl-evaluate --config configs/enl_ntk_crossing_factorial_evaluate.yaml
+```
+
+The archived evaluate configs point to the named final preflight directories and
+pin their manifest hashes. For a new preflight, its output directory and manifest
+digest must be pinned in the matching evaluate config before evaluation.
+
+Preflight writes `config.resolved.yaml`, `environment.json`, `predictions.csv`,
+`prediction_summary.csv`, `prediction_aggregate.csv`,
+`preflight_acceptance.json`, `manifest.json`, `manifest.sha256`, and one
+`kernels/*.pt` file per record. Evaluation writes `config.resolved.yaml`,
+`environment.json`, `trajectories.csv`, `summary.csv`, `aggregate.csv`,
+`crossover.csv`, `scores.csv`, `metrics.json`, `evaluation_acceptance.json`, and
+`provenance.json`.
+
+Before creating an evaluation output directory or optimizer, `enl-evaluate`
+requires the sidecar, actual manifest digest, and externally pinned digest to
+agree; checks the accepted schema and no-training preflight contract; requires an
+exact executable-source fingerprint/count and exact equality of the frozen task,
+model, training, and held-out protocol; validates safe unique paths, required-file
+and per-kernel hashes/sizes, prediction digest, complete configured seed factorial,
+and exact step/`tau` grids. It consumes the hashed `predictions.csv`, not a
+reconstruction from kernel files, and re-hashes every sealed input after training.
+This is a fail-closed integrity/provenance contract, not a kernel-stability proof.
+
+The broad 16-record pilot is a negative result. Classifier correctness was phase
+`12/16`, drift crossing `14/16`, response crossing `14/16`, causal certificate
+`14/16`, and weak-only learnability `12/16`; it **failed** because tanh learnability
+was only `4/8`, below the frozen per-model threshold. The final pilot provenance is:
+
+- evaluation `results/enl_ntk_pilot_evaluate-20260825-160757`;
+- compact evidence `paper/artifacts/enl_ntk_pilot-20260825`;
+- manifest `f186d587e28f6408b68baf95566d2d1f1c5d5701e205e9a69ce86cbe4f0ffaf5`;
+- predictions `9787d99953f1046b4934aa6e7b3f969e30a4efafb3d02a67cc95926232f9dfaa`;
+- recorded source fingerprint `8d8162558e7d25fff7a5059a4cf49139a354ca211fd6f0759417e75dd87f435c`.
+
+After that failure, the fresh restricted factorial froze only drift- and
+response-crossing events as primary. It crossed four unseen data seeds with eight
+unseen model seeds for each architecture (`64` records total). Response-crossing
+classification was `64/64`; drift-crossing classification was `60/64` (`32/32`
+tanh, `28/32` GRU). The reuse-aware two-way-bootstrap 95% lower bounds were `1.0`
+and `0.8125`, respectively. The final factorial provenance is:
+
+- evaluation `results/enl_ntk_crossing_factorial_evaluate-20260825-162949`;
+- compact evidence `paper/artifacts/enl_ntk_crossing_factorial-20260825`;
+- manifest `bdcf02abbef5b9d8f7ce3979d3363ee8d39ab7817a1d554616bc4dd4a22a0db1`;
+- predictions `c05b31810cb3869e7d051f539741732a8758f6cac542deb448a98d2ada7b6542`;
+- recorded source fingerprint `ca878df376b01c0ea45ac352e353530bf20c567de59bb400617e5dd74d5b6b6b`.
+
+The compact archives retain resolved configs, seals, acceptance/metrics/provenance,
+and per-record scores with per-file hashes. They omit large kernel tensors and full
+trajectory/prediction tables. The two exact dirty Python source snapshots are also
+unavailable: the listed source digests are historical fingerprints, not archived
+source bundles, and the later tree fails their source guard. Consequently, a clean
+checkout can audit these outcomes and seals but cannot replay either archived
+study; a regenerated and repinned preflight is a new study.
+
+Phase `52/64`, causal-certificate `56/64`, and learnability `49/64` are
+classifier-correctness counts, not prevalence; these endpoints were explicitly
+secondary/rejected and cannot rescue the broad hypothesis. Crossing times were
+systematically early (bias: tanh drift `-0.0593`, tanh response `-0.1380`, GRU
+drift `-1.4330`, GRU response `-1.8199`), while tanh trajectory magnitudes were
+poor (`2.455` response-gap RMSE and `2.489` weak-response RMSE). Thus the restricted
+result is held-out event-classification evidence at one width/task cell, not causal
+prediction, universal prevalence, kernel stability, or quantitatively accurate
+time prediction.
 
 ### Nonlinear crossover
 
@@ -153,9 +332,10 @@ acceptance remains false by construction.
 
 ### Waterbirds
 
-The adapter is an unrun surrogate probe. The weak coordinate is an intercept, not
-an identified bird-shape feature. No Waterbirds result belongs in the main result
-table until the pilot is run.
+The adapter's CDC-style method is a minibatch head-coordinate surrogate outside
+the full-batch matched-shadow theorem, and it has **not been run**. The weak
+coordinate is an intercept, not an identified bird-shape feature. No Waterbirds
+result belongs in the main result table until the pilot is run.
 
 ## 4. Novelty boundary after reading the 2026 literature
 
@@ -182,33 +362,61 @@ Content was rephrased for compliance with licensing restrictions.
 
 Allowed:
 
-> We prove exact finite-width response dynamics and show that a rate crossover
-> becomes outcome starvation exactly when its negative tail area exhausts the
-> earlier transfer advantage. In a noiseless rank-one cue model, an
-> ordering-invariant log drift ratio gives sufficient conditions for a unique rate
-> crossover. Under a theorem-aligned nonlinear protocol, tanh crossover is
-> seed-dependent (3/8 causal certificates), while GRU outcome crossings fail the
-> causal learnability gate; general optimization-time DMFT prediction remains open.
+> We prove exact finite-width signed-logit/response empirical-NTK flow. Freezing
+> those full sample-level kernels gives an exact nonlinear logistic tangent
+> surrogate, while comparison with trained tanh/GRU networks remains conditional on
+> unproved kernel-movement bounds. After a broad held-out predictor failed on tanh
+> learnability, a fresh restricted four-data-seed by eight-model-seed factorial at
+> one controlled cell classified response-crossing events in 64/64 records and
+> drift-crossing events in 60/64; the two-way-bootstrap lower bounds were 1.0 and
+> 0.8125. Phase, causal certification, learnability, crossing times, and trajectory
+> magnitudes were not validated by that restricted result.
+
+> Separately, we prove that a rate crossover becomes outcome starvation exactly
+> when its negative tail area exhausts the earlier transfer advantage. In a
+> noiseless rank-one cue model, an ordering-invariant log drift ratio gives
+> sufficient conditions for a unique rate crossover. Under the theorem-aligned
+> nonlinear protocol, tanh causal crossover is seed-dependent (3/8), while GRU
+> outcome crossings fail the causal learnability gate. General optimization-time
+> DMFT and certified or quantitatively accurate nonlinear crossing-time prediction
+> remain open.
 
 Not allowed:
 
 - “We prove that recurrent networks generally undergo transfer-to-starvation.”
 - “The DMFT predicts `tau*` or `rho_c`.”
+- “The broad empirical-NTK pilot passed.”
+- “The frozen empirical-NTK surrogate is exact for trained tanh/GRU networks,” or
+  “tanh/GRU kernels are stable.”
+- “The restricted factorial predicts phase, causal starvation, learnability,
+  calibrated crossing times, or universal event prevalence.”
+- “Manifest verification proves the surrogate approximation.”
 - “A drift crossing necessarily implies starvation.”
 - “Late tanh suppression is geometry-dominated.”
 - “CDC preserves the final strong feature or beats its ablations.”
 - “Tests prove the theorem.”
+- Any guarantee of paper acceptance, oral selection, or oral readiness.
 
 ## 6. Readiness status
 
-The theorem package and theorem-aligned nonlinear rerun are complete, including
-figures. The rerun is tracked with its resolved configuration and a content hash
-over all executable Python source. That makes the project scientifically
-defensible, not automatically oral-ready. Historical E1, E2, E2-R, exploratory
-E-NL, and E3 runs remain dirty and cannot be reconstructed exactly because they
-predate content fingerprinting. Paper readiness also requires verification of the
-external baseline implementations and external review. The corrected nonlinear
-crossover is seed-dependent, which materially weakens an oral-level empirical
-headline. Waterbirds is optional only if the paper is explicitly framed as a
-controlled synthetic/theory paper; if it is included, the mandatory pilot must
-precede any full run.
+The theorem package, theorem-aligned nonlinear rerun, and sealed frozen-surrogate
+studies are complete as scoped. The broad surrogate pilot failed; the fresh
+factorial supports only the revised crossing-event classifier at one controlled
+cell. It does not establish tanh/GRU kernel stability, causal prediction,
+universal prevalence, or calibrated times.
+
+The theorem-aligned rerun fingerprint and original metadata are frozen at
+repository commit `2d0ee83` / tag `theorem-aligned-v1`; the pilot and factorial
+have their own manifest, prediction, and recorded source-fingerprint digests listed
+above, but their exact dirty source snapshots are unavailable. These records make
+the named outcomes and seals auditable and scientifically scoped, not executable
+historical reruns or automatically oral-ready. Historical E1, E2, E2-R, exploratory
+E-NL, and E3 runs
+remain dirty and cannot be reconstructed exactly because they predate content
+fingerprinting. Paper readiness also requires verification of the external
+baseline implementations and external review. The seed-dependent nonlinear
+crossover materially weakens an oral-level empirical headline. The still-unrun
+Waterbirds CDC-style minibatch head-coordinate surrogate is optional only if the
+paper is explicitly framed as a controlled synthetic/theory paper; if included,
+the mandatory pilot must precede any full run. Nothing here guarantees acceptance
+or oral selection.

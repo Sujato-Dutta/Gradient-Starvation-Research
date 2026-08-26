@@ -7,8 +7,8 @@ The codebase implements five experiment blocks:
 - **E1 - causal phase diagram:** sweeps feature-strength ratio and temporal separation, measures weak-feature hitting-time delay, and includes a negative-control data regime. Classification is gated on weak-only learnability, so a point where the counterfactual never learns is reported as indeterminate rather than starved.
 - **E2 - width convergence against an empirical reference:** checks the exact finite-width projected-flow identity, compares network trajectories with a held-out numerical closure reference, and measures error versus width. The reference is a mean over trained finite networks, not a solved theory.
 - **E2-R - solver checks:** exercises the two mean-field special cases that are exact without the undelivered closure derivation, and records the remaining checks as blocked. Its acceptance record reports `passed: false` by construction.
-- **E-NL - theorem-aligned crossover:** uses common symmetric unit-probe responses for tanh/GRU, computes the universal direct-autograd response drift at every logged point, reports the projected `Gg` residual separately, and evaluates the exact finite-step tail-area certificate distinguishing rate suppression from outcome starvation.
-- **E3 - mitigation and transfer:** compares ERM, Spectral Decoupling, an interaction penalty, and a five-way ablation of constrained weak-rescue methods including Counterfactual Drift Correction plus Bloop-style and PCGrad-style baselines. A Waterbirds adapter exists but **has never been run**; see `research_scope/waterbirds_setup.md`.
+- **E-NL - theorem-aligned crossover and frozen-kernel falsification:** uses common symmetric unit-probe responses for tanh/GRU, computes the universal direct-autograd response drift at every logged point, reports the projected `Gg` residual separately, and evaluates the exact finite-step tail-area certificate distinguishing rate suppression from outcome starvation. A separate `enl-preflight`/`enl-evaluate` path freezes the full signed-logit empirical NTK and response cross-kernel before training, then tests its crossing-event predictions against held-out nonlinear trajectories.
+- **E3 - mitigation and transfer:** compares ERM, Spectral Decoupling, an interaction penalty, and a five-way ablation of constrained weak-rescue methods including Counterfactual Drift Correction plus Bloop-style and PCGrad-style baselines. The Waterbirds adapter contains a CDC-style minibatch head-coordinate surrogate outside the full-batch matched-shadow theorem, but it **has never been run**; see `research_scope/waterbirds_setup.md`.
 
 ### Read this before quoting any number
 
@@ -17,13 +17,20 @@ empirical, blocked or retracted, and names the artifact behind it. Several figur
 older notes are superseded. The established headline is now a finite-width causal
 theorem package; the more ambitious joint mean-field extension remains a blocked
 conjecture. The ledger exists so that checking which is which is faster than
-rediscovering it. Four things worth knowing before reading anything else:
+rediscovering it. Five things worth knowing before reading anything else:
 
 - The repository **proves** the exact finite-width CE cross-kernel flow, the
   transfer/suppression tail-area criterion, a conditional noiseless rank-one rate-
-  crossover theorem, hitting-time stability, the zero-disorder six-scalar limit,
-  and three local CDC results. See `research_scope/e2_theorem.md` and
+  crossover theorem, conditional quantitatively isolated hitting-time stability,
+  the singular zero-disorder/zero-lag six-scalar limit, and three fixed-coordinate
+  local CDC results. See `research_scope/e2_theorem.md` and
   `research_scope/cdc_theorem.md`.
+- At full sample level, the exact finite-width signed-logit/response flow is
+  `dot r=K(theta)sigma(-r)/n`, `dot M=C(theta)^T sigma(-r)/n`. Freezing `K,C` at
+  initialization gives an exact nonlinear logistic tangent surrogate and exact
+  explicit-Euler recursion for that surrogate. Its agreement with trained
+  tanh/GRU networks is conditional: no required instantaneous/secant kernel-
+  movement bound has been proved for either architecture.
 - The **general positive-disorder/positive-lag joint CE-RNN optimization-time DMFT
   remains unproved**. `research_scope/e2_theorem.md` lists the five outstanding
   obligations; every solver surface that depends on them raises
@@ -47,23 +54,29 @@ submission draft, not a guarantee of ICLR acceptance or oral selection.
 
 ## Setup
 
-Python 3.10 or newer is recommended. Create a dedicated virtual environment and install the unpinned requirements:
+Python 3.12.4 is the canonical validated environment. Create a dedicated virtual environment and install from the content-addressed exact-version manifest:
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install pip==24.0
+python -m pip install -r requirements-lock-py312.txt
+python scripts/check_environment_lock.py
 ```
 
-On macOS or Linux, activate with `source .venv/bin/activate`.
+On Windows PowerShell, activate with `.\.venv\Scripts\Activate.ps1`. The unpinned
+`requirements.txt` remains a Python 3.10 compatibility input, not the reproducible
+claim-bearing environment.
 
-For the optional Waterbirds experiment:
+For the optional, currently unrun Waterbirds experiment:
 
-```powershell
+```bash
 python -m pip install -r requirements-waterbirds.txt
 ```
 
-No package installation step is needed. The root entry points add `src/` to the Python path.
+The Waterbirds extras are not part of the validated lock and back no current
+empirical claim. No project-package installation step is needed: the root entry
+points add `src/` to the Python path.
 
 ## Quick validation
 
@@ -84,7 +97,8 @@ The test suite also runs compact E2 and E3 integrations from
 output contract (resolved configuration, environment record, trajectories,
 summaries, aggregates, geometry check, and figures) without using the
 compute-heavy research configurations. GitHub Actions runs this synthetic suite
-on Python 3.10 and 3.12 for every push and pull request.
+on an unpinned Python 3.10 compatibility environment and the exact locked Python
+3.12.4 environment for every push and pull request.
 
 ## Running the main experiments
 
@@ -146,6 +160,95 @@ not be quoted. The post-hoc grid
 `results/enl_exact_regime_search-20260824-105003` found no 4/4 condition and is
 exploratory negative evidence only.
 
+#### Frozen empirical-NTK preflight and held-out evaluation
+
+The exact finite-width sample-level flow uses the signed-logit Jacobian `J_r`,
+`K(theta)=J_r J_r^T`, and response cross-kernel
+`C_i(theta)=<grad r_i,grad M_w>`:
+
+```text
+dot r = K(theta) sigma(-r)/n,
+dot M_w = C(theta)^T sigma(-r)/n.
+```
+
+Freezing `K_0,C_0` gives an exact nonlinear logistic tangent-surrogate ODE; the
+implemented recursion is its exact explicit-Euler discretization under
+`tau=learning_rate*step`. This exactness is internal to the surrogate. Conditional
+continuous/discrete comparison bounds depend on caller-supplied uniform movement
+bounds for instantaneous or segment-secant `K,C`; the discrete evaluator is
+`theory.frozen_kernel_discrete_error_bound`. No such tanh/GRU stability bound has
+been proved, so the nonlinear comparison is empirical.
+
+To regenerate either protocol under the current source tree, first run its
+preflight:
+
+```bash
+python run_experiment.py enl-preflight --config configs/enl_ntk_pilot_preflight.yaml
+python run_experiment.py enl-preflight --config configs/enl_ntk_crossing_factorial_preflight.yaml
+```
+
+The checked-in evaluate configs are historical evidence records: they pin the final
+archived preflight directories and manifest hashes, whose dirty source fingerprints
+do not match the later tree. They therefore fail closed if executed now. For a new
+study, copy the matching evaluate config, repin `evaluation.preflight_dir` and
+`evaluation.manifest_sha256` to the new preflight, then run `enl-evaluate` with that
+local config. This is a new protocol run, not a bitwise reproduction of the archived
+study.
+
+`enl-preflight` never constructs an optimizer or observes a trained trajectory. It
+writes `config.resolved.yaml`, `environment.json`, `predictions.csv`,
+`prediction_summary.csv`, `prediction_aggregate.csv`,
+`preflight_acceptance.json`, `manifest.json`, `manifest.sha256`, and
+`kernels/*.pt`. Before training, `enl-evaluate` verifies the sidecar, actual and
+externally pinned manifest hashes; accepted preflight contract; executable-source
+fingerprint/count; exact task/model/training/protocol equality; safe unique paths;
+all required-file and kernel hashes/sizes; prediction digest; complete configured
+seed factorial; and exact step/`tau` grids. It consumes the hashed predictions CSV
+rather than recomputing predictions and re-hashes every sealed input after training.
+Evaluation writes `trajectories.csv`, `summary.csv`, `aggregate.csv`,
+`crossover.csv`, `scores.csv`, `metrics.json`, `evaluation_acceptance.json`, and
+`provenance.json`. These checks establish integrity and provenance, not the
+scientific frozen-kernel approximation.
+
+The broad 16-record pilot **failed**: classifier correctness was phase `12/16`,
+drift `14/16`, response `14/16`, causal certificate `14/16`, and learnability
+`12/16`, with tanh learnability only `4/8`. Its manifest, prediction, and source
+hashes are respectively
+`f186d587e28f6408b68baf95566d2d1f1c5d5701e205e9a69ce86cbe4f0ffaf5`,
+`9787d99953f1046b4934aa6e7b3f969e30a4efafb3d02a67cc95926232f9dfaa`, and
+`8d8162558e7d25fff7a5059a4cf49139a354ca211fd6f0759417e75dd87f435c`.
+
+The revised fresh factorial crossed four unseen data seeds with eight unseen model
+seeds for each architecture (`64` records) and froze only drift/response crossing
+as primary. Response classification was `64/64`; drift was `60/64` (`32/32` tanh,
+`28/32` GRU), with reuse-aware two-way-bootstrap 95% lower bounds `1.0` and
+`0.8125`. Its manifest, prediction, and source hashes are respectively
+`bdcf02abbef5b9d8f7ce3979d3363ee8d39ab7817a1d554616bc4dd4a22a0db1`,
+`c05b31810cb3869e7d051f539741732a8758f6cac542deb448a98d2ada7b6542`, and
+`ca878df376b01c0ea45ac352e353530bf20c567de59bb400617e5dd74d5b6b6b`.
+
+Compact, checked-in copies of both studies are at
+`paper/artifacts/enl_ntk_pilot-20260825` and
+`paper/artifacts/enl_ntk_crossing_factorial-20260825`. Their archive manifests and
+`paper/artifacts/provenance_manifest.json` record a SHA-256 digest and byte count
+for each resolved config, sealed preflight manifest/acceptance record, evaluation
+metrics/acceptance/provenance record, and `scores.csv`. The compact archives omit
+`kernels/*.pt`, full trajectory/summary/crossover/aggregate/prediction tables, and
+the exact dirty Python source snapshots. Those run-time files remain only in ignored
+local `results/`; the source snapshots are unavailable. A clean checkout can audit
+the compact outcomes and recorded seals, but it cannot replay either archived study.
+Regenerating and repinning a preflight under current source creates a new study.
+
+Phase `52/64`, causal certificate `56/64`, and learnability `49/64` were explicitly
+secondary/rejected classifier endpoints, not event prevalence. Predicted crossing
+times were systematically early, and tanh trajectory magnitudes were poor
+(`2.455` response-gap RMSE; `2.489` weak-response RMSE). The allowed conclusion is
+therefore narrow: the sealed frozen surrogate classified crossing events well on
+this fresh restricted single-cell factorial after the broad predictor failed.
+It does **not** establish causal prediction, universal prevalence, tanh/GRU kernel
+stability, calibrated crossing times, or an oral/acceptance guarantee. Certified or
+quantitatively accurate nonlinear crossing-time prediction remains open.
+
 ### E3: mitigation
 
 ```powershell
@@ -167,15 +270,23 @@ The summarizer rejects unmatched ERM/CDC seeds and duplicate run keys, then
 writes paired effects, CDC diagnostics, and PNG/PDF width-robustness figures.
 
 `counterfactual_drift` simultaneously trains a matched weak-only shadow model.
-At each full-batch step it attempts the unique minimum-norm correction needed to
-match the shadow model's weak drift while projecting orthogonally to the strong-mode
-gradient. Exact target attainment and minimum-norm optimality require a feasible,
-uncapped direction; infeasible or capped steps remain explicitly logged. The
-instantaneous strong drift is unchanged for every coefficient, including a cap.
-This method requires cross-entropy diagnostics, zero weight decay, and no gradient
-clipping; the trainer rejects configurations that would invalidate the contract.
-Its diagnostics (`cdc_target_met`, `cdc_feasible`, correction size, and strong-drift
-change) are written to `trajectories.csv`.
+At each full-batch step it attempts the unique minimum Euclidean-norm correction,
+in the fixed implemented tensor coordinates with the product Euclidean/Frobenius
+metric, needed to match the shadow model's weak drift while projecting orthogonally
+to the strong-mode gradient. Exact target attainment and fixed-coordinate
+minimum-norm optimality require a feasible, uncapped direction; exact positive-
+deficit feasibility is `q != 0`, while `feasibility_epsilon` is only a numerical
+tolerance. The represented projection, norm, tolerance, and selected minimizer are
+metric- and scale-dependent; no reparameterization-invariance or natural-gradient
+claim is made. A nonbinding cap leaves the result unchanged, whereas a binding cap
+generally loses the target and therefore has no target-attaining optimality claim.
+Infeasible or capped steps remain explicitly logged. The instantaneous strong drift
+is unchanged for every coefficient, including a cap. This method requires
+cross-entropy diagnostics, zero weight decay, and no gradient clipping; the trainer
+rejects configurations that would invalidate the contract. Its diagnostics
+(`cdc_target_met`, `cdc_feasible`, `cdc_uncapped_alpha`, `cdc_alpha`,
+`cdc_cap_binding`, `cdc_target_residual`, correction size, and strong-drift change)
+are written to `trajectories.csv`.
 
 A compact corrected-scaling comparison can be run with:
 
@@ -201,9 +312,10 @@ python run_experiment.py waterbirds --config configs/waterbirds_pilot.yaml
 ```
 
 Only after its learning-rate, weak-target, backbone-update, and modal-agreement
-criteria pass should `configs/waterbirds.yaml` be run. Waterbirds is a surrogate
-probe: its constant weak coordinate is an intercept, not an identified bird-shape
-feature.
+criteria pass should `configs/waterbirds.yaml` be run. Waterbirds remains **not
+run** and supplies only a CDC-style minibatch head-coordinate surrogate outside the
+full-batch matched-shadow theorem. Its constant weak coordinate is an intercept,
+not an identified bird-shape feature.
 
 Waterbirds is intentionally excluded from the mandatory synthetic test suite:
 it requires the optional dependencies, dataset terms acceptance, local storage
@@ -217,9 +329,13 @@ Every output directory contains:
 - `config.resolved.yaml`: the exact configuration after command-line overrides;
 - `environment.json`: Python, PyTorch, device, platform, and source-state metadata;
   if it records `git_dirty: true` without `source_sha256`, the commit hash alone
-  does not reconstruct the executed source. New runs content-address
-  `run_experiment.py` plus `src/**/*.py`; the final E-NL compact archive and the
-  explicit limitations of older dirty runs are recorded in
+  does not reconstruct the executed source. New runs record a fingerprint over
+  `run_experiment.py` plus `src/**/*.py`, but a digest identifies supplied candidate
+  bytes; it does not archive omitted source by itself. The final E-NL source is
+  reconstructible at commit `2d0ee83` / tag `theorem-aligned-v1`. The pilot and
+  factorial retain recorded dirty-source fingerprints but not the corresponding
+  source snapshots, so their exact execution cannot be reconstructed. These and the
+  older dirty-run limitations are recorded in
   `paper/artifacts/provenance_manifest.json`;
 - `finite_n_geometry_check.json` (E2): analytic-versus-autograd validation of the exact linear-RNN geometry;
 - `trajectories.csv`: optimization-time measurements including mode responses, drifts, margins, `A`, `G`, susceptibility, and GSI-5;

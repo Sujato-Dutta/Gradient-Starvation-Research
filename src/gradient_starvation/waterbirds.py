@@ -71,7 +71,7 @@ def _setup(config: Mapping[str, Any]):
     return train_loader, validation_loader, test_loader, model, background_index
 
 
-#: The two shadow-based rescue arms, whose guarantee requires the raw SGD velocity.
+#: The two CDC-style surrogate rescue arms, whose guarantee requires the raw SGD velocity.
 CDC_METHODS = frozenset({"counterfactual_drift_oracle", "counterfactual_drift_modal"})
 
 
@@ -328,12 +328,18 @@ def constrained_weak_rescue(
     model: torch.nn.Module | None = None,
     feasibility_epsilon: float = 1e-12,
 ) -> dict[str, float]:
-    """Apply the CDC correction to the classifier head, in place on ``.grad``.
+    """Apply a fixed-head-coordinate Euclidean CDC-style minibatch surrogate.
 
-    Mirrors `theory.drift_correction` with ``constraint="strong_response"``: the
-    rescue runs along the component of ``grad(m_w)`` orthogonal to ``grad(m_s)``, so
-    the instantaneous strong-response drift is preserved exactly (Result 1 of
-    `research_scope/cdc_theorem.md`).
+    The rescue uses the component of ``grad(m_w)`` Euclidean-orthogonal to
+    ``grad(m_s)`` in the classifier head's implemented tensor coordinates, so it
+    preserves the instantaneous head-coordinate strong-response drift.  This is
+    coordinate-dependent and is not invariant under non-isometric
+    reparameterization.
+
+    This Waterbirds operation is a minibatch surrogate with an absolute configured
+    target.  It is outside the full-batch matched weak-only-shadow theorem used by
+    the synthetic CDC trainer and must not be interpreted as that theorem's causal
+    target or guarantee.
 
     The *correction* is confined to the head, matching the existing interaction
     penalty: the protected geometry is defined by head-parameter gradients, and
@@ -346,6 +352,8 @@ def constrained_weak_rescue(
     than a different method.  ``backbone_updated`` in the returned record states which
     happened.
     """
+    if not np.isfinite(feasibility_epsilon) or feasibility_epsilon < 0:
+        raise ValueError("feasibility_epsilon must be finite and non-negative.")
     parameters = [p for p in head.parameters() if p.requires_grad]
     head_parameters = {id(p) for p in parameters}
     backbone = (
@@ -379,10 +387,16 @@ def constrained_weak_rescue(
         return sum((a * b).sum() for a, b in zip(left, right))
 
     strong_norm_sq = inner(strong, strong)
-    scale = (
-        inner(weak, strong) / strong_norm_sq
-        if float(strong_norm_sq) > feasibility_epsilon
-        else torch.zeros((), device=margin.device)
+    # Orthogonality is exact for every mathematically nonzero strong gradient;
+    # feasibility_epsilon applies only to whether the rescue can attain its target.
+    strong_is_nonzero = strong_norm_sq > 0
+    safe_strong_norm_sq = torch.where(
+        strong_is_nonzero, strong_norm_sq, torch.ones_like(strong_norm_sq)
+    )
+    scale = torch.where(
+        strong_is_nonzero,
+        inner(weak, strong) / safe_strong_norm_sq,
+        strong_norm_sq.new_zeros(()),
     )
     protected = [w - scale * s for w, s in zip(weak, strong)]
     velocity = [-g for g in loss_grads]
@@ -524,11 +538,10 @@ def run_waterbirds(config: dict[str, Any]) -> Path:
                                 }
                             )
                         optimizer.zero_grad(set_to_none=True)
-                        # Target: lift the weak drift by a configured margin above its
-                        # current value. On synthetic data the target comes from a
-                        # matched weak-only shadow; Waterbirds has no exact ablated
-                        # counterfactual, so the target is a stated surrogate and must
-                        # be reported as such.
+                        # Waterbirds has no exact matched weak-only counterfactual.
+                        # The configured value is therefore an absolute surrogate
+                        # weak-drift target, not a margin added to the current drift,
+                        # and must be reported/interpreted as such.
                         record = constrained_weak_rescue(
                             model.fc, margin, coordinates,
                             target_weak_drift=float(

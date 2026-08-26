@@ -3,19 +3,21 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping
 
 import numpy as np
 import pandas as pd
 import torch
 
+from .config import load_config
 from .data.synthetic import SyntheticTaskSpec, make_paired_task
 from .dmft import DMFTSpec, cue_quadrature, solve_frozen_geometry, solve_zero_disorder
 from .losses import training_objective
 from .metrics import (
     causal_metrics,
     classify_causal_regime,
+    gsi5,
     mean_confidence_interval,
     n_sign_changes,
     sign_crossing_time,
@@ -26,10 +28,20 @@ from .theory import (
     discrete_crossover_certificate,
     exact_dense_linear_geometry,
     gradient_gram,
+    initial_frozen_empirical_kernel,
+    integrate_frozen_logistic_sgd,
     integrate_projected_flow,
+    paired_initial_response_jet,
 )
-from .training import train_paired
-from .utils import create_run_directory, resolve_device, seed_everything
+from .training import initialize_paired_models, train_paired
+from .utils import (
+    atomic_torch_save,
+    create_run_directory,
+    executable_source_fingerprint,
+    resolve_device,
+    seed_everything,
+    sha256_file,
+)
 
 
 def _task_spec(task: Mapping[str, Any], rho: float, lag: int, regime: str) -> SyntheticTaskSpec:
@@ -71,6 +83,77 @@ def _annotate(history: Iterable[dict[str, Any]], **metadata: Any) -> list[dict[s
     return [{**metadata, **row} for row in history]
 
 
+def _enl_seed_pairs(
+    training: Mapping[str, Any],
+) -> list[tuple[int, int, int | None]]:
+    """Normalize legacy coupled seeds or explicit E-NL data/model seed pairs.
+
+    The third tuple entry is the legacy scalar seed. It remains present only for
+    coupled runs so historical CSV consumers keep their original ``seed`` column;
+    independent runs are identified unambiguously by ``data_seed`` and
+    ``model_seed`` instead.
+    """
+    raw_pairs = training.get("seed_pairs")
+    if raw_pairs is None:
+        raw_seeds = training.get("seeds", [0, 1])
+        if not isinstance(raw_seeds, list) or not raw_seeds:
+            raise ValueError("E-NL training.seeds must be a non-empty list.")
+        seeds = [int(seed) for seed in raw_seeds]
+        return [(seed, seed, seed) for seed in seeds]
+
+    if "seeds" in training:
+        raise ValueError(
+            "E-NL training.seed_pairs cannot be combined with training.seeds; "
+            "remove the coupled legacy list to make the design unambiguous."
+        )
+    if not isinstance(raw_pairs, list) or not raw_pairs:
+        raise ValueError("E-NL training.seed_pairs must be a non-empty list.")
+
+    normalized: list[tuple[int, int, int | None]] = []
+    seen: set[tuple[int, int]] = set()
+    for index, pair in enumerate(raw_pairs):
+        if not isinstance(pair, Mapping) or not {"data_seed", "model_seed"} <= set(pair):
+            raise ValueError(
+                "Each E-NL seed pair must map both data_seed and model_seed "
+                f"(invalid entry at index {index})."
+            )
+        data_seed = int(pair["data_seed"])
+        model_seed = int(pair["model_seed"])
+        key = (data_seed, model_seed)
+        if key in seen:
+            raise ValueError(f"Duplicate E-NL seed pair {key} at index {index}.")
+        seen.add(key)
+        normalized.append((data_seed, model_seed, None))
+    return normalized
+
+
+def _replicate_design(group: pd.DataFrame) -> dict[str, Any]:
+    """Describe replication without treating crossed seed reuse as independence."""
+    if {"data_seed", "model_seed"} <= set(group.columns):
+        n_pairs = int(
+            group[["data_seed", "model_seed"]].drop_duplicates().shape[0]
+        )
+        n_data = int(group.data_seed.nunique())
+        n_model = int(group.model_seed.nunique())
+    elif "seed" in group:
+        n_pairs = n_data = n_model = int(group.seed.nunique())
+    else:
+        n_pairs = n_data = n_model = len(group)
+    seed_reuse = n_data < n_pairs or n_model < n_pairs
+    return {
+        "n_seeds": n_pairs,
+        "n_seed_pairs": n_pairs,
+        "n_data_seeds": n_data,
+        "n_model_seeds": n_model,
+        "seed_reuse": seed_reuse,
+        "ci95_scope": (
+            "descriptive_only_seed_reuse"
+            if seed_reuse
+            else "independent_pair_replicates"
+        ),
+    }
+
+
 def _write_aggregate(
     summary: pd.DataFrame,
     group_columns: list[str],
@@ -81,9 +164,15 @@ def _write_aggregate(
     for keys, group in summary.groupby(group_columns, dropna=False):
         key_values = keys if isinstance(keys, tuple) else (keys,)
         row = dict(zip(group_columns, key_values))
-        row['n_seeds'] = int(group.seed.nunique()) if 'seed' in group else len(group)
+        replicate_design = _replicate_design(group)
+        row.update(replicate_design)
         for metric in metrics:
             mean, low, high = mean_confidence_interval(group[metric].to_numpy())
+            if replicate_design["seed_reuse"]:
+                # Reusing a data or model seed creates crossed dependence between
+                # pair rows. A row-wise Student-t interval would be anti-conservative;
+                # a hierarchical/two-way analysis belongs in the confirmatory report.
+                low = high = float("nan")
             row[f'{metric}_mean'] = mean
             row[f'{metric}_ci95_low'] = low
             row[f'{metric}_ci95_high'] = high
@@ -365,6 +454,7 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
         "final_weak_m_w": float(weak.iloc[-1].m_w),
         "final_accuracy": float(both.iloc[-1].accuracy),
         "final_gsi5": float(both.iloc[-1].gsi5),
+        "weak_only_learnable": weak_only_learnable,
         # A drift crossing alone establishes suppression of the weak mode's *rate*.
         # A response crossing is outcome suppression; the causal starvation label is
         # reserved for runs that also pass the weak-only learnability gate.
@@ -400,7 +490,8 @@ def _write_enl_crossover_report(summary: pd.DataFrame, run_dir: Path) -> None:
     for keys, group in summary.groupby(group_columns, dropna=False):
         key_values = keys if isinstance(keys, tuple) else (keys,)
         row = dict(zip(group_columns, key_values))
-        row["n_seeds"] = int(group.seed.nunique())
+        replicate_design = _replicate_design(group)
+        row.update(replicate_design)
         row["n_tail_single_crossover"] = int(
             group.tail_single_transfer_to_suppression.sum()
         )
@@ -422,6 +513,8 @@ def _write_enl_crossover_report(summary: pd.DataFrame, run_dir: Path) -> None:
             row[f"n_{label}_never_crossed"] = int(np.isinf(values).sum())
             row[f"n_{label}_undecidable"] = int(np.isnan(values).sum())
             mean, low, high = mean_confidence_interval(values)
+            if replicate_design["seed_reuse"]:
+                low = high = float("nan")
             row[f"tau_star_{label}_mean"] = mean
             row[f"tau_star_{label}_ci95_low"] = low
             row[f"tau_star_{label}_ci95_high"] = high
@@ -434,6 +527,1134 @@ def _write_enl_crossover_report(summary: pd.DataFrame, run_dir: Path) -> None:
         row["phases"] = "|".join(sorted(set(group.phase)))
         rows.append(row)
     pd.DataFrame(rows).to_csv(run_dir / "crossover.csv", index=False)
+
+
+def _frozen_kernel_payload(kernel: Any) -> dict[str, Any]:
+    return {
+        "ordinary_logits": kernel.ordinary_logits.detach().cpu(),
+        "signed_logits": kernel.signed_logits.detach().cpu(),
+        "response": kernel.response.detach().cpu(),
+        "logit_jacobian": kernel.logit_jacobian.detach().cpu(),
+        "signed_logit_jacobian": kernel.signed_logit_jacobian.detach().cpu(),
+        "response_jacobian": kernel.response_jacobian.detach().cpu(),
+        "signed_ntk": kernel.signed_ntk.detach().cpu(),
+        "response_cross_kernel": kernel.response_cross_kernel.detach().cpu(),
+        "parameter_names": kernel.parameter_names,
+        "parameter_shapes": kernel.parameter_shapes,
+    }
+
+
+def _frozen_trajectory_rows(
+    trajectory: Any,
+    *,
+    condition: str,
+    metadata: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for index, step in enumerate(trajectory.steps.tolist()):
+        signed_logits = trajectory.signed_logits[index]
+        weights = torch.sigmoid(-signed_logits)
+        rows.append(
+            {
+                **metadata,
+                "step": int(step),
+                "tau": float(trajectory.tau[index]),
+                "condition": condition,
+                "m_w": float(trajectory.response[index]),
+                "direct_drift_w": float(trajectory.response_drift[index]),
+                "loss": float(torch.nn.functional.softplus(-signed_logits).mean()),
+                "accuracy": float((signed_logits >= 0).to(torch.float64).mean()),
+                "gsi5": gsi5(weights.cpu().numpy()),
+            }
+        )
+    return rows
+
+
+def _frozen_enl_summary(
+    both_trajectory: Any,
+    weak_trajectory: Any,
+    *,
+    beta: float,
+) -> dict[str, Any]:
+    tau = both_trajectory.tau.cpu().numpy()
+    both_response = both_trajectory.response.cpu().numpy()
+    weak_response = weak_trajectory.response.cpu().numpy()
+    response_gap = both_response - weak_response
+    drift_gap = (
+        both_trajectory.response_drift - weak_trajectory.response_drift
+    ).cpu().numpy()
+    tau_star_drift = sign_crossing_time(tau, drift_gap)
+    tau_star_response = sign_crossing_time(tau, response_gap)
+    causal = causal_metrics(tau, both_response, weak_response, beta)
+    weak_only_learnable = bool(
+        math.isfinite(causal.weak_hitting_time)
+        and causal.weak_hitting_time > float(tau[0])
+    )
+    finite_step = discrete_crossover_certificate(
+        response_gap,
+        weak_only_learnable=weak_only_learnable,
+        tolerance=1e-10,
+    )
+    phase = (
+        (
+            (
+                "transfer_then_starvation"
+                if weak_only_learnable
+                else "transfer_then_outcome_crossing_unlearnable"
+            )
+            if math.isfinite(tau_star_response)
+            else "transfer_then_suppression"
+        )
+        if math.isfinite(tau_star_drift)
+        else (
+            "transfer_throughout" if drift_gap[-1] > 0 else "suppression_throughout"
+        )
+    )
+    return {
+        **causal.__dict__,
+        "tau_star_drift": tau_star_drift,
+        "tau_star_response": tau_star_response,
+        "drift_crossed": bool(math.isfinite(tau_star_drift)),
+        "response_crossed": bool(math.isfinite(tau_star_response)),
+        "n_sign_changes_d_w": n_sign_changes(drift_gap),
+        "initial_d_w": float(drift_gap[0]),
+        "final_d_w": float(drift_gap[-1]),
+        "final_both_m_w": float(both_response[-1]),
+        "final_weak_m_w": float(weak_response[-1]),
+        "final_response_gap": float(response_gap[-1]),
+        "weak_only_learnable": weak_only_learnable,
+        "tail_single_transfer_to_suppression": finite_step.single_transfer_to_suppression,
+        "tail_response_equality_reached": finite_step.response_equality_reached,
+        "tail_strict_outcome_starvation": finite_step.strict_outcome_starvation,
+        "tail_causal_starvation_certified": finite_step.causal_starvation_certified,
+        "tail_positive_area": finite_step.positive_area,
+        "tail_negative_area": finite_step.negative_tail_area,
+        "tail_area_margin": finite_step.tail_area_margin,
+        "phase": phase,
+    }
+
+
+def run_enl_preflight(config: dict[str, Any]) -> Path:
+    """Freeze full empirical-NTK predictions without running optimization.
+
+    This stage constructs shared initial models, differentiates only initialization
+    objects, integrates the frozen tangent recursion, and hashes every prediction
+    artifact. It never creates an optimizer or evaluates a trained parameter state.
+    """
+    task, training, model_config = config["task"], config["training"], config["model"]
+    if not bool(training.get("full_batch", True)):
+        raise ValueError("E-NL preflight requires full_batch: true.")
+    if float(training.get("weight_decay", 0.0)) != 0.0:
+        raise ValueError("E-NL preflight requires weight_decay: 0.")
+    if training.get("gradient_clip") is not None:
+        raise ValueError("E-NL preflight is incompatible with gradient_clip.")
+    if str(training.get("objective", "cross_entropy")) != "cross_entropy":
+        raise ValueError("E-NL preflight requires the cross_entropy objective.")
+
+    run_dir = create_run_directory(config)
+    artifact_dir = run_dir / "kernels"
+    artifact_dir.mkdir()
+    device = resolve_device(str(config.get("experiment", {}).get("device", "auto")))
+    steps = int(training.get("steps", 1000))
+    learning_rate = float(training.get("learning_rate", 0.01))
+    log_every = int(training.get("log_every", 10))
+    kinds = model_config.get("kinds", [model_config.get("kind", "tanh")])
+    prediction_rows: list[dict[str, Any]] = []
+    summary_rows: list[dict[str, Any]] = []
+    manifest_records: list[dict[str, Any]] = []
+    max_initial_drift_error = 0.0
+    all_finite = True
+    state_unchanged = True
+    gradients_unpopulated = True
+
+    for kind in kinds:
+        for rho in task.get("rho_values", [4]):
+            for lag in task.get("lag_separations", [2]):
+                for regime in task.get("regimes", ["positive"]):
+                    spec = _task_spec(task, float(rho), int(lag), str(regime))
+                    for data_seed, model_seed, legacy_seed in _enl_seed_pairs(training):
+                        both, weak = (
+                            batch.to(device)
+                            for batch in make_paired_task(spec, data_seed)
+                        )
+                        both_model, weak_model = initialize_paired_models(
+                            model_config, both, seed=model_seed, kind=str(kind)
+                        )
+                        before_both = {
+                            name: value.detach().clone()
+                            for name, value in both_model.state_dict().items()
+                        }
+                        before_weak = {
+                            name: value.detach().clone()
+                            for name, value in weak_model.state_dict().items()
+                        }
+                        jet = paired_initial_response_jet(
+                            both_model, weak_model, both, weak
+                        )
+                        both_kernel = initial_frozen_empirical_kernel(both_model, both)
+                        weak_kernel = initial_frozen_empirical_kernel(weak_model, weak)
+                        both_trajectory = integrate_frozen_logistic_sgd(
+                            both_kernel,
+                            steps=steps,
+                            learning_rate=learning_rate,
+                            log_every=log_every,
+                        )
+                        weak_trajectory = integrate_frozen_logistic_sgd(
+                            weak_kernel,
+                            steps=steps,
+                            learning_rate=learning_rate,
+                            log_every=log_every,
+                        )
+
+                        kernel_initial_drift = float(
+                            both_trajectory.response_drift[0]
+                            - weak_trajectory.response_drift[0]
+                        )
+                        initial_drift_error = abs(kernel_initial_drift - float(jet.d_0))
+                        max_initial_drift_error = max(
+                            max_initial_drift_error, initial_drift_error
+                        )
+                        finite_tensors = (
+                            both_kernel.signed_ntk,
+                            weak_kernel.signed_ntk,
+                            both_trajectory.response,
+                            weak_trajectory.response,
+                        )
+                        all_finite = all_finite and all(
+                            bool(torch.isfinite(value).all()) for value in finite_tensors
+                        )
+                        state_unchanged = state_unchanged and all(
+                            torch.equal(value, both_model.state_dict()[name])
+                            for name, value in before_both.items()
+                        ) and all(
+                            torch.equal(value, weak_model.state_dict()[name])
+                            for name, value in before_weak.items()
+                        )
+                        gradients_unpopulated = gradients_unpopulated and all(
+                            parameter.grad is None
+                            for model in (both_model, weak_model)
+                            for parameter in model.parameters()
+                        )
+
+                        metadata: dict[str, Any] = {
+                            "model_kind": str(kind),
+                            "rho": float(rho),
+                            "lag_separation": int(lag),
+                            "regime": str(regime),
+                            "data_seed": data_seed,
+                            "model_seed": model_seed,
+                        }
+                        if legacy_seed is not None:
+                            metadata["seed"] = legacy_seed
+                        both_rows = _frozen_trajectory_rows(
+                            both_trajectory, condition="both", metadata=metadata
+                        )
+                        weak_rows = _frozen_trajectory_rows(
+                            weak_trajectory, condition="weak_only", metadata=metadata
+                        )
+                        for both_row, weak_row in zip(both_rows, weak_rows):
+                            both_row["response_gap"] = (
+                                both_row["m_w"] - weak_row["m_w"]
+                            )
+                            both_row["d_w_equal_time_exact"] = (
+                                both_row["direct_drift_w"]
+                                - weak_row["direct_drift_w"]
+                            )
+                        prediction_rows.extend(both_rows)
+                        prediction_rows.extend(weak_rows)
+
+                        summary = {
+                            **metadata,
+                            **_frozen_enl_summary(
+                                both_trajectory,
+                                weak_trajectory,
+                                beta=float(task.get("beta", 0.5)),
+                            ),
+                            "initial_delta_w": float(jet.delta_0),
+                            "initial_j_w": float(jet.j_0),
+                            "initial_drift_reconstruction_error": initial_drift_error,
+                            "both_ntk_min_eigenvalue": float(
+                                torch.linalg.eigvalsh(
+                                    both_kernel.signed_ntk.to(torch.float64)
+                                ).min()
+                            ),
+                            "weak_ntk_min_eigenvalue": float(
+                                torch.linalg.eigvalsh(
+                                    weak_kernel.signed_ntk.to(torch.float64)
+                                ).min()
+                            ),
+                        }
+                        summary_rows.append(summary)
+
+                        record_id = (
+                            f"{kind}_rho-{float(rho):g}_lag-{int(lag)}_{regime}"
+                            f"_data-{data_seed}_model-{model_seed}"
+                        )
+                        artifact_path = artifact_dir / f"{record_id}.pt"
+                        payload = {
+                            "schema_version": "frozen-empirical-ntk-v1",
+                            "metadata": metadata,
+                            "task": {
+                                "sequence_length": spec.sequence_length,
+                                "n_samples": spec.n_samples,
+                                "rho": spec.rho,
+                                "lag_separation": spec.lag_separation,
+                                "regime": spec.regime,
+                                "cue_noise": spec.cue_noise,
+                                "background_noise": spec.background_noise,
+                            },
+                            "both": _frozen_kernel_payload(both_kernel),
+                            "weak_only": _frozen_kernel_payload(weak_kernel),
+                            "initial_jet": {
+                                "delta_0": jet.delta_0.detach().cpu(),
+                                "d_0": jet.d_0.detach().cpu(),
+                                "j_0": jet.j_0.detach().cpu(),
+                            },
+                        }
+                        atomic_torch_save(payload, artifact_path)
+                        manifest_records.append(
+                            {
+                                "record_id": record_id,
+                                **metadata,
+                                "artifact": artifact_path.relative_to(run_dir).as_posix(),
+                                "artifact_sha256": sha256_file(artifact_path),
+                                "artifact_bytes": artifact_path.stat().st_size,
+                                "predicted_phase": summary["phase"],
+                                "predicted_tau_star_drift": summary["tau_star_drift"],
+                                "predicted_tau_star_response": summary["tau_star_response"],
+                            }
+                        )
+
+    predictions = pd.DataFrame(prediction_rows)
+    summaries = pd.DataFrame(summary_rows)
+    predictions_path = run_dir / "predictions.csv"
+    summary_path = run_dir / "prediction_summary.csv"
+    aggregate_path = run_dir / "prediction_aggregate.csv"
+    predictions.to_csv(predictions_path, index=False)
+    summaries.to_csv(summary_path, index=False)
+    _write_aggregate(
+        summaries,
+        ["model_kind", "rho", "lag_separation", "regime"],
+        [
+            "initial_d_w",
+            "initial_j_w",
+            "tau_star_drift",
+            "tau_star_response",
+            "final_response_gap",
+            "tail_area_margin",
+        ],
+        aggregate_path,
+    )
+    acceptance = {
+        "stage": "initialization_only_preflight",
+        "optimizer_constructed": False,
+        "training_trajectory_observed": False,
+        "state_unchanged": state_unchanged,
+        "parameter_gradients_unpopulated": gradients_unpopulated,
+        "all_kernel_and_prediction_values_finite": all_finite,
+        "max_initial_drift_reconstruction_error": max_initial_drift_error,
+    }
+    acceptance["passed"] = bool(
+        state_unchanged
+        and gradients_unpopulated
+        and all_finite
+        and max_initial_drift_error < 2e-6
+    )
+    acceptance_path = run_dir / "preflight_acceptance.json"
+    acceptance_path.write_text(json.dumps(acceptance, indent=2), encoding="utf-8")
+
+    source_sha256, source_file_count = executable_source_fingerprint()
+    tracked_files = [
+        predictions_path,
+        summary_path,
+        aggregate_path,
+        acceptance_path,
+        run_dir / "config.resolved.yaml",
+        run_dir / "environment.json",
+    ]
+    manifest = {
+        "schema_version": "enl-ntk-preflight-v2",
+        "source_sha256": source_sha256,
+        "source_file_count": source_file_count,
+        "prediction_sha256": sha256_file(predictions_path),
+        "files": [
+            {
+                "path": path.relative_to(run_dir).as_posix(),
+                "sha256": sha256_file(path),
+                "bytes": path.stat().st_size,
+            }
+            for path in tracked_files
+        ],
+        "records": manifest_records,
+        "preflight_passed": acceptance["passed"],
+    }
+    # JSON has no Infinity literal. Crossing event booleans and the hashed summary
+    # retain the decision; null marks a non-finite convenience copy in the manifest.
+    for record in manifest["records"]:
+        for key in ("predicted_tau_star_drift", "predicted_tau_star_response"):
+            if not math.isfinite(float(record[key])):
+                record[key] = None
+    manifest_path = run_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
+    manifest_digest = sha256_file(manifest_path)
+    (run_dir / "manifest.sha256").write_text(
+        f"{manifest_digest}  manifest.json\n", encoding="utf-8"
+    )
+    return run_dir
+
+
+def _manifest_member(root: Path, raw_path: Any) -> Path:
+    """Resolve one manifest member without permitting traversal or absolute paths."""
+    if not isinstance(raw_path, str) or not raw_path:
+        raise ValueError("Preflight manifest paths must be non-empty strings.")
+    member = PurePosixPath(raw_path)
+    if member.is_absolute() or ".." in member.parts or "." in member.parts:
+        raise ValueError(f"Unsafe preflight manifest path: {raw_path!r}.")
+    candidate = (root / Path(*member.parts)).resolve()
+    resolved_root = root.resolve()
+    if candidate != resolved_root and resolved_root not in candidate.parents:
+        raise ValueError(f"Preflight manifest path escapes its directory: {raw_path!r}.")
+    return candidate
+
+
+def _enl_record_key(values: Mapping[str, Any]) -> tuple[str, float, int, str, int, int]:
+    return (
+        str(values["model_kind"]),
+        float(values["rho"]),
+        int(values["lag_separation"]),
+        str(values["regime"]),
+        int(values["data_seed"]),
+        int(values["model_seed"]),
+    )
+
+
+def _expected_enl_record_keys(config: Mapping[str, Any]) -> set[tuple[str, float, int, str, int, int]]:
+    task = config["task"]
+    model = config["model"]
+    training = config["training"]
+    kinds = model.get("kinds", [model.get("kind", "tanh")])
+    return {
+        (str(kind), float(rho), int(lag), str(regime), data_seed, model_seed)
+        for kind in kinds
+        for rho in task.get("rho_values", [4])
+        for lag in task.get("lag_separations", [2])
+        for regime in task.get("regimes", ["positive"])
+        for data_seed, model_seed, _ in _enl_seed_pairs(training)
+    }
+
+
+def _file_signature(path: Path) -> tuple[str, int]:
+    return sha256_file(path), path.stat().st_size
+
+
+def _verify_enl_preflight(
+    config: Mapping[str, Any],
+) -> tuple[Path, dict[str, Any], pd.DataFrame, pd.DataFrame, dict[Path, tuple[str, int]]]:
+    """Verify a frozen preflight before any optimizer or output directory exists."""
+    evaluation = config.get("evaluation")
+    if not isinstance(evaluation, Mapping):
+        raise ValueError("E-NL evaluation requires an evaluation mapping.")
+    training = config.get("training")
+    if not isinstance(training, Mapping):
+        raise ValueError("E-NL evaluation requires a training mapping.")
+    if training.get("paired_mode") != "lockstep":
+        raise ValueError("E-NL evaluation requires training.paired_mode='lockstep'.")
+    if training.get("exact_response_drift") is not True:
+        raise ValueError("E-NL evaluation requires training.exact_response_drift=true.")
+    if "preflight_dir" not in evaluation or "manifest_sha256" not in evaluation:
+        raise ValueError(
+            "E-NL evaluation requires evaluation.preflight_dir and an externally "
+            "pinned evaluation.manifest_sha256."
+        )
+    preflight_dir = Path(str(evaluation["preflight_dir"])).expanduser().resolve()
+    manifest_path = preflight_dir / "manifest.json"
+    sidecar_path = preflight_dir / "manifest.sha256"
+    if not manifest_path.is_file() or not sidecar_path.is_file():
+        raise ValueError(f"Incomplete E-NL preflight directory: {preflight_dir}.")
+
+    sidecar_fields = sidecar_path.read_text(encoding="utf-8").strip().split()
+    if (
+        len(sidecar_fields) != 2
+        or sidecar_fields[1] != "manifest.json"
+        or len(sidecar_fields[0]) != 64
+        or any(character not in "0123456789abcdef" for character in sidecar_fields[0])
+    ):
+        raise ValueError("Malformed preflight manifest.sha256 sidecar.")
+    actual_manifest_sha256 = sha256_file(manifest_path)
+    pinned_manifest_sha256 = str(evaluation["manifest_sha256"]).lower()
+    if sidecar_fields[0] != actual_manifest_sha256:
+        raise ValueError("Preflight manifest hash does not match manifest.sha256.")
+    if pinned_manifest_sha256 != actual_manifest_sha256:
+        raise ValueError("Preflight manifest hash does not match the externally pinned hash.")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("schema_version") != "enl-ntk-preflight-v2":
+        raise ValueError("Unsupported E-NL preflight manifest schema.")
+    if manifest.get("preflight_passed") is not True:
+        raise ValueError("E-NL preflight acceptance did not pass.")
+
+    source_sha256, source_file_count = executable_source_fingerprint()
+    if (
+        manifest.get("source_sha256") != source_sha256
+        or int(manifest.get("source_file_count", -1)) != source_file_count
+    ):
+        raise ValueError("Executable source does not match the frozen E-NL preflight.")
+
+    snapshots: dict[Path, tuple[str, int]] = {
+        manifest_path: _file_signature(manifest_path),
+        sidecar_path: _file_signature(sidecar_path),
+    }
+    file_entries = manifest.get("files")
+    if not isinstance(file_entries, list):
+        raise ValueError("Preflight manifest files must be a list.")
+    declared_paths: set[str] = set()
+    required_paths = {
+        "predictions.csv",
+        "prediction_summary.csv",
+        "prediction_aggregate.csv",
+        "preflight_acceptance.json",
+        "config.resolved.yaml",
+        "environment.json",
+    }
+    for entry in file_entries:
+        if not isinstance(entry, Mapping):
+            raise ValueError("Every preflight file entry must be a mapping.")
+        raw_path = str(entry.get("path", ""))
+        if raw_path in declared_paths:
+            raise ValueError(f"Duplicate preflight file entry: {raw_path!r}.")
+        declared_paths.add(raw_path)
+        path = _manifest_member(preflight_dir, raw_path)
+        if not path.is_file():
+            raise ValueError(f"Missing preflight file: {raw_path}.")
+        signature = _file_signature(path)
+        if signature != (str(entry.get("sha256")), int(entry.get("bytes", -1))):
+            raise ValueError(f"Preflight file hash/size mismatch: {raw_path}.")
+        snapshots[path] = signature
+    missing_paths = required_paths - declared_paths
+    if missing_paths:
+        raise ValueError(f"Preflight manifest omits required files: {sorted(missing_paths)}.")
+
+    predictions_path = preflight_dir / "predictions.csv"
+    if manifest.get("prediction_sha256") != sha256_file(predictions_path):
+        raise ValueError("Frozen prediction SHA-256 does not match predictions.csv.")
+    acceptance = json.loads(
+        (preflight_dir / "preflight_acceptance.json").read_text(encoding="utf-8")
+    )
+    acceptance_contract = {
+        "stage": "initialization_only_preflight",
+        "optimizer_constructed": False,
+        "training_trajectory_observed": False,
+        "state_unchanged": True,
+        "parameter_gradients_unpopulated": True,
+        "all_kernel_and_prediction_values_finite": True,
+        "passed": True,
+    }
+    for key, expected in acceptance_contract.items():
+        if acceptance.get(key) != expected:
+            raise ValueError(f"Preflight acceptance contract failed at {key!r}.")
+
+    frozen_config = load_config(preflight_dir / "config.resolved.yaml")
+    for section in ("task", "model", "training", "held_out_protocol"):
+        if config.get(section) != frozen_config.get(section):
+            raise ValueError(f"Evaluation {section} does not match the frozen preflight config.")
+
+    records = manifest.get("records")
+    if not isinstance(records, list) or not records:
+        raise ValueError("Preflight manifest records must be a non-empty list.")
+    record_ids: set[str] = set()
+    record_keys: set[tuple[str, float, int, str, int, int]] = set()
+    artifact_paths: set[str] = set()
+    for record in records:
+        if not isinstance(record, Mapping):
+            raise ValueError("Every preflight record must be a mapping.")
+        record_id = str(record.get("record_id", ""))
+        if not record_id or record_id in record_ids:
+            raise ValueError(f"Missing or duplicate preflight record_id: {record_id!r}.")
+        record_ids.add(record_id)
+        key = _enl_record_key(record)
+        if key in record_keys:
+            raise ValueError(f"Duplicate preflight record key: {key!r}.")
+        record_keys.add(key)
+        raw_artifact = str(record.get("artifact", ""))
+        if raw_artifact in artifact_paths or raw_artifact in declared_paths:
+            raise ValueError(f"Duplicate preflight artifact path: {raw_artifact!r}.")
+        artifact_paths.add(raw_artifact)
+        artifact = _manifest_member(preflight_dir, raw_artifact)
+        if not artifact.is_file():
+            raise ValueError(f"Missing frozen kernel artifact: {raw_artifact}.")
+        signature = _file_signature(artifact)
+        if signature != (
+            str(record.get("artifact_sha256")),
+            int(record.get("artifact_bytes", -1)),
+        ):
+            raise ValueError(f"Frozen kernel hash/size mismatch: {raw_artifact}.")
+        snapshots[artifact] = signature
+
+    expected_keys = _expected_enl_record_keys(config)
+    if record_keys != expected_keys:
+        raise ValueError("Manifest records do not exactly match the frozen protocol seed pairs.")
+
+    predictions = pd.read_csv(predictions_path)
+    prediction_summary = pd.read_csv(preflight_dir / "prediction_summary.csv")
+    identity_columns = [
+        "model_kind", "rho", "lag_separation", "regime", "data_seed", "model_seed"
+    ]
+    trajectory_columns = identity_columns + [
+        "step", "tau", "condition", "m_w", "direct_drift_w"
+    ]
+    if not set(trajectory_columns) <= set(predictions.columns):
+        raise ValueError("Frozen predictions.csv is missing required columns.")
+    if not set(identity_columns + ["phase"]) <= set(prediction_summary.columns):
+        raise ValueError("Frozen prediction_summary.csv is missing required columns.")
+    prediction_keys = {
+        _enl_record_key(row) for row in predictions[identity_columns].to_dict("records")
+    }
+    summary_keys = {
+        _enl_record_key(row)
+        for row in prediction_summary[identity_columns].to_dict("records")
+    }
+    if prediction_keys != record_keys or summary_keys != record_keys:
+        raise ValueError("Frozen CSV record identities do not match the manifest.")
+    if prediction_summary.duplicated(identity_columns).any():
+        raise ValueError("Frozen prediction summary contains duplicate records.")
+
+    training = config["training"]
+    steps = int(training.get("steps", 1000))
+    log_every = int(training.get("log_every", 10))
+    expected_steps = list(range(0, steps + 1, log_every))
+    if expected_steps[-1] != steps:
+        expected_steps.append(steps)
+    for key, group in predictions.groupby(identity_columns, dropna=False):
+        if set(group["condition"]) != {"both", "weak_only"}:
+            raise ValueError(f"Frozen prediction conditions are incomplete for {key!r}.")
+        for condition in ("both", "weak_only"):
+            condition_rows = group[group.condition == condition]
+            if condition_rows.step.tolist() != expected_steps:
+                raise ValueError(f"Frozen prediction grid mismatch for {key!r}/{condition}.")
+            expected_tau = np.asarray(expected_steps) * float(training["learning_rate"])
+            if not np.allclose(
+                condition_rows.tau.to_numpy(), expected_tau, rtol=0.0, atol=1e-12
+            ):
+                raise ValueError(f"Frozen prediction tau grid mismatch for {key!r}/{condition}.")
+
+    return preflight_dir, manifest, predictions, prediction_summary, snapshots
+
+
+def _strict_json_value(value: Any) -> Any:
+    """Convert NumPy values and non-finite floats into strict JSON values."""
+    if isinstance(value, Mapping):
+        return {str(key): _strict_json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_strict_json_value(item) for item in value]
+    if isinstance(value, (np.bool_, bool)):
+        return bool(value)
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating, float)):
+        numeric = float(value)
+        return numeric if math.isfinite(numeric) else None
+    return value
+
+
+def _write_strict_json(path: Path, value: Mapping[str, Any]) -> None:
+    path.write_text(
+        json.dumps(_strict_json_value(value), indent=2, sort_keys=True, allow_nan=False)
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _binary_accuracy(group: pd.DataFrame, column: str) -> dict[str, Any]:
+    correct = int(group[column].sum())
+    total = int(len(group))
+    return {"correct": correct, "total": total, "accuracy": correct / total}
+
+
+def _two_way_bootstrap_accuracy(
+    group: pd.DataFrame,
+    column: str,
+    *,
+    replicates: int,
+    seed: int,
+) -> dict[str, Any]:
+    """Resample data- and model-seed clusters independently on a crossed design.
+
+    Rows sharing either seed are dependent. The two-way pigeonhole bootstrap
+    resamples each axis, then averages the resulting crossed cells. When multiple
+    rows occupy a cell (the overall tanh+GRU result), their cell mean is retained.
+    """
+    required = {"data_seed", "model_seed", column}
+    if not required <= set(group.columns):
+        raise ValueError(f"Two-way bootstrap is missing columns: {sorted(required - set(group))}.")
+    if replicates < 1:
+        raise ValueError("Two-way bootstrap requires at least one replicate.")
+    matrix = group.pivot_table(
+        index="data_seed", columns="model_seed", values=column, aggfunc="mean"
+    ).sort_index().sort_index(axis=1)
+    if matrix.empty or matrix.isna().any().any():
+        raise ValueError("Two-way bootstrap requires a complete crossed seed factorial.")
+    values = matrix.to_numpy(dtype=float)
+    rng = np.random.default_rng(seed)
+    estimates = np.empty(replicates, dtype=float)
+    for index in range(replicates):
+        data_indices = rng.integers(0, values.shape[0], size=values.shape[0])
+        model_indices = rng.integers(0, values.shape[1], size=values.shape[1])
+        estimates[index] = float(values[np.ix_(data_indices, model_indices)].mean())
+    return {
+        "method": "two_way_pigeonhole_bootstrap",
+        "n_data_seeds": int(values.shape[0]),
+        "n_model_seeds": int(values.shape[1]),
+        "replicates": int(replicates),
+        "seed": int(seed),
+        "point_accuracy": float(values.mean()),
+        "ci95_low": float(np.quantile(estimates, 0.025)),
+        "ci95_high": float(np.quantile(estimates, 0.975)),
+    }
+
+
+def _timing_metrics(group: pd.DataFrame, prefix: str) -> dict[str, Any]:
+    errors = group[f"{prefix}_time_error"].dropna().to_numpy(dtype=float)
+    result: dict[str, Any] = {
+        "finite_pair_count": int(len(errors)),
+        "mae": float(np.mean(np.abs(errors))) if len(errors) else float("nan"),
+        "bias": float(np.mean(errors)) if len(errors) else float("nan"),
+        "correlation": float("nan"),
+    }
+    finite = group.dropna(subset=[f"predicted_{prefix}_time", f"observed_{prefix}_time"])
+    if len(finite) >= 2:
+        predicted = finite[f"predicted_{prefix}_time"].to_numpy(dtype=float)
+        observed = finite[f"observed_{prefix}_time"].to_numpy(dtype=float)
+        if np.std(predicted) > 0 and np.std(observed) > 0:
+            result["correlation"] = float(np.corrcoef(predicted, observed)[0, 1])
+    return result
+
+
+def run_enl_evaluate(config: dict[str, Any]) -> Path:
+    """Train and score only records from an externally pinned E-NL preflight.
+
+    Verification precedes optimizer construction and run-directory creation. Frozen
+    predictions are loaded from hashed CSV bytes and are never reconstructed from
+    kernels. Every preflight input is rechecked after training to detect mutation.
+    """
+    preflight_dir, manifest, predictions, predicted_summary, snapshots = (
+        _verify_enl_preflight(config)
+    )
+    run_dir = create_run_directory(config)
+    device = resolve_device(str(config.get("experiment", {}).get("device", "auto")))
+    task = config["task"]
+    training = dict(config["training"])
+    model_config = config["model"]
+
+    identity_columns = [
+        "model_kind", "rho", "lag_separation", "regime", "data_seed", "model_seed"
+    ]
+    key_to_record_id = {
+        _enl_record_key(record): str(record["record_id"])
+        for record in manifest["records"]
+    }
+    predictions = predictions.copy()
+    predicted_summary = predicted_summary.copy()
+    predictions["record_id"] = [
+        key_to_record_id[_enl_record_key(row)] for row in predictions.to_dict("records")
+    ]
+    predicted_summary["record_id"] = [
+        key_to_record_id[_enl_record_key(row)]
+        for row in predicted_summary.to_dict("records")
+    ]
+
+    trajectories: list[dict[str, Any]] = []
+    summaries: list[dict[str, Any]] = []
+    for record in manifest["records"]:
+        spec = _task_spec(
+            task,
+            float(record["rho"]),
+            int(record["lag_separation"]),
+            str(record["regime"]),
+        )
+        both, weak = (
+            batch.to(device)
+            for batch in make_paired_task(spec, int(record["data_seed"]))
+        )
+        history, _ = train_paired(
+            model_config,
+            both,
+            weak,
+            training,
+            {"method": "erm"},
+            seed=int(record["model_seed"]),
+            kind=str(record["model_kind"]),
+        )
+        metadata = {
+            "record_id": str(record["record_id"]),
+            "model_kind": str(record["model_kind"]),
+            "rho": float(record["rho"]),
+            "lag_separation": int(record["lag_separation"]),
+            "regime": str(record["regime"]),
+            "data_seed": int(record["data_seed"]),
+            "model_seed": int(record["model_seed"]),
+        }
+        annotated = _annotate(history, **metadata)
+        trajectories.extend(annotated)
+        summaries.append(
+            {
+                **metadata,
+                **_enl_summary(
+                    pd.DataFrame(annotated),
+                    beta=float(task.get("beta", 0.5)),
+                    phase_delay=float(task.get("phase_delay", 1.0)),
+                ),
+            }
+        )
+
+    observed_trajectories = pd.DataFrame(trajectories)
+    observed_summary = pd.DataFrame(summaries)
+    observed_trajectories.to_csv(run_dir / "trajectories.csv", index=False)
+    observed_summary.to_csv(run_dir / "summary.csv", index=False)
+    _write_aggregate(
+        observed_summary,
+        ["model_kind", "rho", "lag_separation", "regime"],
+        [
+            "tau_star_drift", "tau_star_response", "tail_positive_area",
+            "tail_negative_area", "tail_area_margin", "weak_auc_gap",
+            "final_both_m_w", "final_weak_m_w", "final_accuracy", "final_gsi5",
+        ],
+        run_dir / "aggregate.csv",
+    )
+    _write_enl_crossover_report(observed_summary, run_dir)
+
+    summary_fields = [
+        "record_id", "phase", "drift_crossed", "response_crossed",
+        "tail_causal_starvation_certified", "weak_only_learnable",
+        "tau_star_drift", "tau_star_response",
+    ]
+    comparison = predicted_summary[summary_fields].merge(
+        observed_summary[summary_fields],
+        on="record_id",
+        suffixes=("_predicted", "_observed"),
+        validate="one_to_one",
+    )
+    comparison = comparison.merge(
+        observed_summary[["record_id", *identity_columns]],
+        on="record_id",
+        validate="one_to_one",
+    )
+    comparison["phase_correct"] = (
+        comparison.phase_predicted == comparison.phase_observed
+    )
+    comparison["drift_crossing_correct"] = (
+        comparison.drift_crossed_predicted == comparison.drift_crossed_observed
+    )
+    comparison["response_crossing_correct"] = (
+        comparison.response_crossed_predicted == comparison.response_crossed_observed
+    )
+    comparison["certificate_correct"] = (
+        comparison.tail_causal_starvation_certified_predicted
+        == comparison.tail_causal_starvation_certified_observed
+    )
+    comparison["learnability_correct"] = (
+        comparison.weak_only_learnable_predicted
+        == comparison.weak_only_learnable_observed
+    )
+    for label, column in (
+        ("drift", "tau_star_drift"), ("response", "tau_star_response")
+    ):
+        predicted_time = comparison[f"{column}_predicted"].to_numpy(dtype=float)
+        observed_time = comparison[f"{column}_observed"].to_numpy(dtype=float)
+        finite_pair = np.isfinite(predicted_time) & np.isfinite(observed_time)
+        comparison[f"predicted_{label}_time"] = np.where(
+            np.isfinite(predicted_time), predicted_time, np.nan
+        )
+        comparison[f"observed_{label}_time"] = np.where(
+            np.isfinite(observed_time), observed_time, np.nan
+        )
+        time_error = np.full(predicted_time.shape, np.nan, dtype=float)
+        time_error[finite_pair] = (
+            predicted_time[finite_pair] - observed_time[finite_pair]
+        )
+        comparison[f"{label}_time_error"] = time_error
+
+    trajectory_scores: list[dict[str, Any]] = []
+    trajectory_key = ["record_id", "step", "condition"]
+    predicted_core = predictions[
+        trajectory_key
+        + [
+            "tau", "m_w", "direct_drift_w", "response_gap",
+            "d_w_equal_time_exact",
+        ]
+    ]
+    observed_core = observed_trajectories[
+        trajectory_key + ["tau", "m_w", "direct_drift_w", "d_w_equal_time_exact"]
+    ]
+    aligned = predicted_core.merge(
+        observed_core,
+        on=trajectory_key,
+        suffixes=("_predicted", "_observed"),
+        validate="one_to_one",
+    )
+    if len(aligned) != len(predicted_core) or len(aligned) != len(observed_core):
+        raise RuntimeError("Observed trajectory grid does not exactly match frozen predictions.")
+    if not np.allclose(
+        aligned.tau_predicted.to_numpy(),
+        aligned.tau_observed.to_numpy(),
+        rtol=0.0,
+        atol=1e-12,
+    ):
+        raise RuntimeError("Observed tau grid does not match frozen predictions.")
+    for record_id, group in aligned.groupby("record_id", sort=False):
+        both_rows = group[group.condition == "both"].sort_values("step")
+        weak_rows = group[group.condition == "weak_only"].sort_values("step")
+        if not np.array_equal(both_rows.step.to_numpy(), weak_rows.step.to_numpy()):
+            raise RuntimeError(f"Paired score grids differ for record {record_id}.")
+        predicted_gap = (
+            both_rows.m_w_predicted.to_numpy() - weak_rows.m_w_predicted.to_numpy()
+        )
+        observed_gap = (
+            both_rows.m_w_observed.to_numpy() - weak_rows.m_w_observed.to_numpy()
+        )
+        predicted_drift = (
+            both_rows.direct_drift_w_predicted.to_numpy()
+            - weak_rows.direct_drift_w_predicted.to_numpy()
+        )
+        observed_drift = both_rows.d_w_equal_time_exact_observed.to_numpy()
+        if not np.allclose(
+            predicted_gap, both_rows.response_gap.to_numpy(), rtol=1e-10, atol=1e-10
+        ) or not np.allclose(
+            predicted_drift,
+            both_rows.d_w_equal_time_exact_predicted.to_numpy(),
+            rtol=1e-10,
+            atol=1e-10,
+        ):
+            raise RuntimeError(f"Frozen pair-level columns are inconsistent for {record_id}.")
+        if not np.allclose(
+            both_rows.m_w_predicted.iloc[0], both_rows.m_w_observed.iloc[0],
+            rtol=2e-5, atol=2e-6,
+        ) or not np.allclose(
+            predicted_drift[0], observed_drift[0], rtol=2e-5, atol=2e-6
+        ):
+            raise RuntimeError(
+                f"Initialization mismatch for {record_id}; config/seed equivalence failed."
+            )
+        metadata = observed_summary[observed_summary.record_id == record_id].iloc[0]
+        trajectory_scores.append(
+            {
+                "record_id": record_id,
+                **{column: metadata[column] for column in identity_columns},
+                "n_trajectory_points": int(len(predicted_gap)),
+                "response_gap_rmse": float(
+                    np.sqrt(np.mean(np.square(predicted_gap - observed_gap)))
+                ),
+                "drift_rmse": float(
+                    np.sqrt(np.mean(np.square(predicted_drift - observed_drift)))
+                ),
+                "response_gap_sign_agreement": float(
+                    np.mean(np.sign(predicted_gap) == np.sign(observed_gap))
+                ),
+                "drift_sign_agreement": float(
+                    np.mean(np.sign(predicted_drift) == np.sign(observed_drift))
+                ),
+                "both_m_w_rmse": float(
+                    np.sqrt(
+                        np.mean(
+                            np.square(
+                                both_rows.m_w_predicted.to_numpy()
+                                - both_rows.m_w_observed.to_numpy()
+                            )
+                        )
+                    )
+                ),
+                "weak_m_w_rmse": float(
+                    np.sqrt(
+                        np.mean(
+                            np.square(
+                                weak_rows.m_w_predicted.to_numpy()
+                                - weak_rows.m_w_observed.to_numpy()
+                            )
+                        )
+                    )
+                ),
+            }
+        )
+    trajectory_score_frame = pd.DataFrame(trajectory_scores)
+    comparison = comparison.merge(
+        trajectory_score_frame.drop(columns=identity_columns),
+        on="record_id",
+        validate="one_to_one",
+    )
+    comparison.to_csv(run_dir / "scores.csv", index=False)
+
+    primary_columns = {
+        "phase": "phase_correct",
+        "drift_crossing": "drift_crossing_correct",
+        "response_crossing": "response_crossing_correct",
+        "causal_certificate": "certificate_correct",
+        "weak_only_learnability": "learnability_correct",
+    }
+    held_out_protocol = config.get("held_out_protocol", {})
+    if held_out_protocol and not isinstance(held_out_protocol, Mapping):
+        raise ValueError("held_out_protocol must be a mapping when provided.")
+    configured_primary = (
+        held_out_protocol.get("primary_outputs", list(primary_columns))
+        if isinstance(held_out_protocol, Mapping)
+        else list(primary_columns)
+    )
+    if not isinstance(configured_primary, list) or not configured_primary:
+        raise ValueError("held_out_protocol.primary_outputs must be a non-empty list.")
+    acceptance_primary = [str(name) for name in configured_primary]
+    unknown_primary = set(acceptance_primary) - set(primary_columns)
+    if unknown_primary:
+        raise ValueError(f"Unknown held-out primary outputs: {sorted(unknown_primary)}.")
+
+    inference_config = (
+        held_out_protocol.get("reuse_aware_inference", {})
+        if isinstance(held_out_protocol, Mapping)
+        else {}
+    )
+    if not isinstance(inference_config, Mapping):
+        raise ValueError("held_out_protocol.reuse_aware_inference must be a mapping.")
+    bootstrap_replicates = int(inference_config.get("bootstrap_replicates", 5000))
+    bootstrap_seed = int(inference_config.get("bootstrap_seed", 2027))
+    classifications: dict[str, Any] = {
+        "overall": {
+            name: _binary_accuracy(comparison, column)
+            for name, column in primary_columns.items()
+        },
+        "by_model": {},
+        "reuse_aware_two_way_bootstrap": {
+            "overall": {
+                name: _two_way_bootstrap_accuracy(
+                    comparison,
+                    column,
+                    replicates=bootstrap_replicates,
+                    seed=bootstrap_seed + index,
+                )
+                for index, (name, column) in enumerate(primary_columns.items())
+            },
+            "by_model": {},
+        },
+    }
+    timing: dict[str, Any] = {"overall": {}, "by_model": {}}
+    trajectory_metrics: dict[str, Any] = {"by_model": {}}
+    for label in ("drift", "response"):
+        timing["overall"][label] = _timing_metrics(comparison, label)
+    for model_index, (model_kind, group) in enumerate(comparison.groupby("model_kind")):
+        classifications["by_model"][str(model_kind)] = {
+            name: _binary_accuracy(group, column)
+            for name, column in primary_columns.items()
+        }
+        classifications["reuse_aware_two_way_bootstrap"]["by_model"][
+            str(model_kind)
+        ] = {
+            name: _two_way_bootstrap_accuracy(
+                group,
+                column,
+                replicates=bootstrap_replicates,
+                seed=bootstrap_seed + 100 * (model_index + 1) + index,
+            )
+            for index, (name, column) in enumerate(primary_columns.items())
+        }
+        timing["by_model"][str(model_kind)] = {
+            label: _timing_metrics(group, label) for label in ("drift", "response")
+        }
+        trajectory_metrics["by_model"][str(model_kind)] = {
+            column: float(group[column].mean())
+            for column in (
+                "response_gap_rmse", "drift_rmse", "response_gap_sign_agreement",
+                "drift_sign_agreement", "both_m_w_rmse", "weak_m_w_rmse",
+            )
+        }
+
+    acceptance_config = (
+        held_out_protocol.get("acceptance", {})
+        if isinstance(held_out_protocol, Mapping)
+        else {}
+    )
+    if not acceptance_config:
+        acceptance_config = config["evaluation"].get("acceptance", {})
+    if not isinstance(acceptance_config, Mapping):
+        raise ValueError("Held-out acceptance thresholds must be a mapping.")
+    minimum_overall = float(acceptance_config.get("minimum_overall_accuracy", 0.75))
+    minimum_by_model = float(acceptance_config.get("minimum_model_accuracy", 0.625))
+    required_coverage = float(acceptance_config.get("required_prediction_coverage", 1.0))
+    minimum_bootstrap_low_raw = acceptance_config.get(
+        "minimum_two_way_bootstrap_ci95_low"
+    )
+    minimum_bootstrap_low = (
+        float(minimum_bootstrap_low_raw)
+        if minimum_bootstrap_low_raw is not None
+        else None
+    )
+    coverage = len(comparison) / len(manifest["records"])
+    checks = {
+        "prediction_coverage": coverage >= required_coverage,
+        **{
+            f"overall_{name}": classifications["overall"][name]["accuracy"]
+            >= minimum_overall
+            for name in acceptance_primary
+        },
+    }
+    for model_kind, model_metrics in classifications["by_model"].items():
+        for name in acceptance_primary:
+            checks[f"{model_kind}_{name}"] = (
+                model_metrics[name]["accuracy"] >= minimum_by_model
+            )
+    if minimum_bootstrap_low is not None:
+        overall_bootstrap = classifications["reuse_aware_two_way_bootstrap"]["overall"]
+        for name in acceptance_primary:
+            checks[f"overall_{name}_bootstrap_ci95_low"] = (
+                overall_bootstrap[name]["ci95_low"] >= minimum_bootstrap_low
+            )
+    thresholds: dict[str, Any] = {
+        "minimum_overall_accuracy": minimum_overall,
+        "minimum_model_accuracy": minimum_by_model,
+        "required_prediction_coverage": required_coverage,
+    }
+    if minimum_bootstrap_low is not None:
+        thresholds["minimum_two_way_bootstrap_ci95_low"] = minimum_bootstrap_low
+    evaluation_acceptance = {
+        "stage": "held_out_falsification_evaluation",
+        "manifest_sha256": sha256_file(preflight_dir / "manifest.json"),
+        "prediction_sha256": manifest["prediction_sha256"],
+        "accepted_primary_outputs": acceptance_primary,
+        "thresholds": thresholds,
+        "checks": checks,
+        "passed": all(checks.values()),
+    }
+    metrics = {
+        "status": (
+            held_out_protocol.get("status", "held_out_falsification_evaluation")
+            if isinstance(held_out_protocol, Mapping)
+            else "held_out_falsification_evaluation"
+        ),
+        "manifest_sha256": evaluation_acceptance["manifest_sha256"],
+        "prediction_sha256": manifest["prediction_sha256"],
+        "n_records": int(len(comparison)),
+        "classifications": classifications,
+        "conditional_crossing_time": timing,
+        "trajectory_diagnostics": trajectory_metrics,
+        "acceptance": evaluation_acceptance,
+    }
+    _write_strict_json(run_dir / "metrics.json", metrics)
+    _write_strict_json(run_dir / "evaluation_acceptance.json", evaluation_acceptance)
+
+    changed = [
+        str(path) for path, signature in snapshots.items()
+        if not path.is_file() or _file_signature(path) != signature
+    ]
+    if changed:
+        raise RuntimeError(f"Frozen preflight inputs changed during evaluation: {changed}.")
+    provenance = {
+        "preflight_dir": str(preflight_dir),
+        "manifest_sha256": evaluation_acceptance["manifest_sha256"],
+        "prediction_sha256": manifest["prediction_sha256"],
+        "verified_file_count": len(snapshots),
+        "source_sha256": manifest["source_sha256"],
+        "frozen_inputs_unchanged": True,
+    }
+    _write_strict_json(run_dir / "provenance.json", provenance)
+    return run_dir
 
 
 def run_enl(config: dict[str, Any]) -> Path:
@@ -466,18 +1687,25 @@ def run_enl(config: dict[str, Any]) -> Path:
             for lag in task.get("lag_separations", [2]):
                 for regime in task.get("regimes", ["positive"]):
                     spec = _task_spec(task, float(rho), int(lag), str(regime))
-                    for seed in training.get("seeds", [0, 1]):
+                    for data_seed, model_seed, legacy_seed in _enl_seed_pairs(training):
                         both, weak = (
-                            batch.to(device) for batch in make_paired_task(spec, int(seed))
+                            batch.to(device)
+                            for batch in make_paired_task(spec, data_seed)
                         )
                         history, _ = train_paired(
                             model_config, both, weak, training, {"method": "erm"},
-                            seed=int(seed), kind=str(kind),
+                            seed=model_seed, kind=str(kind),
                         )
                         metadata = {
-                            "model_kind": kind, "rho": float(rho),
-                            "lag_separation": int(lag), "regime": regime, "seed": int(seed),
+                            "model_kind": kind,
+                            "rho": float(rho),
+                            "lag_separation": int(lag),
+                            "regime": regime,
+                            "data_seed": data_seed,
+                            "model_seed": model_seed,
                         }
+                        if legacy_seed is not None:
+                            metadata["seed"] = legacy_seed
                         annotated = _annotate(history, **metadata)
                         trajectories.extend(annotated)
                         summaries.append({

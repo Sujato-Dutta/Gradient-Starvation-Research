@@ -1,6 +1,8 @@
 {
-  "schema_version": 1,
-  "generated_utc": "2026-08-24T08:42:07.294712+00:00",
+  "schema_version": 2,
+  "initial_schema_v1_generated_utc": "2026-08-24T08:42:07.294712+00:00",
+  "schema_v2_update_timestamp": null,
+  "schema_v2_update_note": "The schema-v1 timestamp predates the later E19/E20 archive entries and is retained only as document history; no replacement wall-clock time is asserted.",
   "authoritative_source_fingerprinted_run": {
     "run_id": "enl_tanh_crossover-20260824-141207",
     "claim_family": "final nonlinear crossover",
@@ -18,6 +20,195 @@
       "enl_tanh_crossover-20260824-141207/aggregate.csv",
       "enl_tanh_crossover-20260824-141207/enl_crossover.pdf"
     ]
+  },
+  "frozen_empirical_ntk_studies": [
+    {
+      "claim_id": "E19",
+      "claim_family": "broad initialization-frozen predictor falsification pilot",
+      "preflight_run_id": "enl_ntk_pilot_preflight-20260825-160655",
+      "evaluation_run_id": "enl_ntk_pilot_evaluate-20260825-160757",
+      "git_commit": "2d0ee8362f2140c2134ac1bd9324bd667a06a51b",
+      "git_dirty": true,
+      "source_provenance_class": "historical_dirty_unreconstructible",
+      "source_sha256": "8d8162558e7d25fff7a5059a4cf49139a354ca211fd6f0759417e75dd87f435c",
+      "source_snapshot_archived": false,
+      "source_reconstructible": false,
+      "source_limitation": "The sealed preflight records a dirty-tree source fingerprint, but the exact Python source bytes were not archived and are unavailable and unreconstructible; a digest cannot recover omitted bytes. A clean checkout can audit outcomes and seals but cannot replay the historical study, and regeneration under current source is a new study. Current source intentionally fails the historical preflight source guard.",
+      "manifest_sha256": "f186d587e28f6408b68baf95566d2d1f1c5d5701e205e9a69ce86cbe4f0ffaf5",
+      "prediction_sha256": "9787d99953f1046b4934aa6e7b3f969e30a4efafb3d02a67cc95926232f9dfaa",
+      "verified_frozen_file_count": 24,
+      "accepted_primary_outputs": [
+        "phase",
+        "drift_crossing",
+        "response_crossing",
+        "causal_certificate",
+        "weak_only_learnability"
+      ],
+      "acceptance_contract": {
+        "total_records": 16,
+        "records_by_model": {
+          "tanh": 8,
+          "gru": 8
+        },
+        "required_thresholds": {
+          "minimum_model_accuracy": 0.625,
+          "minimum_overall_accuracy": 0.75,
+          "required_prediction_coverage": 1.0
+        }
+      },
+      "evaluation_passed": false,
+      "verdict": "failed preregistered broad acceptance on tanh weak-only learnability",
+      "compact_archive_root": "paper/artifacts/enl_ntk_pilot-20260825",
+      "archived_files": [
+        {
+          "path": "paper/artifacts/enl_ntk_pilot-20260825/archive_manifest.json",
+          "sha256": "4636f67d3cd52a658afb69457ef5887fe1749f3613db62d88be588384da6a149",
+          "bytes": 3637
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_pilot-20260825/preflight/config.resolved.yaml",
+          "sha256": "3b025173365c0e0223c54619cf2856c6393bcf7b5527bf71c67fa9e500dd48f5",
+          "bytes": 1764
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_pilot-20260825/preflight/manifest.json",
+          "sha256": "f186d587e28f6408b68baf95566d2d1f1c5d5701e205e9a69ce86cbe4f0ffaf5",
+          "bytes": 10670
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_pilot-20260825/preflight/manifest.sha256",
+          "sha256": "13e3c417e0537a6e77802c8c1c859595571b7119b3cf3e3dbe696c9cc706e7e2",
+          "bytes": 80
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_pilot-20260825/preflight/preflight_acceptance.json",
+          "sha256": "b54c9ae8429824a11a9cd50db590c9b5d7fd5e175cd025c46b0eb86255533761",
+          "bytes": 328
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_pilot-20260825/evaluation/config.resolved.yaml",
+          "sha256": "e73855700c964b8b0eb688b6a8ca15c713dbd590b2c57fd46afd4e690cce736d",
+          "bytes": 1924
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_pilot-20260825/evaluation/metrics.json",
+          "sha256": "4a3d704217db7a815442bb785bb627a3f65cdb281fff0383ae6219592747c275",
+          "bytes": 4962
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_pilot-20260825/evaluation/evaluation_acceptance.json",
+          "sha256": "e747bc1bd716b4e96407cec230b6a4b9bf339e7a5b52b74e6db19097db1450ce",
+          "bytes": 963
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_pilot-20260825/evaluation/provenance.json",
+          "sha256": "83168a54254f0e6fd9fe34beecd43b1f55a0fb9ecce905dbf910e9555bd92d63",
+          "bytes": 505
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_pilot-20260825/evaluation/scores.csv",
+          "sha256": "deb6b2fc1d6fabdef9976ac276ef65dd000d6134dd5554267a2177bb1bff7e62",
+          "bytes": 7609
+        }
+      ]
+    },
+    {
+      "claim_id": "E20",
+      "claim_family": "restricted initialization-frozen crossing-event validation",
+      "preflight_run_id": "enl_ntk_crossing_factorial_preflight-20260825-162750",
+      "evaluation_run_id": "enl_ntk_crossing_factorial_evaluate-20260825-162949",
+      "git_commit": "2d0ee8362f2140c2134ac1bd9324bd667a06a51b",
+      "git_dirty": true,
+      "source_provenance_class": "historical_dirty_unreconstructible",
+      "source_sha256": "ca878df376b01c0ea45ac352e353530bf20c567de59bb400617e5dd74d5b6b6b",
+      "source_snapshot_archived": false,
+      "source_reconstructible": false,
+      "source_limitation": "The sealed preflight records a dirty-tree source fingerprint, but the exact Python source bytes were not archived and are unavailable and unreconstructible; a digest cannot recover omitted bytes. A clean checkout can audit outcomes and seals but cannot replay the historical study, and regeneration under current source is a new study. Current source intentionally fails the historical preflight source guard.",
+      "manifest_sha256": "bdcf02abbef5b9d8f7ce3979d3363ee8d39ab7817a1d554616bc4dd4a22a0db1",
+      "prediction_sha256": "c05b31810cb3869e7d051f539741732a8758f6cac542deb448a98d2ada7b6542",
+      "verified_frozen_file_count": 72,
+      "accepted_primary_outputs": [
+        "drift_crossing",
+        "response_crossing"
+      ],
+      "acceptance_contract": {
+        "total_records": 64,
+        "records_by_model": {
+          "tanh": 32,
+          "gru": 32
+        },
+        "required_thresholds": {
+          "minimum_model_accuracy": 0.625,
+          "minimum_overall_accuracy": 0.75,
+          "minimum_two_way_bootstrap_ci95_low": 0.5,
+          "required_prediction_coverage": 1.0
+        }
+      },
+      "evaluation_passed": true,
+      "verdict": "passed only preregistered drift/response crossing classification endpoints",
+      "compact_archive_root": "paper/artifacts/enl_ntk_crossing_factorial-20260825",
+      "archived_files": [
+        {
+          "path": "paper/artifacts/enl_ntk_crossing_factorial-20260825/archive_manifest.json",
+          "sha256": "5339fc1b390ccb3758f5dbb7fef62bca4916a71a80dc8b7bd0014d7bd5d07557",
+          "bytes": 3807
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_crossing_factorial-20260825/preflight/config.resolved.yaml",
+          "sha256": "851b10092adab8c984007007467b12264326e68ac4319af049782dc98af340c4",
+          "bytes": 3469
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_crossing_factorial-20260825/preflight/manifest.json",
+          "sha256": "bdcf02abbef5b9d8f7ce3979d3363ee8d39ab7817a1d554616bc4dd4a22a0db1",
+          "bytes": 39131
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_crossing_factorial-20260825/preflight/manifest.sha256",
+          "sha256": "5e8d602857b0ada440478afb256ecd4ad2bd54163bad0681b9cf546a693ec17b",
+          "bytes": 80
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_crossing_factorial-20260825/preflight/preflight_acceptance.json",
+          "sha256": "d62edfb830afe47cea88ce8adfbb697c0f9f6897525921567ee2ab1ddfd285c9",
+          "bytes": 327
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_crossing_factorial-20260825/evaluation/config.resolved.yaml",
+          "sha256": "ccf762fc4ff5c88870ecf16042df672d7d9c32e97989396807a567a047c618ab",
+          "bytes": 3642
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_crossing_factorial-20260825/evaluation/metrics.json",
+          "sha256": "be9a4603ee392cdeefdad69ceaed652d98249c9c29f8ae3bc2c04cf7a8d8e47f",
+          "bytes": 9755
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_crossing_factorial-20260825/evaluation/evaluation_acceptance.json",
+          "sha256": "e5b736204825f0a0dbeaebd4c7a5bc43a658d0f63ce2fd081b68f8b6179557f9",
+          "bytes": 892
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_crossing_factorial-20260825/evaluation/provenance.json",
+          "sha256": "7c9f27297ad402ae618afcd9678599690ddeea14375a6735be02bf828b34c0cc",
+          "bytes": 518
+        },
+        {
+          "path": "paper/artifacts/enl_ntk_crossing_factorial-20260825/evaluation/scores.csv",
+          "sha256": "4d58dd5f99d0c8807eda057848ae3ed2c835e63a37f06f32d7ddceda43250bf7",
+          "bytes": 28049
+        }
+      ]
+    }
+  ],
+  "compact_archive_limitation": "The compact empirical-NTK archives omit kernels/*.pt and the full trajectories/summary/crossover/aggregate/predictions files; those large data files remain in ignored results/ locally, so a clean checkout cannot rerun evaluation from the compact archive alone. More fundamentally, the exact Python source snapshots from the dirty trees were never archived and are now unavailable and unreconstructible: their digests can verify candidate bytes but cannot recover omitted bytes. The compact outcomes, manifests, and seals remain auditable, but the historical studies cannot be replayed; regeneration under current source is a new study, and current source intentionally fails the historical preflight source guard.",
+  "excluded_engineering_attempt": {
+    "data_seed": 100,
+    "model_seeds": "1000-1007",
+    "status": "excluded from scientific evidence; no scores inspected",
+    "first_failure": "Frozen prediction tau-grid mismatch rejected before training.",
+    "second_failure": "Observed trajectory grid mismatch rejected after nonlinear outcomes had been generated.",
+    "use": "Used only to repair evaluator CSV-grid alignment via integer-step matching and a numerical tau check; it did not change labels, acceptance thresholds, or the broad pilot endpoints."
   },
   "historical_runs_without_content_fingerprints": [
     {
@@ -62,5 +253,5 @@
   ],
   "historical_figure_note": "These tracked PDFs make the manuscript source compile without ignored results directories. They preserve the displayed historical outputs but do not reconstruct the dirty executable source that generated them.",
   "historical_limitation": "Every listed historical run recorded git_dirty=true and omitted a content-addressed source fingerprint. The exact executed source cannot be reconstructed retroactively from its commit. Local results directories were ignored by Git and are not part of a clean checkout; their empirical claims therefore retain a disclosed provenance limitation.",
-  "interpretation": "The archived E-NL rerun content-addresses executable Python source and preserves its resolved configuration and compact outputs. This repairs E-NL source identity but does not repair provenance for E1, E2, E2-R, the exploratory E-NL grid, or E3."
+  "interpretation": "Only the final theorem-aligned E-NL rerun is reconstructible and content-addressed through commit 2d0ee83/tag theorem-aligned-v1. The two initialization-frozen studies retain auditable compact outcomes, manifests, seals, and recorded dirty-tree source fingerprints, but their exact Python source snapshots are unavailable and they are not executable historical reruns. The broad frozen-kernel pilot failed; the later fresh factorial passed only its restricted drift/response crossing-classification endpoints. Manifest integrity does not prove kernel stability, causal prediction, calibrated times, or universal prevalence. Historical provenance limitations for E1, E2, E2-R, exploratory E-NL, and E3 remain unchanged."
 }

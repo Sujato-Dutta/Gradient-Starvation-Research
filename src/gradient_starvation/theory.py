@@ -111,7 +111,12 @@ class CrossoverDecomposition:
 
 @dataclass
 class CounterfactualDriftCorrection:
-    """Minimum-norm correction that protects weak drift and strong progress."""
+    """CDC-style correction measured in the implemented parameter coordinates.
+
+    Norms and orthogonality use the Euclidean/Frobenius inner product on the fixed
+    model tensors.  The minimum-norm statement is therefore coordinate-dependent
+    and is not invariant under non-isometric reparameterizations.
+    """
 
     gradients: list[torch.Tensor]
     weak_drift_before: torch.Tensor
@@ -121,9 +126,12 @@ class CounterfactualDriftCorrection:
     target_weak_drift: torch.Tensor
     deficit: torch.Tensor
     alpha: torch.Tensor
+    uncapped_alpha: torch.Tensor
     protected_norm_sq: torch.Tensor
     correction_norm: torch.Tensor
+    target_residual: torch.Tensor
     feasible: bool
+    cap_binding: bool
 
 
 def _trainable_parameters(model: torch.nn.Module) -> list[torch.nn.Parameter]:
@@ -149,6 +157,346 @@ def _scalar_gradients(
         torch.zeros_like(parameter) if gradient is None else gradient
         for parameter, gradient in zip(parameter_list, gradients)
     ]
+
+
+@dataclass(frozen=True)
+class InitialResponseJet:
+    """Exact paired weak-response jet under the full-batch CE gradient field.
+
+    ``delta_0`` is the initial both-minus-weak response gap, ``d_0`` is its
+    first Lie derivative, and ``j_0`` is ``L_V d`` on the joint paired state.
+    The condition-level terms are retained so every subtraction is auditable.
+    All returned tensors are detached scalars; evaluating the jet neither mutates
+    parameters nor populates ``parameter.grad``.
+    """
+
+    delta_0: torch.Tensor
+    d_0: torch.Tensor
+    j_0: torch.Tensor
+    both_drift_0: torch.Tensor
+    weak_only_drift_0: torch.Tensor
+    both_j_0: torch.Tensor
+    weak_only_j_0: torch.Tensor
+
+
+def _condition_weak_response_jet(
+    model: RecurrentBinaryClassifier,
+    batch: SyntheticBatch,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Return ``(M_w, L_V M_w, L_V^2 M_w)`` for ``V=-grad L_C``."""
+    parameters = _trainable_parameters(model)
+    weak_response = differentiable_mode_responses(model, batch)[1]
+    logits = synthetic_logits(model, batch)
+    loss = F.binary_cross_entropy_with_logits(logits, batch.y.float())
+
+    response_gradients = _scalar_gradients(
+        weak_response, parameters, create_graph=True, retain_graph=True
+    )
+    loss_gradients = _scalar_gradients(
+        loss, parameters, create_graph=True, retain_graph=True
+    )
+    drift = -sum(
+        (response_gradient * loss_gradient).sum()
+        for response_gradient, loss_gradient in zip(
+            response_gradients, loss_gradients
+        )
+    )
+    drift_gradients = _scalar_gradients(
+        drift, parameters, create_graph=False, retain_graph=False
+    )
+    lie_derivative = -sum(
+        (drift_gradient * loss_gradient.detach()).sum()
+        for drift_gradient, loss_gradient in zip(
+            drift_gradients, loss_gradients
+        )
+    )
+    return weak_response.detach(), drift.detach(), lie_derivative.detach()
+
+
+def paired_initial_response_jet(
+    both_model: RecurrentBinaryClassifier,
+    weak_only_model: RecurrentBinaryClassifier,
+    both: SyntheticBatch,
+    weak_only: SyntheticBatch,
+) -> InitialResponseJet:
+    """Compute an initialization-only jet for the paired CE gradient flow.
+
+    The models must have bitwise-identical state and the batches must be an exact
+    matched strong-channel intervention. This helper describes the unregularized
+    full-batch cross-entropy field. Callers using weight decay, clipping, momentum,
+    minibatches, or another objective must not label its values as their optimizer
+    jet.
+    """
+    if both.condition != "both" or weak_only.condition != "weak_only":
+        raise ValueError("The initialization jet requires (both, weak_only) conditions.")
+    if both.spec != weak_only.spec:
+        raise ValueError("The initialization jet requires identical paired task specs.")
+    for name in ("y", "signed_labels", "z_s", "z_w"):
+        if not torch.equal(getattr(both, name), getattr(weak_only, name)):
+            raise ValueError(f"The initialization jet requires matched paired {name}.")
+    if not torch.equal(both.x[:, :, 1], weak_only.x[:, :, 1]):
+        raise ValueError("The paired batches must share the complete weak input channel.")
+    if torch.count_nonzero(weak_only.x[:, :, 0]):
+        raise ValueError("The weak-only batch must zero the strong input channel.")
+
+    both_state = both_model.state_dict()
+    weak_state = weak_only_model.state_dict()
+    if both_state.keys() != weak_state.keys() or any(
+        not torch.equal(value, weak_state[name]) for name, value in both_state.items()
+    ):
+        raise ValueError("The initialization jet requires bitwise-identical model state.")
+
+    both_response, both_drift, both_j = _condition_weak_response_jet(
+        both_model, both
+    )
+    weak_response, weak_drift, weak_j = _condition_weak_response_jet(
+        weak_only_model, weak_only
+    )
+    return InitialResponseJet(
+        delta_0=both_response - weak_response,
+        d_0=both_drift - weak_drift,
+        j_0=both_j - weak_j,
+        both_drift_0=both_drift,
+        weak_only_drift_0=weak_drift,
+        both_j_0=both_j,
+        weak_only_j_0=weak_j,
+    )
+
+
+@dataclass(frozen=True)
+class FrozenEmpiricalKernel:
+    """Initialization-only full sample-logit and response/logit kernels.
+
+    The logit Jacobian uses ordinary network logits. ``signed_logit_jacobian``
+    multiplies each row by its signed label, so ``signed_ntk`` and
+    ``response_cross_kernel`` directly drive mean-BCE signed-margin and response
+    dynamics without an omitted label sign.
+    """
+
+    ordinary_logits: torch.Tensor
+    signed_logits: torch.Tensor
+    response: torch.Tensor
+    logit_jacobian: torch.Tensor
+    signed_logit_jacobian: torch.Tensor
+    response_jacobian: torch.Tensor
+    signed_ntk: torch.Tensor
+    response_cross_kernel: torch.Tensor
+    parameter_names: tuple[str, ...]
+    parameter_shapes: tuple[tuple[int, ...], ...]
+
+
+@dataclass(frozen=True)
+class FrozenKernelTrajectory:
+    """Explicit-Euler trajectory of the initialization-frozen tangent model."""
+
+    steps: torch.Tensor
+    tau: torch.Tensor
+    signed_logits: torch.Tensor
+    response: torch.Tensor
+    response_drift: torch.Tensor
+
+
+@dataclass(frozen=True)
+class FrozenKernelErrorBound:
+    """Conditional true-SGD versus frozen-tangent error at one grid step."""
+
+    logit_error: float
+    response_error: float
+
+
+def empirical_logit_jacobian(
+    model: RecurrentBinaryClassifier,
+    batch: SyntheticBatch,
+) -> tuple[torch.Tensor, tuple[str, ...], tuple[tuple[int, ...], ...]]:
+    """Materialize the per-sample ordinary-logit Jacobian in parameter order.
+
+    A per-sample reverse-mode loop is intentional. PyTorch's current ``vmap`` rule
+    for fused RNN/GRU operators does not support the required Jacobian batching,
+    while this loop evaluates only one sequence per reverse pass and is fast for
+    the controlled ``n=256`` experiments.
+    """
+    named_parameters = [
+        (name, parameter)
+        for name, parameter in model.named_parameters()
+        if parameter.requires_grad
+    ]
+    if not named_parameters:
+        raise ValueError("The empirical NTK requires at least one trainable parameter.")
+    names = tuple(name for name, _ in named_parameters)
+    parameters = [parameter for _, parameter in named_parameters]
+    shapes = tuple(tuple(parameter.shape) for parameter in parameters)
+    rows: list[torch.Tensor] = []
+    for sample in batch.x:
+        logit = model(sample.unsqueeze(0)).reshape(())
+        gradients = _scalar_gradients(
+            logit, parameters, create_graph=False, retain_graph=False
+        )
+        rows.append(torch.cat([gradient.reshape(-1) for gradient in gradients]))
+    return torch.stack(rows), names, shapes
+
+
+def initial_frozen_empirical_kernel(
+    model: RecurrentBinaryClassifier,
+    batch: SyntheticBatch,
+) -> FrozenEmpiricalKernel:
+    """Compute the full finite-width tangent objects at initialization.
+
+    This function performs differentiation only: it does not populate ``.grad``,
+    mutate model state, construct an optimizer, or inspect a training trajectory.
+    """
+    parameters = _trainable_parameters(model)
+    response = differentiable_mode_responses(model, batch)[1]
+    response_gradients = _scalar_gradients(
+        response, parameters, create_graph=False, retain_graph=False
+    )
+    response_jacobian = torch.cat(
+        [gradient.reshape(-1) for gradient in response_gradients]
+    )
+    logit_jacobian, names, shapes = empirical_logit_jacobian(model, batch)
+    with torch.no_grad():
+        ordinary_logits = model(batch.x)
+        signed_logits = batch.signed_labels * ordinary_logits
+        signed_logit_jacobian = batch.signed_labels[:, None] * logit_jacobian
+        signed_ntk = signed_logit_jacobian @ signed_logit_jacobian.T
+        response_cross_kernel = signed_logit_jacobian @ response_jacobian
+    return FrozenEmpiricalKernel(
+        ordinary_logits=ordinary_logits.detach(),
+        signed_logits=signed_logits.detach(),
+        response=response.detach(),
+        logit_jacobian=logit_jacobian.detach(),
+        signed_logit_jacobian=signed_logit_jacobian.detach(),
+        response_jacobian=response_jacobian.detach(),
+        signed_ntk=signed_ntk.detach(),
+        response_cross_kernel=response_cross_kernel.detach(),
+        parameter_names=names,
+        parameter_shapes=shapes,
+    )
+
+
+def integrate_frozen_logistic_sgd(
+    kernel: FrozenEmpiricalKernel,
+    *,
+    steps: int,
+    learning_rate: float,
+    log_every: int,
+) -> FrozenKernelTrajectory:
+    """Integrate the exact explicit-Euler recursion of the frozen tangent model.
+
+    The recursion uses the same mean-BCE ``1/n`` scaling and optimization-time
+    convention ``tau = step * learning_rate`` as the full-batch SGD experiment.
+    It is exact for the initialization-linearized surrogate, not for the nonlinear
+    trained network.
+    """
+    if steps < 0:
+        raise ValueError("steps must be non-negative.")
+    if not np.isfinite(learning_rate) or learning_rate <= 0:
+        raise ValueError("learning_rate must be finite and positive.")
+    if log_every < 1:
+        raise ValueError("log_every must be at least one.")
+    signed_logits = kernel.signed_logits.detach().to(dtype=torch.float64).clone()
+    signed_ntk = kernel.signed_ntk.detach().to(dtype=torch.float64)
+    cross_kernel = kernel.response_cross_kernel.detach().to(dtype=torch.float64)
+    response = kernel.response.detach().to(dtype=torch.float64).clone()
+    n_samples = int(signed_logits.numel())
+    if signed_ntk.shape != (n_samples, n_samples):
+        raise ValueError("signed_ntk shape does not match the signed-logit vector.")
+    if cross_kernel.shape != (n_samples,):
+        raise ValueError("response_cross_kernel shape does not match the batch.")
+
+    logged_steps: list[int] = []
+    logged_logits: list[torch.Tensor] = []
+    logged_responses: list[torch.Tensor] = []
+    logged_drifts: list[torch.Tensor] = []
+    for step in range(steps + 1):
+        weights = torch.sigmoid(-signed_logits)
+        response_drift = cross_kernel @ weights / n_samples
+        if step % log_every == 0 or step == steps:
+            logged_steps.append(step)
+            logged_logits.append(signed_logits.clone())
+            logged_responses.append(response.clone())
+            logged_drifts.append(response_drift.clone())
+        if step == steps:
+            break
+        signed_logits = (
+            signed_logits
+            + learning_rate * (signed_ntk @ weights) / n_samples
+        )
+        response = response + learning_rate * response_drift
+
+    step_tensor = torch.tensor(logged_steps, dtype=torch.int64)
+    return FrozenKernelTrajectory(
+        steps=step_tensor,
+        tau=step_tensor.to(torch.float64) * learning_rate,
+        signed_logits=torch.stack(logged_logits),
+        response=torch.stack(logged_responses),
+        response_drift=torch.stack(logged_drifts),
+    )
+
+
+def frozen_kernel_discrete_error_bound(
+    *,
+    step: int,
+    learning_rate: float,
+    n_samples: int,
+    initial_kernel_norm: float,
+    initial_cross_kernel_norm: float,
+    secant_kernel_drift_bound: float,
+    secant_cross_kernel_drift_bound: float,
+    sample_vector_norm_bound: float | None = None,
+) -> FrozenKernelErrorBound:
+    """Evaluate the discrete finite-width frozen-kernel comparison theorem.
+
+    The two drift bounds are caller-supplied uniform induced-norm bounds over the
+    plain mean-logistic full-batch SGD segments ``0 <= j < step``. This helper
+    evaluates the theorem; it does not prove those bounds for a model or trajectory.
+    """
+    values = {
+        "initial_kernel_norm": initial_kernel_norm,
+        "initial_cross_kernel_norm": initial_cross_kernel_norm,
+        "secant_kernel_drift_bound": secant_kernel_drift_bound,
+        "secant_cross_kernel_drift_bound": secant_cross_kernel_drift_bound,
+    }
+    if step < 0 or n_samples < 1:
+        raise ValueError("step must be non-negative and n_samples must be positive.")
+    if not np.isfinite(learning_rate) or learning_rate <= 0:
+        raise ValueError("learning_rate must be finite and positive.")
+    if any(not np.isfinite(value) or value < 0 for value in values.values()):
+        raise ValueError("Norms and drift bounds must be finite and non-negative.")
+    vector_bound = (
+        float(np.sqrt(n_samples))
+        if sample_vector_norm_bound is None
+        else float(sample_vector_norm_bound)
+    )
+    if not np.isfinite(vector_bound) or vector_bound < 0:
+        raise ValueError("sample_vector_norm_bound must be finite and non-negative.")
+
+    a = initial_kernel_norm / (4.0 * n_samples)
+    if a == 0.0:
+        phi = step * learning_rate
+        psi = learning_rate * step * (step - 1) / 2.0
+    else:
+        growth = (1.0 + learning_rate * a) ** step
+        phi = (growth - 1.0) / a
+        psi = ((growth - 1.0) / (learning_rate * a) - step) / a
+    logit_error = (
+        secant_kernel_drift_bound * vector_bound / n_samples * phi
+    )
+    response_error = (
+        step
+        * learning_rate
+        * secant_cross_kernel_drift_bound
+        * vector_bound
+        / n_samples
+        + learning_rate
+        * initial_cross_kernel_norm
+        * secant_kernel_drift_bound
+        * vector_bound
+        * psi
+        / (4.0 * n_samples * n_samples)
+    )
+    return FrozenKernelErrorBound(
+        logit_error=float(logit_error), response_error=float(response_error)
+    )
 
 
 def gradient_gram(
@@ -562,18 +910,45 @@ def transverse_hitting_time_error_bound(
     uniform_trajectory_error: float,
     crossing_slope_lower_bound: float,
     *,
+    prehit_separation: float,
+    transversality_radius: float,
     grid_spacing: float = 0.0,
 ) -> float:
-    """Return Corollary D's deterministic first-hitting-time error bound."""
+    """Return the conditional deterministic first-hitting-time error formula.
+
+    This function only evaluates ``epsilon / kappa + h`` after checking the
+    quantitative hypotheses supplied by the caller.  The caller must separately
+    prove continuous first-entry semantics (or the corresponding sign-reversed
+    directional semantics), including an initially sub-threshold state, an
+    interior reference hit, and a transversality radius contained in the time
+    horizon; isolation from the target throughout the prehistory; the stated
+    derivative lower bound on that neighbourhood; and that the observation grid
+    is valid for the claimed discrete hitting time. ``prehit_separation`` is the
+    proved prehistory isolation margin and ``transversality_radius`` is the radius
+    on which the derivative bound applies.
+    """
     if not np.isfinite(uniform_trajectory_error) or uniform_trajectory_error < 0:
         raise ValueError("uniform_trajectory_error must be finite and non-negative.")
     if not np.isfinite(crossing_slope_lower_bound) or crossing_slope_lower_bound <= 0:
         raise ValueError("crossing_slope_lower_bound must be finite and positive.")
+    if not np.isfinite(prehit_separation) or prehit_separation <= 0:
+        raise ValueError("prehit_separation must be finite and positive.")
+    if not np.isfinite(transversality_radius) or transversality_radius <= 0:
+        raise ValueError("transversality_radius must be finite and positive.")
     if not np.isfinite(grid_spacing) or grid_spacing < 0:
         raise ValueError("grid_spacing must be finite and non-negative.")
-    return float(
-        uniform_trajectory_error / crossing_slope_lower_bound + grid_spacing
-    )
+    if uniform_trajectory_error >= prehit_separation:
+        raise ValueError(
+            "uniform_trajectory_error must be strictly smaller than "
+            "prehit_separation."
+        )
+    bound = uniform_trajectory_error / crossing_slope_lower_bound + grid_spacing
+    if bound > transversality_radius:
+        raise ValueError(
+            "The hitting-time error bound exceeds transversality_radius; the "
+            "derivative hypothesis does not cover the claimed error window."
+        )
+    return float(bound)
 
 
 def zero_disorder_initialization_failure_bound(width: int, epsilon: float) -> float:
@@ -594,20 +969,41 @@ def zero_disorder_trajectory_failure_bound(
     delta: float,
     lipschitz_constant: float,
     horizon: float,
+    *,
+    tube_radius: float,
 ) -> float:
     """Propagate Theorem E.2's initialization bound through Gronwall.
 
-    The caller must establish that ``lipschitz_constant`` is valid on a common
-    compact tube containing both trajectories over ``[0,horizon]``.
+    The caller must provide a deterministic ``lipschitz_constant`` proved valid on
+    the deterministic reference trajectory's tube over ``[0, horizon]``.
+    ``tube_radius`` is the bootstrap radius used to keep the random trajectory in
+    that tube, so the admissible initial error is based on
+    ``min(delta, tube_radius)`` rather than on ``delta`` alone.
     """
+    if width < 1:
+        raise ValueError("width must be positive.")
     if not np.isfinite(delta) or delta <= 0:
         raise ValueError("delta must be finite and positive.")
     if not np.isfinite(lipschitz_constant) or lipschitz_constant < 0:
         raise ValueError("lipschitz_constant must be finite and non-negative.")
     if not np.isfinite(horizon) or horizon < 0:
         raise ValueError("horizon must be finite and non-negative.")
-    initial_epsilon = delta * np.exp(-lipschitz_constant * horizon)
-    return zero_disorder_initialization_failure_bound(width, initial_epsilon)
+    if not np.isfinite(tube_radius) or tube_radius <= 0:
+        raise ValueError("tube_radius must be finite and positive.")
+    # Evaluate the same probability formula in the log domain.  Forming the
+    # admissible initial epsilon directly can underflow to zero for a large but
+    # finite ``lipschitz_constant * horizon`` and would incorrectly fail the
+    # positive-epsilon guard instead of returning the saturated probability 1.
+    scale = min(delta, tube_radius)
+    log_failure_bound = (
+        np.log(9.0)
+        - np.log(float(width))
+        - 2.0 * np.log(scale)
+        + 2.0 * lipschitz_constant * horizon
+    )
+    if log_failure_bound >= 0.0:
+        return 1.0
+    return float(np.exp(log_failure_bound))
 
 
 def cdc_finite_step_deviation_bound(
@@ -685,6 +1081,16 @@ def crossover_decomposition(
     )
 
 
+def _validate_correction_controls(
+    feasibility_epsilon: float, max_alpha: float | None
+) -> None:
+    """Validate numerical controls shared by the CDC correction implementations."""
+    if not np.isfinite(feasibility_epsilon) or feasibility_epsilon < 0:
+        raise ValueError("feasibility_epsilon must be finite and non-negative.")
+    if max_alpha is not None and (not np.isfinite(max_alpha) or max_alpha < 0):
+        raise ValueError("max_alpha must be finite and non-negative when provided.")
+
+
 def counterfactual_drift_correction(
     model: RecurrentBinaryClassifier,
     batch: SyntheticBatch,
@@ -693,14 +1099,20 @@ def counterfactual_drift_correction(
     feasibility_epsilon: float = 1e-12,
     max_alpha: float | None = None,
 ) -> CounterfactualDriftCorrection:
-    """Return the minimum-norm CE-gradient correction protecting two modes.
+    """Return the fixed-coordinate minimum-norm CE-gradient correction.
 
     The correction is restricted to the component of ``grad(m_w)`` orthogonal
     to ``grad(m_s)``.  Consequently it leaves the instantaneous strong-mode
     drift unchanged and, when feasible and uncapped, raises weak drift to the
     weak-only target.  This is the constructive mitigation associated with the
     causal drift-comparison theorem.
+
+    All norms and projections are Euclidean/Frobenius in the model's implemented
+    tensor coordinates.  Thus the minimum-norm correction is well-defined only in
+    those fixed coordinates and is not invariant under a non-isometric
+    reparameterization.
     """
+    _validate_correction_controls(feasibility_epsilon, max_alpha)
     parameters = _trainable_parameters(model)
     logits = synthetic_logits(model, batch)
     loss = F.binary_cross_entropy_with_logits(logits, batch.y.float())
@@ -742,13 +1154,16 @@ def counterfactual_drift_correction(
     target = target_weak_drift.detach().to(weak_before)
     deficit = torch.relu(target - weak_before)
     feasible = bool(protected_norm_sq.detach() > feasibility_epsilon or deficit.detach() <= 0)
-    alpha = torch.where(
+    uncapped_alpha = torch.where(
         protected_norm_sq > feasibility_epsilon,
         deficit / protected_norm_sq.clamp_min(feasibility_epsilon),
         protected_norm_sq.new_zeros(()),
     )
+    alpha = uncapped_alpha
+    cap_binding = False
     if max_alpha is not None:
-        alpha = alpha.clamp(max=float(max_alpha))
+        cap_binding = bool(uncapped_alpha.detach() > max_alpha)
+        alpha = uncapped_alpha.clamp(max=float(max_alpha))
 
     corrected_gradients = [
         loss_gradient - alpha * direction
@@ -767,9 +1182,12 @@ def counterfactual_drift_correction(
         target_weak_drift=target,
         deficit=deficit,
         alpha=alpha,
+        uncapped_alpha=uncapped_alpha,
         protected_norm_sq=protected_norm_sq,
         correction_norm=correction_norm,
+        target_residual=target - weak_after,
         feasible=feasible,
+        cap_binding=cap_binding,
     )
 
 
@@ -795,19 +1213,17 @@ def finite_step_deviation_sweep(
     """Measure how the one-step strong response diverges between CDC and ERM.
 
     Result 1 of ``research_scope/cdc_theorem.md`` is exact and proved: the
-    *instantaneous first-order* strong drift is unchanged.  Result 3 is a target:
-    after an actual step of size ``eta`` the strong responses should differ by
-    ``O(eta^2)``, because the first-order terms cancel and the leading survivor is
-    the curvature term.
+    *instantaneous first-order* strong drift is unchanged.  Result 3 is also a
+    proved conditional local theorem: when its smoothness-neighbourhood and
+    velocity-norm hypotheses hold, the one-step strong-response deviation is
+    ``O(eta^2)`` because the first-order terms cancel.
 
-    This routine measures that scaling.  It takes one gradient computation at the
-    current parameter state, forms both candidate velocities, then evaluates
+    This routine only measures that scaling.  It takes one gradient computation at
+    the current parameter state, forms both candidate velocities, then evaluates
     ``m_s`` after stepping along each with several ``eta`` and fits the log-log
-    slope.  A slope near 2 is consistent with the target.
-
-    The measurement is empirical.  It is not the bound Result 3 calls for, which
-    needs an explicit Lipschitz neighbourhood and a bound on the corrected update
-    norm.
+    slope.  A slope near 2 is consistent with the theorem's conclusion, but the
+    sweep neither verifies its local hypotheses nor supplies the required
+    smoothness and velocity constants.
     """
     parameters = _trainable_parameters(model)
     correction = counterfactual_drift_correction(
@@ -912,12 +1328,16 @@ def drift_correction(
 
     Only ``strong_response`` carries the proved Result 1 guarantee.  The others are
     expected to perturb the strong drift, and the returned
-    ``strong_drift_after - strong_drift_before`` records by how much.
+    ``strong_drift_after - strong_drift_before`` records by how much.  Every norm
+    and projection here is Euclidean/Frobenius in the fixed implemented tensor
+    coordinates, so these corrections are not invariant under non-isometric
+    reparameterizations.
     """
     if constraint not in CORRECTION_CONSTRAINTS:
         raise ValueError(
             f"Unknown constraint {constraint!r}; expected one of {CORRECTION_CONSTRAINTS}."
         )
+    _validate_correction_controls(feasibility_epsilon, max_alpha)
     parameters = _trainable_parameters(model)
     logits = synthetic_logits(model, batch)
     loss = F.binary_cross_entropy_with_logits(logits, batch.y.float())
@@ -975,31 +1395,38 @@ def drift_correction(
     # denominator is what lets every family actually reach the shared target.
     gain = inner(weak_gradient, protected)
     feasible = bool(gain.detach() > feasibility_epsilon or deficit.detach() <= 0)
-    alpha = torch.where(
+    uncapped_alpha = torch.where(
         gain > feasibility_epsilon,
         deficit / gain.clamp_min(feasibility_epsilon),
         gain.new_zeros(()),
     )
+    alpha = uncapped_alpha
+    cap_binding = False
     if max_alpha is not None:
-        alpha = alpha.clamp(max=float(max_alpha))
+        cap_binding = bool(uncapped_alpha.detach() > max_alpha)
+        alpha = uncapped_alpha.clamp(max=float(max_alpha))
 
     corrected_gradients = [
         gradient - alpha * direction
         for gradient, direction in zip(loss_gradients, protected)
     ]
     corrected_velocity = [-gradient for gradient in corrected_gradients]
+    weak_after = inner(weak_gradient, corrected_velocity)
     return CounterfactualDriftCorrection(
         gradients=corrected_gradients,
         weak_drift_before=weak_before,
-        weak_drift_after=inner(weak_gradient, corrected_velocity),
+        weak_drift_after=weak_after,
         strong_drift_before=strong_before,
         strong_drift_after=inner(strong_gradient, corrected_velocity),
         target_weak_drift=target,
         deficit=deficit,
         alpha=alpha,
+        uncapped_alpha=uncapped_alpha,
         protected_norm_sq=protected_norm_sq,
         correction_norm=alpha.abs() * protected_norm_sq.sqrt(),
+        target_residual=target - weak_after,
         feasible=feasible,
+        cap_binding=cap_binding,
     )
 
 

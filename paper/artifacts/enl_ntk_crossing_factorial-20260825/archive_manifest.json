@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "study_id": "enl_ntk_crossing_factorial-20260825",
+  "run_ids": {
+    "preflight": "enl_ntk_crossing_factorial_preflight-20260825-162750",
+    "evaluation": "enl_ntk_crossing_factorial_evaluate-20260825-162949"
+  },
+  "archive_root": "paper/artifacts/enl_ntk_crossing_factorial-20260825",
+  "archived_files": [
+    {
+      "source_path": "results/enl_ntk_crossing_factorial_preflight-20260825-162750/config.resolved.yaml",
+      "archive_relative_path": "preflight/config.resolved.yaml",
+      "sha256": "851b10092adab8c984007007467b12264326e68ac4319af049782dc98af340c4",
+      "bytes": 3469
+    },
+    {
+      "source_path": "results/enl_ntk_crossing_factorial_preflight-20260825-162750/manifest.json",
+      "archive_relative_path": "preflight/manifest.json",
+      "sha256": "bdcf02abbef5b9d8f7ce3979d3363ee8d39ab7817a1d554616bc4dd4a22a0db1",
+      "bytes": 39131
+    },
+    {
+      "source_path": "results/enl_ntk_crossing_factorial_preflight-20260825-162750/manifest.sha256",
+      "archive_relative_path": "preflight/manifest.sha256",
+      "sha256": "5e8d602857b0ada440478afb256ecd4ad2bd54163bad0681b9cf546a693ec17b",
+      "bytes": 80
+    },
+    {
+      "source_path": "results/enl_ntk_crossing_factorial_preflight-20260825-162750/preflight_acceptance.json",
+      "archive_relative_path": "preflight/preflight_acceptance.json",
+      "sha256": "d62edfb830afe47cea88ce8adfbb697c0f9f6897525921567ee2ab1ddfd285c9",
+      "bytes": 327
+    },
+    {
+      "source_path": "results/enl_ntk_crossing_factorial_evaluate-20260825-162949/config.resolved.yaml",
+      "archive_relative_path": "evaluation/config.resolved.yaml",
+      "sha256": "ccf762fc4ff5c88870ecf16042df672d7d9c32e97989396807a567a047c618ab",
+      "bytes": 3642
+    },
+    {
+      "source_path": "results/enl_ntk_crossing_factorial_evaluate-20260825-162949/metrics.json",
+      "archive_relative_path": "evaluation/metrics.json",
+      "sha256": "be9a4603ee392cdeefdad69ceaed652d98249c9c29f8ae3bc2c04cf7a8d8e47f",
+      "bytes": 9755
+    },
+    {
+      "source_path": "results/enl_ntk_crossing_factorial_evaluate-20260825-162949/evaluation_acceptance.json",
+      "archive_relative_path": "evaluation/evaluation_acceptance.json",
+      "sha256": "e5b736204825f0a0dbeaebd4c7a5bc43a658d0f63ce2fd081b68f8b6179557f9",
+      "bytes": 892
+    },
+    {
+      "source_path": "results/enl_ntk_crossing_factorial_evaluate-20260825-162949/provenance.json",
+      "archive_relative_path": "evaluation/provenance.json",
+      "sha256": "7c9f27297ad402ae618afcd9678599690ddeea14375a6735be02bf828b34c0cc",
+      "bytes": 518
+    },
+    {
+      "source_path": "results/enl_ntk_crossing_factorial_evaluate-20260825-162949/scores.csv",
+      "archive_relative_path": "evaluation/scores.csv",
+      "sha256": "4d58dd5f99d0c8807eda057848ae3ed2c835e63a37f06f32d7ddceda43250bf7",
+      "bytes": 28049
+    }
+  ],
+  "archived_file_count": 9,
+  "archived_file_bytes": 85863,
+  "compact_archive_limitation": "The compact archive omits kernels/*.pt and the full trajectories/summary/crossover/aggregate/predictions files. Those omitted files remain in ignored results/ locally. Because they are omitted, a clean checkout can audit the compact outcomes and manifests but cannot rerun evaluation without regenerating the sealed preflight.",
+  "source_snapshot_limitation": "The dirty-tree source fingerprint is recorded in the sealed preflight, but the exact Python source bytes were not archived and are now unavailable and unreconstructible. A digest can verify candidate bytes but cannot reconstruct omitted bytes. A clean checkout can audit the compact outcomes and seals but cannot replay the historical study; regeneration under current source is a new study. Current source intentionally fails the historical preflight source guard."
+}

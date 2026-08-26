@@ -254,6 +254,23 @@ def train_paired(
     return both_history + weak_history, {"both": both_state, "weak_only": weak_state}
 
 
+def initialize_paired_models(
+    model_config: Mapping[str, object],
+    both: SyntheticBatch,
+    *,
+    seed: int,
+    kind: str | None = None,
+) -> tuple[RecurrentBinaryClassifier, RecurrentBinaryClassifier]:
+    """Build the exact shared initialization used by paired training and preflight."""
+    seed_everything(seed)
+    device = both.x.device
+    both_model = build_model(model_config, kind=kind).to(device)
+    shared_initial = copy.deepcopy(both_model.state_dict())
+    weak_model = build_model(model_config, kind=kind).to(device)
+    weak_model.load_state_dict(copy.deepcopy(shared_initial))
+    return both_model, weak_model
+
+
 def train_paired_lockstep(
     model_config: Mapping[str, object],
     both: SyntheticBatch,
@@ -295,12 +312,9 @@ def train_paired_lockstep(
         raise NotImplementedError("Controlled synthetic experiments require full_batch: true.")
     _reject_mismatched_diagnostics(mitigation)
 
-    seed_everything(seed)
-    device = both.x.device
-    both_model = build_model(model_config, kind=kind).to(device)
-    shared_initial = copy.deepcopy(both_model.state_dict())
-    weak_model = build_model(model_config, kind=kind).to(device)
-    weak_model.load_state_dict(copy.deepcopy(shared_initial))
+    both_model, weak_model = initialize_paired_models(
+        model_config, both, seed=seed, kind=kind
+    )
 
     steps = int(training.get("steps", 1000))
     learning_rate = float(training.get("learning_rate", 0.01))
@@ -433,13 +447,18 @@ def _train_paired_counterfactual_drift(
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, torch.Tensor]]]:
     """Train a both-feature model against a simultaneous weak-only shadow.
 
-    When feasible and uncapped, the both-feature update is the unique minimum-norm
-    correction of the ERM update that matches the shadow model's instantaneous weak
-    drift while preserving the both-feature strong drift. Infeasible directions and
-    binding caps are logged and may fail target attainment; instantaneous strong-
-    drift preservation still holds. Cross-entropy diagnostics, zero weight decay,
-    and no gradient clipping are required because post-correction transformations
-    would invalidate the stated contract.
+    For the ``strong_response`` CDC arm, when feasible and uncapped, the
+    both-feature update is the unique minimum-Euclidean/Frobenius-norm correction
+    of the ERM update that matches the shadow model's instantaneous weak drift while
+    preserving the both-feature strong drift.  This statement is in the fixed
+    implemented tensor coordinates and is not invariant under non-isometric
+    reparameterization.  Other shadow arms use the documented alternative
+    constraint in :func:`gradient_starvation.theory.drift_correction`.  Infeasible
+    directions and binding caps are logged and may fail target attainment;
+    instantaneous strong-drift preservation still holds for the CDC arm.
+    Cross-entropy diagnostics, zero weight decay, and no gradient clipping are
+    required because post-correction transformations would invalidate the stated
+    contract.
     """
     _reject_mismatched_diagnostics(mitigation)
     method = str(mitigation.get("method", "counterfactual_drift"))
@@ -512,6 +531,9 @@ def _train_paired_counterfactual_drift(
                     "cdc_strong_drift_after": float(correction.strong_drift_after.detach()),
                     "cdc_deficit": float(correction.deficit.detach()),
                     "cdc_alpha": float(correction.alpha.detach()),
+                    "cdc_uncapped_alpha": float(correction.uncapped_alpha.detach()),
+                    "cdc_cap_binding": correction.cap_binding,
+                    "cdc_target_residual": float(correction.target_residual.detach()),
                     "cdc_protected_norm_sq": float(correction.protected_norm_sq.detach()),
                     "cdc_correction_norm": float(correction.correction_norm.detach()),
                     "cdc_feasible": correction.feasible,

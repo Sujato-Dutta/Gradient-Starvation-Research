@@ -1,20 +1,26 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
+import torch
 
+import gradient_starvation.experiments as experiment_module
 from gradient_starvation.config import load_config
 from gradient_starvation.experiments import (
     _enl_summary,
+    _two_way_bootstrap_accuracy,
     run_e1,
     run_e2,
     run_e2r,
     run_e3,
     run_enl,
+    run_enl_evaluate,
+    run_enl_preflight,
 )
 from gradient_starvation.metrics import CAUSAL_REGIMES
 from gradient_starvation.plotting import _e1_plot_tables
@@ -27,6 +33,22 @@ def _smoke_config(name: str, tmp_path: Path) -> dict:
     config = load_config(ROOT / "configs" / name)
     config["experiment"]["output_root"] = str(tmp_path)
     config["experiment"]["device"] = "cpu"
+    return config
+
+
+def _evaluation_config(config: dict, preflight_dir: Path) -> dict:
+    config["experiment"]["name"] = "smoke_enl_evaluate"
+    config["evaluation"] = {
+        "preflight_dir": str(preflight_dir),
+        "manifest_sha256": hashlib.sha256(
+            (preflight_dir / "manifest.json").read_bytes()
+        ).hexdigest(),
+        "acceptance": {
+            "minimum_overall_accuracy": 0.0,
+            "minimum_model_accuracy": 0.0,
+            "required_prediction_coverage": 1.0,
+        },
+    }
     return config
 
 
@@ -392,3 +414,153 @@ def test_e2r_outputs_never_use_the_phrase_dmft_validation(tmp_path):
         text = (run_dir / artifact).read_text().lower()
         assert "dmft validation" not in text, artifact
         assert "validated dmft" not in text, artifact
+
+
+def test_enl_ntk_preflight_hashes_initialization_only_predictions(tmp_path):
+    config = _smoke_config("enl_smoke.yaml", tmp_path)
+    run_dir = run_enl_preflight(config)
+
+    assert (run_dir / "predictions.csv").is_file()
+    assert (run_dir / "prediction_summary.csv").is_file()
+    assert (run_dir / "prediction_aggregate.csv").is_file()
+    assert (run_dir / "preflight_acceptance.json").is_file()
+    assert (run_dir / "manifest.json").is_file()
+    assert (run_dir / "manifest.sha256").is_file()
+    assert not (run_dir / "trajectories.csv").exists()
+
+    acceptance = json.loads((run_dir / "preflight_acceptance.json").read_text())
+    assert acceptance["passed"] is True
+    assert acceptance["optimizer_constructed"] is False
+    assert acceptance["training_trajectory_observed"] is False
+    assert acceptance["state_unchanged"] is True
+    assert acceptance["parameter_gradients_unpopulated"] is True
+
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["schema_version"] == "enl-ntk-preflight-v2"
+    expected = (run_dir / "manifest.sha256").read_text().split()[0]
+    actual = hashlib.sha256((run_dir / "manifest.json").read_bytes()).hexdigest()
+    assert actual == expected
+    assert "environment.json" in {entry["path"] for entry in manifest["files"]}
+    assert manifest["prediction_sha256"] == hashlib.sha256(
+        (run_dir / "predictions.csv").read_bytes()
+    ).hexdigest()
+    assert len(manifest["records"]) == 2  # tanh and GRU
+    for record in manifest["records"]:
+        artifact = run_dir / record["artifact"]
+        assert artifact.is_file()
+        assert hashlib.sha256(artifact.read_bytes()).hexdigest() == record["artifact_sha256"]
+        payload = torch.load(artifact, map_location="cpu", weights_only=True)
+        assert payload["schema_version"] == "frozen-empirical-ntk-v1"
+        assert payload["both"]["signed_ntk"].shape == (12, 12)
+
+
+def test_enl_evaluate_verifies_and_preserves_frozen_predictions(tmp_path, monkeypatch):
+    config = _smoke_config("enl_smoke.yaml", tmp_path)
+    config["training"].pop("seeds")
+    config["training"]["seed_pairs"] = [
+        {"data_seed": 101, "model_seed": 1001}
+    ]
+    # Include 0.3 in the serialized tau grid; CSV round-tripping must not be
+    # mistaken for protocol drift.
+    config["training"]["steps"] = 1000
+    config["training"]["log_every"] = 10
+    preflight_dir = run_enl_preflight(config)
+    frozen = {
+        path: (hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_size)
+        for path in preflight_dir.rglob("*")
+        if path.is_file()
+    }
+    evaluation_config = _evaluation_config(config, preflight_dir)
+
+    # Evaluation must consume hashed CSV predictions, never recompute them.
+    def forbidden(*args, **kwargs):
+        raise AssertionError("frozen predictions were recomputed during evaluation")
+
+    monkeypatch.setattr(experiment_module, "initial_frozen_empirical_kernel", forbidden)
+    monkeypatch.setattr(experiment_module, "integrate_frozen_logistic_sgd", forbidden)
+    monkeypatch.setattr(experiment_module, "paired_initial_response_jet", forbidden)
+    run_dir = run_enl_evaluate(evaluation_config)
+
+    for name in (
+        "trajectories.csv", "summary.csv", "scores.csv", "metrics.json",
+        "evaluation_acceptance.json", "provenance.json",
+    ):
+        assert (run_dir / name).is_file()
+    summary = pd.read_csv(run_dir / "summary.csv")
+    assert set(summary["data_seed"]) == {101}
+    assert set(summary["model_seed"]) == {1001}
+    assert len(summary) == 2
+    metrics = json.loads((run_dir / "metrics.json").read_text())
+    assert metrics["n_records"] == 2
+    assert metrics["acceptance"]["passed"] is True
+    provenance = json.loads((run_dir / "provenance.json").read_text())
+    assert provenance["frozen_inputs_unchanged"] is True
+    assert provenance["prediction_sha256"] == hashlib.sha256(
+        (preflight_dir / "predictions.csv").read_bytes()
+    ).hexdigest()
+    assert frozen == {
+        path: (hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_size)
+        for path in preflight_dir.rglob("*")
+        if path.is_file()
+    }
+
+
+def test_enl_evaluate_rejects_tampered_prediction(tmp_path):
+    config = _smoke_config("enl_smoke.yaml", tmp_path)
+    preflight_dir = run_enl_preflight(config)
+    evaluation_config = _evaluation_config(config, preflight_dir)
+    prediction_path = preflight_dir / "predictions.csv"
+    prediction_path.write_bytes(prediction_path.read_bytes() + b"\n")
+
+    with pytest.raises(ValueError, match="hash/size mismatch"):
+        run_enl_evaluate(evaluation_config)
+    assert not list(tmp_path.glob("smoke_enl_evaluate-*"))
+
+
+def test_enl_evaluate_rejects_pin_protocol_and_source_mismatches(tmp_path, monkeypatch):
+    config = _smoke_config("enl_smoke.yaml", tmp_path)
+    preflight_dir = run_enl_preflight(config)
+    evaluation_config = _evaluation_config(config, preflight_dir)
+
+    evaluation_config["evaluation"]["manifest_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="externally pinned hash"):
+        run_enl_evaluate(evaluation_config)
+
+    evaluation_config["evaluation"]["manifest_sha256"] = hashlib.sha256(
+        (preflight_dir / "manifest.json").read_bytes()
+    ).hexdigest()
+    evaluation_config["task"]["n_samples"] += 1
+    with pytest.raises(ValueError, match="task does not match"):
+        run_enl_evaluate(evaluation_config)
+    evaluation_config["task"]["n_samples"] -= 1
+
+    monkeypatch.setattr(
+        experiment_module,
+        "executable_source_fingerprint",
+        lambda: ("f" * 64, 1),
+    )
+    with pytest.raises(ValueError, match="Executable source does not match"):
+        run_enl_evaluate(evaluation_config)
+
+
+def test_two_way_bootstrap_respects_crossed_seed_reuse():
+    frame = pd.DataFrame(
+        {
+            "data_seed": [1, 1, 2, 2],
+            "model_seed": [10, 11, 10, 11],
+            "correct": [True, True, True, False],
+        }
+    )
+    result = _two_way_bootstrap_accuracy(
+        frame, "correct", replicates=2000, seed=2027
+    )
+
+    assert result["method"] == "two_way_pigeonhole_bootstrap"
+    assert result["n_data_seeds"] == 2
+    assert result["n_model_seeds"] == 2
+    assert result["point_accuracy"] == 0.75
+    assert result["ci95_low"] <= result["point_accuracy"] <= result["ci95_high"]
+    with pytest.raises(ValueError, match="complete crossed seed factorial"):
+        _two_way_bootstrap_accuracy(
+            frame.iloc[:-1], "correct", replicates=10, seed=2027
+        )

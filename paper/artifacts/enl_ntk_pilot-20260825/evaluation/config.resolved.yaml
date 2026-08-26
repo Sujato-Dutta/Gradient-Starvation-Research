@@ -1,0 +1,86 @@
+experiment:
+  name: enl_ntk_pilot_evaluate
+  output_root: results
+  device: cpu
+evaluation:
+  preflight_dir: results/enl_ntk_pilot_preflight-20260825-160655
+  manifest_sha256: f186d587e28f6408b68baf95566d2d1f1c5d5701e205e9a69ce86cbe4f0ffaf5
+held_out_protocol:
+  status: prospective_falsification_pilot
+  predictor_role: uncalibrated_event_and_phase_classifier
+  primary_outputs:
+  - phase
+  - drift_crossing
+  - response_crossing
+  - causal_certificate
+  - weak_only_learnability
+  secondary_uncalibrated_outputs:
+  - drift_crossing_time
+  - response_crossing_time
+  - response_trajectory_magnitude
+  - drift_trajectory_magnitude
+  architecture_specific_correction: none
+  prediction_abstention: none
+  inference_scope: conditional_on_one_unseen_data_seed_with_eight_unseen_model_seeds
+  excluded_from_evidence:
+  - reason: evaluator_float_grid_engineering_failure_generated_unscored_outcomes
+    data_seed: 100
+    model_seeds:
+    - 1000
+    - 1001
+    - 1002
+    - 1003
+    - 1004
+    - 1005
+    - 1006
+    - 1007
+  acceptance:
+    minimum_overall_accuracy: 0.75
+    minimum_model_accuracy: 0.625
+    required_prediction_coverage: 1.0
+task:
+  sequence_length: 20
+  n_samples: 256
+  rho_values:
+  - 4
+  lag_separations:
+  - 2
+  regimes:
+  - positive
+  cue_noise: 0.1
+  background_noise: 0.0
+  beta: 0.5
+  phase_delay: 0.25
+model:
+  kinds:
+  - tanh
+  - gru
+  width: 32
+  bulk_gain: 0.8
+training:
+  steps: 1000
+  learning_rate: 0.01
+  full_batch: true
+  log_every: 10
+  seed_pairs:
+  - data_seed: 200
+    model_seed: 2000
+  - data_seed: 200
+    model_seed: 2001
+  - data_seed: 200
+    model_seed: 2002
+  - data_seed: 200
+    model_seed: 2003
+  - data_seed: 200
+    model_seed: 2004
+  - data_seed: 200
+    model_seed: 2005
+  - data_seed: 200
+    model_seed: 2006
+  - data_seed: 200
+    model_seed: 2007
+  weight_decay: 0.0
+  gradient_clip: null
+  objective: cross_entropy
+  paired_mode: lockstep
+  exact_response_drift: true

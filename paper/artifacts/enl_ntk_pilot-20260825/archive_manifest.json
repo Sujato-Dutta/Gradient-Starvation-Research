@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "study_id": "enl_ntk_pilot-20260825",
+  "run_ids": {
+    "preflight": "enl_ntk_pilot_preflight-20260825-160655",
+    "evaluation": "enl_ntk_pilot_evaluate-20260825-160757"
+  },
+  "archive_root": "paper/artifacts/enl_ntk_pilot-20260825",
+  "archived_files": [
+    {
+      "source_path": "results/enl_ntk_pilot_preflight-20260825-160655/config.resolved.yaml",
+      "archive_relative_path": "preflight/config.resolved.yaml",
+      "sha256": "3b025173365c0e0223c54619cf2856c6393bcf7b5527bf71c67fa9e500dd48f5",
+      "bytes": 1764
+    },
+    {
+      "source_path": "results/enl_ntk_pilot_preflight-20260825-160655/manifest.json",
+      "archive_relative_path": "preflight/manifest.json",
+      "sha256": "f186d587e28f6408b68baf95566d2d1f1c5d5701e205e9a69ce86cbe4f0ffaf5",
+      "bytes": 10670
+    },
+    {
+      "source_path": "results/enl_ntk_pilot_preflight-20260825-160655/manifest.sha256",
+      "archive_relative_path": "preflight/manifest.sha256",
+      "sha256": "13e3c417e0537a6e77802c8c1c859595571b7119b3cf3e3dbe696c9cc706e7e2",
+      "bytes": 80
+    },
+    {
+      "source_path": "results/enl_ntk_pilot_preflight-20260825-160655/preflight_acceptance.json",
+      "archive_relative_path": "preflight/preflight_acceptance.json",
+      "sha256": "b54c9ae8429824a11a9cd50db590c9b5d7fd5e175cd025c46b0eb86255533761",
+      "bytes": 328
+    },
+    {
+      "source_path": "results/enl_ntk_pilot_evaluate-20260825-160757/config.resolved.yaml",
+      "archive_relative_path": "evaluation/config.resolved.yaml",
+      "sha256": "e73855700c964b8b0eb688b6a8ca15c713dbd590b2c57fd46afd4e690cce736d",
+      "bytes": 1924
+    },
+    {
+      "source_path": "results/enl_ntk_pilot_evaluate-20260825-160757/metrics.json",
+      "archive_relative_path": "evaluation/metrics.json",
+      "sha256": "4a3d704217db7a815442bb785bb627a3f65cdb281fff0383ae6219592747c275",
+      "bytes": 4962
+    },
+    {
+      "source_path": "results/enl_ntk_pilot_evaluate-20260825-160757/evaluation_acceptance.json",
+      "archive_relative_path": "evaluation/evaluation_acceptance.json",
+      "sha256": "e747bc1bd716b4e96407cec230b6a4b9bf339e7a5b52b74e6db19097db1450ce",
+      "bytes": 963
+    },
+    {
+      "source_path": "results/enl_ntk_pilot_evaluate-20260825-160757/provenance.json",
+      "archive_relative_path": "evaluation/provenance.json",
+      "sha256": "83168a54254f0e6fd9fe34beecd43b1f55a0fb9ecce905dbf910e9555bd92d63",
+      "bytes": 505
+    },
+    {
+      "source_path": "results/enl_ntk_pilot_evaluate-20260825-160757/scores.csv",
+      "archive_relative_path": "evaluation/scores.csv",
+      "sha256": "deb6b2fc1d6fabdef9976ac276ef65dd000d6134dd5554267a2177bb1bff7e62",
+      "bytes": 7609
+    }
+  ],
+  "archived_file_count": 9,
+  "archived_file_bytes": 28805,
+  "compact_archive_limitation": "The compact archive omits kernels/*.pt and the full trajectories/summary/crossover/aggregate/predictions files. Those omitted files remain in ignored results/ locally. Because they are omitted, a clean checkout can audit the compact outcomes and manifests but cannot rerun evaluation without regenerating the sealed preflight.",
+  "source_snapshot_limitation": "The dirty-tree source fingerprint is recorded in the sealed preflight, but the exact Python source bytes were not archived and are now unavailable and unreconstructible. A digest can verify candidate bytes but cannot reconstruct omitted bytes. A clean checkout can audit the compact outcomes and seals but cannot replay the historical study; regeneration under current source is a new study. Current source intentionally fails the historical preflight source guard."
+}

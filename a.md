@@ -49,7 +49,12 @@ The supplied blueprint proposes or motivates:
 6. exact finite-width geometry for a dense linear RNN;
 7. a joint cross-entropy dynamical mean-field theory (CE-DMFT) and starvation phase boundary.
 
-The finite-dimensional identities are implemented and numerically tested. The full joint paired CE-DMFT theorem, concentration proof, and analytic phase boundary are **not proved**. The authoritative current theorem-scoping files are:
+The finite-dimensional identities are implemented and numerically tested. The
+general positive-disorder/positive-lag joint paired CE-DMFT theorem, its quenched
+concentration proof, and analytic phase boundary are **not proved**. A separate
+singular dense-linear zero-disorder/zero-lag six-scalar limit is proved under its
+explicit deterministic tube assumptions. The authoritative current theorem-scoping
+files are:
 
 - `research_scope/e2_theorem.md`
 - `research_scope/oral_theorem_package.md`
@@ -122,15 +127,30 @@ This separates suppression caused by cross-entropy saturation from geometry chan
 
 ### 6.3 Counterfactual Drift Correction (CDC)
 
-CDC uses a matched weak-only shadow model to estimate the counterfactual weak drift. It adds the minimum-norm correction along the component of `grad(m_w)` orthogonal to `grad(m_s)`.
+CDC uses a matched weak-only shadow model to estimate the counterfactual weak drift.
+It works in the fixed implemented tensor coordinates with the product
+Euclidean/Frobenius metric and adds a correction along the component of
+`grad(m_w)` orthogonal to `grad(m_s)` in that metric. There is no
+reparameterization-invariance or natural-gradient claim.
 
-When the protected direction is nonzero and the correction is uncapped:
+When the positive deficit is exactly feasible (`q != 0`) and the correction is
+uncapped:
 
 1. corrected instantaneous weak drift reaches at least the weak-only target;
 2. instantaneous strong drift is unchanged;
-3. the correction has minimum norm among corrections satisfying those constraints.
+3. the correction is the unique minimum Euclidean-norm, lower-bound-attaining
+   feasible correction in those coordinates.
 
-The trainer logs feasibility, target attainment, correction norm, and strong-drift preservation error. CDC currently requires full-batch training, no weight decay, and no gradient clipping. The guarantee is **instantaneous**. The final strong response can be lower because CDC follows a different trajectory; this tradeoff must always be reported.
+The represented `q`, its norm, the numerical `feasibility_epsilon`, and the
+selected minimizer are metric- and scale-dependent. A nonbinding cap leaves the
+result unchanged; a binding cap generally misses the target, so no target-attaining
+optimality claim applies. The trainer logs feasibility, target attainment,
+correction norm, strong-drift preservation error, uncapped and applied
+coefficients, whether the cap binds, and the target residual. CDC requires
+full-batch training, no weight decay, and no gradient clipping. The guarantee is
+**instantaneous** and local; same-chart finite-step smoothness gives only the proved
+one-step bound. The final strong response can be lower because CDC follows a
+different trajectory, and this tradeoff must always be reported.
 
 ## 7. Critical E2 corrections
 
@@ -403,11 +423,16 @@ Implemented:
 - adapter: `src/gradient_starvation/waterbirds.py`;
 - config: `configs/waterbirds.yaml`;
 - actionable missing-data/dependency preflight test;
-- methods currently supported: ERM, Spectral Decoupling, and interaction proxy.
+- ERM, Spectral Decoupling, interaction proxy, and CDC-style minibatch
+  head-coordinate surrogate variants.
+
+The CDC-style Waterbirds variants are outside the full-batch matched-shadow theorem:
+they use minibatches and head-coordinate surrogates rather than its exact causal
+response setting. They are implementation-tested but **have not been run**.
 
 Not implemented or run:
 
-- CDC or a practical CDC approximation for Waterbirds;
+- any Waterbirds experiment or result;
 - dataset download/preparation;
 - pretrained asset setup;
 - real-data experiments;
@@ -481,7 +506,9 @@ Do not reverse the logic by calling the current ensemble average “DMFT.”
 
 ### Priority 5: real-data experiment
 
-- Port CDC or a practical approximation to Waterbirds.
+- Treat the existing Waterbirds CDC-style minibatch head-coordinate implementation
+  only as a surrogate outside the full-batch matched-shadow theorem.
+- Run the mandatory pilot before any full experiment; it remains **not run**.
 - Establish data and pretrained-backbone setup separately from mandatory CI.
 - Compare ERM, Spectral Decoupling, interaction proxy, and the proposed method.
 - Report average accuracy, worst-group accuracy, per-group confidence intervals, compute cost, and sensitivity.
@@ -620,6 +647,14 @@ Scientifically remaining:
 
 ## 21. Best immediate next action
 
-The next model should first run `pytest -q`, inspect `git diff`, and read both `research_scope` theorem files. Then it should focus on the actual coupled generating-functional derivation and specify every order parameter needed for an independent E2 solver. Running more finite networks before that derivation has diminishing scientific value. In parallel, if engineering time is available, rerun E1 and linear E3 with the final width-scaled dense model and prepare the Waterbirds CDC implementation.
+The next model should first run `pytest -q`, inspect `git diff`, and read both
+`research_scope` theorem files. Then it should focus on the actual coupled
+generating-functional derivation and specify every order parameter needed for an
+independent E2 solver. Running more finite networks before that derivation has
+diminishing scientific value. In parallel, if engineering time is available,
+rerun E1 and linear E3 with the final width-scaled dense model; only then run the
+mandatory pilot for the existing, still-unrun Waterbirds CDC-style minibatch
+head-coordinate surrogate, which remains outside the full-batch matched-shadow
+theorem.
 
 This handoff is deliberately conservative: the repository contains strong synthetic evidence and a much cleaner experimental foundation than it began with, but its headline oral-level theorem remains unfinished.

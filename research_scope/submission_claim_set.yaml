@@ -1,0 +1,328 @@
+{
+  "schema_version": "submission-claim-set-v1",
+  "format_note": "This file uses the JSON subset of YAML 1.2 so it can be validated with the Python standard library.",
+  "freeze_revision": 1,
+  "source_of_truth": {
+    "claim_ledger": "research_scope/claim_ledger.md",
+    "provenance_manifest": "paper/artifacts/provenance_manifest.json",
+    "repository_head_at_evidence_freeze": "2d0ee8362f2140c2134ac1bd9324bd667a06a51b",
+    "branch": "codex/corrected-dense-baseline"
+  },
+  "freeze_policy": {
+    "claims_frozen_before_new_confirmatory_outcomes": true,
+    "new_confirmatory_outcomes_allowed_now": false,
+    "unblock_requirements": [
+      "a reviewed clean Git source state",
+      "a content-addressed environment specification",
+      "a machine-validated preregistration committed before outcome generation",
+      "untouched data and model seeds"
+    ],
+    "prohibited_promotions": [
+      "Do not promote a drift or response crossing classifier into a causal-starvation predictor.",
+      "Do not claim tanh or GRU kernel stability without a nonvacuous movement certificate.",
+      "Do not call the blocked positive-disorder recurrent closure DMFT solved.",
+      "Do not call crossing times calibrated or quantitatively accurate.",
+      "Do not treat artifact integrity as scientific validity or historical replayability."
+    ]
+  },
+  "venue": {
+    "target": "ICLR 2027",
+    "official_venue_requirements_verified": true,
+    "verification_scope": "Official ICLR 2027 web guidance was checked. The official style-package URL is verified, but its contents have not yet been integrated or audited in this repository.",
+    "requirements_summary_note": "The requirement summaries are paraphrased from the cited official pages for licensing compliance.",
+    "official_sources": [
+      {
+        "name": "ICLR 2027 Author Guidelines",
+        "url": "https://iclr.cc/Conferences/2027/AuthorGuidelines",
+        "verified_facts": [
+          "submission main text is limited to 9 pages",
+          "discussion and camera-ready versions may use 10 main-text pages",
+          "references are outside the page limit",
+          "appendices may follow the bibliography and are not required reading for reviewers",
+          "submission is double blind and supplementary text must also be anonymous",
+          "the official ICLR 2027 style files are required",
+          "an AI-use statement is mandatory and outside the page limit",
+          "the abstract deadline is 2026-09-18 AOE and the paper deadline is 2026-09-25 AOE"
+        ]
+      },
+      {
+        "name": "ICLR 2027 Call for Papers",
+        "url": "https://iclr.cc/Conferences/2027/CallForPapers",
+        "verified_facts": [
+          "the work is in scope under optimization, learning theory, causal reasoning, and recurrent-learning topics",
+          "submissions are double blind"
+        ]
+      },
+      {
+        "name": "ICLR 2027 AI Policy for Authors",
+        "url": "https://iclr.cc/Conferences/2027/AIPolicyForAuthors",
+        "verified_facts": [
+          "AI use must be disclosed in the manuscript and submission form",
+          "authors remain responsible for all AI-assisted claims, proofs, code, artifacts, and text"
+        ]
+      },
+      {
+        "name": "ICLR 2027 Dates and Deadlines",
+        "url": "https://iclr.cc/Conferences/2027/Dates",
+        "verified_facts": [
+          "abstract deadline is 2026-09-18 AOE",
+          "paper deadline is 2026-09-25 AOE",
+          "decisions are scheduled for 2026-12-16"
+        ]
+      }
+    ],
+    "official_style_package": {
+      "url": "https://media.iclr.cc/Conferences/ICLR2027/iclr-2027-style-files.zip",
+      "advertised_by_official_author_guidelines": true,
+      "downloaded_into_repository": false,
+      "checksum_recorded": false,
+      "applied_to_manuscript": false
+    }
+  },
+  "headline_claim": {
+    "label": "finite-width causal theorem package",
+    "included_theory_claim_ids": [
+      "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8",
+      "T9", "T10", "T11", "T12", "T13", "T14", "T15", "T16"
+    ],
+    "blocked_or_excluded_theory_claim_ids": ["T17", "T18"],
+    "interpretation": "The exact identities and conditional comparison bounds are the theory contribution. They do not establish a general positive-disorder RNN DMFT, nonlinear kernel stability, calibrated crossing times, or a universal causal-starvation boundary."
+  },
+  "theory_claims": [
+    {
+      "id": "T1",
+      "status": "proved",
+      "statement": "Universal finite-width signed-cross-entropy response flow through the response/logit cross-kernel.",
+      "evidence": ["research_scope/e2_theorem.md#theorem-a1", "src/gradient_starvation/theory.py"]
+    },
+    {
+      "id": "T2",
+      "status": "proved_with_assumptions",
+      "statement": "The two-mode flow dm/dtau=Gg closes when signed logits have an exact parameter-independent two-mode realization.",
+      "evidence": ["research_scope/e2_theorem.md#corollary-a2"]
+    },
+    {
+      "id": "T3",
+      "status": "proved",
+      "statement": "Exact finite-width dense-linear-RNN projected geometry.",
+      "evidence": ["src/gradient_starvation/theory.py", "tests/test_theory.py"]
+    },
+    {
+      "id": "T4",
+      "status": "proved_with_assumptions",
+      "statement": "Exact matched weak-drift decomposition under exact two-mode realization.",
+      "evidence": ["src/gradient_starvation/theory.py", "tests/test_theory.py"]
+    },
+    {
+      "id": "T5",
+      "status": "proved",
+      "statement": "Both equal-time product-difference orderings reconstruct projected drift; neither attribution is canonical.",
+      "evidence": ["src/gradient_starvation/theory.py", "tests/test_theory.py"]
+    },
+    {
+      "id": "T6",
+      "status": "proved",
+      "statement": "After a unique transfer-to-suppression drift crossing, an outcome crossing occurs exactly when accumulated negative drift reaches the positive peak area.",
+      "evidence": ["research_scope/e2_theorem.md#theorem-b1", "src/gradient_starvation/theory.py"]
+    },
+    {
+      "id": "T7",
+      "status": "proved_with_assumptions",
+      "statement": "A noiseless rank-one cue log-drift ratio yields a monotone sufficient condition for a unique rate crossover, not an outcome crossing by itself.",
+      "evidence": ["research_scope/e2_theorem.md#theorem-c"]
+    },
+    {
+      "id": "T8",
+      "status": "proved_with_assumptions",
+      "statement": "Quantitatively isolated transverse first hitting times are stable under uniform trajectory error with explicit first-entry and mesh hypotheses.",
+      "evidence": ["research_scope/e2_theorem.md#corollary-d"]
+    },
+    {
+      "id": "T9",
+      "status": "proved",
+      "statement": "The zero-bulk-gain, zero-lag, zero-background-noise dense linear full-batch flow closes exactly on six scalars at every width.",
+      "evidence": ["research_scope/e2_theorem.md#theorem-e1"]
+    },
+    {
+      "id": "T10",
+      "status": "proved_with_assumptions",
+      "statement": "The zero-disorder six-scalar process has the stated finite-width initialization and trajectory convergence bounds under the theorem's radius and moment assumptions.",
+      "evidence": ["research_scope/e2_theorem.md#theorem-e2"]
+    },
+    {
+      "id": "T11",
+      "status": "proved",
+      "statement": "CDC exactly preserves instantaneous strong-response drift.",
+      "evidence": ["research_scope/cdc_theorem.md#result-1"]
+    },
+    {
+      "id": "T12",
+      "status": "proved_with_assumptions",
+      "statement": "The uncapped CDC correction is the unique minimum-Euclidean-norm lower-bound-attaining feasible correction in the fixed implemented chart.",
+      "evidence": ["research_scope/cdc_theorem.md#result-2"]
+    },
+    {
+      "id": "T13",
+      "status": "proved_with_assumptions",
+      "statement": "CDC has a fixed-chart O(eta^2) one-step strong-response deviation under local smoothness, segment containment, and stated boundedness assumptions.",
+      "evidence": ["research_scope/cdc_theorem.md#result-3"]
+    },
+    {
+      "id": "T14",
+      "status": "proved",
+      "statement": "The exact finite-width signed-logit/response empirical-NTK flow is dot(r)=K(theta)sigma(-r)/n and dot(M)=C(theta)^T sigma(-r)/n.",
+      "evidence": ["research_scope/e2_theorem.md#theorem-a1", "tests/test_theory.py"]
+    },
+    {
+      "id": "T15",
+      "status": "proved",
+      "statement": "Freezing K0 and C0 defines an exact nonlinear logistic tangent-surrogate ODE, and the implemented recursion is its exact explicit-Euler discretization under tau=eta*k.",
+      "evidence": ["src/gradient_starvation/theory.py", "tests/test_theory.py"]
+    },
+    {
+      "id": "T16",
+      "status": "proved_with_assumptions",
+      "statement": "Continuous and explicit-SGD true-versus-frozen errors are conditionally bounded by caller-supplied uniform instantaneous or secant kernel-movement bounds; zero movement gives exact agreement.",
+      "evidence": ["research_scope/oral_theorem_package.md#conditional-secant-kernel-comparison", "tests/test_theory.py"]
+    },
+    {
+      "id": "T17",
+      "status": "blocked_conjecture",
+      "statement": "General joint paired cross-entropy RNN optimization-time DMFT at positive disorder or lag is not proved.",
+      "evidence": ["research_scope/e2_theorem.md"]
+    },
+    {
+      "id": "T18",
+      "status": "open_blocked",
+      "statement": "Certified or quantitatively accurate tanh/GRU crossover-time prediction and an analytic learnability/starvation boundary rho_c remain open.",
+      "evidence": ["research_scope/claim_ledger.md"]
+    }
+  ],
+  "empirical_claims": {
+    "submission_primary_claim_id": "E20",
+    "submission_primary_endpoints": ["drift_crossing", "response_crossing"],
+    "studies": [
+      {
+        "id": "E19",
+        "status": "failed",
+        "role": "sealed broad falsification pilot",
+        "records": 16,
+        "acceptance_contract": {
+          "total_records": 16,
+          "records_by_model": {"tanh": 8, "gru": 8},
+          "required_thresholds": {
+            "minimum_model_accuracy": 0.625,
+            "minimum_overall_accuracy": 0.75,
+            "required_prediction_coverage": 1.0
+          }
+        },
+        "primary_outputs": [
+          "phase", "drift_crossing", "response_crossing",
+          "causal_certificate", "weak_only_learnability"
+        ],
+        "correct_counts": {
+          "phase": "12/16",
+          "drift_crossing": "14/16",
+          "response_crossing": "14/16",
+          "causal_certificate": "14/16",
+          "weak_only_learnability": "12/16"
+        },
+        "failure": "tanh weak-only-learnability correctness was 4/8, below the preregistered 5/8 threshold",
+        "broad_hypothesis_accepted": false,
+        "evidence": {
+          "compact_archive_root": "paper/artifacts/enl_ntk_pilot-20260825",
+          "manifest_sha256": "f186d587e28f6408b68baf95566d2d1f1c5d5701e205e9a69ce86cbe4f0ffaf5",
+          "prediction_sha256": "9787d99953f1046b4934aa6e7b3f969e30a4efafb3d02a67cc95926232f9dfaa",
+          "source_sha256": "8d8162558e7d25fff7a5059a4cf49139a354ca211fd6f0759417e75dd87f435c",
+          "archive_manifest_sha256": "4636f67d3cd52a658afb69457ef5887fe1749f3613db62d88be588384da6a149",
+          "verified_frozen_file_count": 24,
+          "source_provenance_class": "historical_dirty_unreconstructible",
+          "source_snapshot_archived": false,
+          "source_reconstructible": false
+        }
+      },
+      {
+        "id": "E20",
+        "status": "passed_restricted",
+        "role": "fresh restricted crossing-event factorial",
+        "records": 64,
+        "acceptance_contract": {
+          "total_records": 64,
+          "records_by_model": {"tanh": 32, "gru": 32},
+          "required_thresholds": {
+            "minimum_model_accuracy": 0.625,
+            "minimum_overall_accuracy": 0.75,
+            "minimum_two_way_bootstrap_ci95_low": 0.5,
+            "required_prediction_coverage": 1.0
+          }
+        },
+        "design": "4 data seeds by 8 model seeds for tanh and GRU at one frozen task/width cell",
+        "primary_outputs": ["drift_crossing", "response_crossing"],
+        "correct_counts": {
+          "response_crossing": "64/64",
+          "drift_crossing": "60/64",
+          "tanh_drift_crossing": "32/32",
+          "gru_drift_crossing": "28/32"
+        },
+        "two_way_bootstrap_ci95_lower": {
+          "response_crossing": 1.0,
+          "drift_crossing": 0.8125
+        },
+        "restricted_hypothesis_accepted": true,
+        "scope_limit": "Only drift- and response-crossing event classification in this frozen cell is supported.",
+        "evidence": {
+          "compact_archive_root": "paper/artifacts/enl_ntk_crossing_factorial-20260825",
+          "manifest_sha256": "bdcf02abbef5b9d8f7ce3979d3363ee8d39ab7817a1d554616bc4dd4a22a0db1",
+          "prediction_sha256": "c05b31810cb3869e7d051f539741732a8758f6cac542deb448a98d2ada7b6542",
+          "source_sha256": "ca878df376b01c0ea45ac352e353530bf20c567de59bb400617e5dd74d5b6b6b",
+          "archive_manifest_sha256": "5339fc1b390ccb3758f5dbb7fef62bca4916a71a80dc8b7bd0014d7bd5d07557",
+          "verified_frozen_file_count": 72,
+          "source_provenance_class": "historical_dirty_unreconstructible",
+          "source_snapshot_archived": false,
+          "source_reconstructible": false
+        }
+      }
+    ],
+    "secondary_non_promotable_outputs": [
+      {
+        "name": "phase",
+        "promotion_allowed": false,
+        "reason": "The broad pilot failed and factorial phase correctness was secondary."
+      },
+      {
+        "name": "causal_certificate",
+        "promotion_allowed": false,
+        "reason": "Crossing correctness does not predict the weak-only learnability gate or causal starvation."
+      },
+      {
+        "name": "weak_only_learnability",
+        "promotion_allowed": false,
+        "reason": "This endpoint caused the broad-pilot failure and was not a factorial primary endpoint."
+      },
+      {
+        "name": "crossing_time",
+        "promotion_allowed": false,
+        "reason": "Factorial predictions were systematically early and were not calibrated."
+      },
+      {
+        "name": "trajectory_magnitude",
+        "promotion_allowed": false,
+        "reason": "Tanh response and drift trajectory errors were large."
+      },
+      {
+        "name": "event_prevalence_or_universal_generalization",
+        "promotion_allowed": false,
+        "reason": "Classifier correctness in one task/width cell is not prevalence or architecture-wide validity."
+      }
+    ]
+  },
+  "historical_source_limitation": {
+    "applies_to_claim_ids": ["E19", "E20"],
+    "exact_dirty_source_bytes_available": false,
+    "reconstruction_possible_from_digest": false,
+    "clean_checkout_can_audit_compact_outcomes": true,
+    "clean_checkout_can_replay_historical_studies": false,
+    "regeneration_class": "new_study",
+    "required_interpretation": "Regeneration under current or future source is a new study, not a replay of either historical study."
+  }
+}

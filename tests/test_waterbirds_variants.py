@@ -89,7 +89,7 @@ def test_modal_estimator_agreement_is_nan_for_a_degenerate_direction():
 
 
 def test_constrained_rescue_preserves_the_strong_drift_and_writes_gradients():
-    """Result 1 must hold on the Waterbirds head exactly as it does on synthetic data."""
+    """The fixed-head Euclidean surrogate preserves its strong drift."""
     torch.manual_seed(2)
     n, d = 128, 12
     head = torch.nn.Linear(d, 2)
@@ -113,6 +113,64 @@ def test_constrained_rescue_preserves_the_strong_drift_and_writes_gradients():
     assert record["cdc_weak_drift_after"] >= 5.0 - 1e-3
     # Gradients must be written for the optimizer to consume.
     assert all(parameter.grad is not None for parameter in head.parameters())
+
+
+def test_constrained_rescue_projects_a_small_nonzero_strong_gradient():
+    """The feasibility tolerance must not switch off exact orthogonality."""
+
+    class ThreeParameterHead(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.theta = torch.nn.Parameter(torch.zeros(3, dtype=torch.float64))
+
+    head = ThreeParameterHead()
+    coordinates = torch.eye(2, dtype=torch.float64)
+    scale = 1e-8
+    feasibility_epsilon = 1e-12
+    coefficients = torch.stack(
+        (scale * head.theta[0], head.theta[0] + head.theta[1])
+    )
+    margin = coordinates @ coefficients
+    loss = head.theta.sum()
+
+    # _projected_modes multiplies both coefficients by this ridge factor.  Hence
+    # 0 < ||grad(m_s)||^2 <= epsilon and grad(m_s).grad(m_w) is nonzero.
+    ridge_factor = 0.5 / (0.5 + 1e-5)
+    strong_norm_sq = (ridge_factor * scale) ** 2
+    weak_strong_inner = ridge_factor**2 * scale
+    assert 0 < strong_norm_sq <= feasibility_epsilon
+    assert weak_strong_inner != 0
+
+    record = constrained_weak_rescue(
+        head,
+        margin,
+        coordinates,
+        target_weak_drift=1.0,
+        loss=loss,
+        feasibility_epsilon=feasibility_epsilon,
+    )
+    assert record["cdc_feasible"]
+    assert record["cdc_alpha"] > 0
+    assert abs(record["cdc_strong_drift_change"]) < 1e-14
+
+
+@pytest.mark.parametrize("feasibility_epsilon", [-1.0, float("nan"), float("inf")])
+def test_constrained_rescue_rejects_invalid_feasibility_tolerance(
+    feasibility_epsilon,
+):
+    head = torch.nn.Linear(2, 2)
+    features = torch.eye(2)
+    labels = torch.tensor([0, 1])
+    logits = head(features)
+    with pytest.raises(ValueError, match="feasibility_epsilon"):
+        constrained_weak_rescue(
+            head,
+            _margin(logits, labels),
+            torch.eye(2),
+            target_weak_drift=0.0,
+            loss=torch.nn.functional.cross_entropy(logits, labels),
+            feasibility_epsilon=feasibility_epsilon,
+        )
 
 
 def test_constrained_rescue_is_inactive_without_a_deficit():

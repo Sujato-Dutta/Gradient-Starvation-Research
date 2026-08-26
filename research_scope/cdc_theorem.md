@@ -13,8 +13,13 @@ Implementation: `theory.counterfactual_drift_correction`, driven by
 ## Setting
 
 Let `theta` be the trainable parameters of the both-feature model and let
-`L(theta)` be the full-batch cross-entropy. Write the two feature responses as
-`m_s(theta)` and `m_w(theta)`, with gradients
+`L(theta)` be the full-batch cross-entropy. Flatten the implemented trainable
+tensors into one fixed parameter chart and equip it with the standard product
+Euclidean/Frobenius inner product. Every gradient, dot product, norm, orthogonal
+projection, Lipschitz ball, and straight step segment below uses this chart and
+metric. No reparameterization-invariance or natural-gradient claim is made.
+
+Write the two feature responses as `m_s(theta)` and `m_w(theta)`, with gradients
 
 ```
 a = grad m_s(theta),        p = grad m_w(theta).
@@ -44,9 +49,9 @@ delta = relu(F_w^W - F_w),        alpha = delta / ||q||^2
 ```
 
 when `delta>0` and `q!=0`, and `alpha=0` when `delta=0`. A positive deficit with
-`q=0` is infeasible. An optional `max_alpha` cap preserves the orthogonality result
-but generally loses target attainment and minimum-norm optimality over the set of
-target-attaining corrections.
+`q=0` is infeasible. A nonbinding `max_alpha` cap leaves the uncapped result
+unchanged. A binding cap preserves orthogonality but generally loses target
+attainment, so no target-attaining minimum-norm optimality claim then applies.
 
 Assumptions used throughout: full-batch gradients, zero weight decay, no gradient
 clipping, and an actual SGD step along the corrected velocity. The trainer rejects
@@ -85,14 +90,14 @@ inner products rather than with a systematic effect.
 
 **Claim.** For the **uncapped** construction, among all corrections `d`
 satisfying `a . d = 0` and `p . (v + d) >= F_w^W`, the choice
-`d* = alpha q` above is the unique minimiser of `||d||` whenever the constraint is
-feasible.
+`d* = alpha q` is the unique minimum Euclidean-norm correction in the fixed
+implemented coordinates whenever the constraint is feasible.
 
-**Proof.** Feasibility requires `p . d >= F_w^W - F_w =: delta`. If
-`delta <= 0`, `d=0` is feasible and trivially minimal, and `alpha=0` by the
-`relu`. Assume `delta>0`. When `a=0`, `q=p` and the argument below applies on the
-whole parameter space. When `a!=0`, decompose
-`p = q + (p . a / ||a||^2) a`. For every admissible `d`,
+**Proof.** Let the raw deficit be `r=F_w^W-F_w` and the active deficit be
+`delta=[r]_+`. Feasibility requires `p . d >= r`. If `r<=0`, `d=0` is feasible
+and uniquely norm-minimal, and `delta=alpha=0`. Assume `r>0`, so `delta=r`.
+When `a=0`, `q=p` and the argument below applies on the whole parameter space.
+When `a!=0`, decompose `p = q + (p . a / ||a||^2) a`. For every admissible `d`,
 
 ```
 p . d = q . d,
@@ -105,36 +110,40 @@ problem reduces to
 minimise ||d||   subject to   a . d = 0,   q . d >= delta.
 ```
 
-By Cauchy-Schwarz on the subspace `{d : a . d = 0}`, which contains `q`,
+By Cauchy-Schwarz on the Euclidean subspace `{d : a . d = 0}`, which contains
+`q`,
 
 ```
-delta <= q . d <= ||q|| ||d||   =>   ||d|| >= delta / ||q||,
+delta <= q . d <= ||q|| ||d||   =>   ||d|| >= delta / ||q||.
 ```
 
-with equality iff `d` is a non-negative multiple of `q`. Taking
-`d = (delta / ||q||^2) q` attains the bound and satisfies both constraints, and
-Cauchy-Schwarz equality is strict unless `d || q`, giving uniqueness. □
+Equality requires a non-negative multiple of `q`. The correction
+`d*=(delta/||q||^2)q` is feasible and attains this lower bound; it is therefore
+the unique minimum-norm, lower-bound-attaining feasible correction. Larger
+positive multiples may also attain the target, but have larger norm. □
 
-Equivalently: `d*` maximises the strictly concave objective
-`q . d - ||d||^2 / (2 lambda)` subject to `a . d = 0`, whose stationarity condition
-`q - d / lambda = mu a` combined with `a . d = 0` yields `d = lambda q` after
-eliminating the multiplier `mu`. The two formulations agree with
-`lambda = delta / ||q||^2`.
+Equivalently, `d*` maximises the strictly concave fixed-coordinate objective
+`q . d - ||d||^2/(2 lambda)` subject to `a . d = 0`, with
+`lambda=delta/||q||^2` in the active case.
 
-**Feasibility condition.** If `delta<=0`, `d=0` is feasible regardless of
-`q`. If `delta>0`, feasibility requires `q!=0`, i.e. `grad m_w` must have a
-nonzero component orthogonal to `grad m_s`. The trainer logs
-`protected_norm_sq=||q||^2`, `cdc_feasible`, and target attainment. Its numerical
-`feasibility_epsilon` is an implementation tolerance: exact theorem claims require
-either `a=0` or the exact projection branch, and a positive lower bound on `||q||`
+**Feasibility condition.** Intrinsically, and only at this tangent-space level, a
+positive raw deficit is feasible exactly when the differential `d m_w` has a
+nonzero restriction to `ker(d m_s)`; in the fixed Euclidean representation this
+is equivalent to `q!=0`. The vector `q`, its norm, the numerical tolerance, and
+the selected minimum-norm correction are metric- and parameter-scale-dependent.
+The trainer logs `protected_norm_sq=||q||^2`, `cdc_feasible`, target attainment,
+`cdc_uncapped_alpha`, `cdc_cap_binding`, and `cdc_target_residual`. Its
+`feasibility_epsilon` is an implementation tolerance rather than the exact
+feasibility criterion. A positive lower bound on `||q||` is additionally needed
 for the explicit Result 3 constant.
 
 ---
 
 ## Result 3 — local finite-step deviation. **Proved, conditionally.**
 
-**Claim.** Fix the current state `theta`. Let `grad m_s` be `L`-Lipschitz on a
-convex neighbourhood containing both step segments
+**Claim.** Fix the current state `theta` in the implemented parameter chart. Let
+`grad m_s` be `L`-Lipschitz in the same Euclidean/Frobenius norm on a convex
+neighbourhood containing the two straight coordinate segments
 
 ```
 {theta + s eta v : 0 <= s <= 1},
@@ -148,8 +157,8 @@ Then
     <= (L/2) eta^2 (||v'||^2 + ||v||^2).
 ```
 
-If additionally `||v||<=V`, the active deficit is at most `D`, and
-`||q||>=q_min>0`, then
+For the active uncapped correction, if additionally `||v||<=V`,
+`delta<=D`, and `||q||>=q_min>0`, then
 
 ```
 ||v'|| <= V + D/q_min,
@@ -157,14 +166,17 @@ If additionally `||v||<=V`, the active deficit is at most `D`, and
     <= (L/2) eta^2 [V^2 + (V + D/q_min)^2].
 ```
 
-When smoothness is known only on the ball `B(theta,r)`, it is sufficient that
+The same norm estimate remains valid under a nonnegative upper cap because it can
+only reduce `alpha`, although a binding cap generally loses target attainment. If
+smoothness is known only on the fixed-coordinate ball `B(theta,r)`, sufficient
+segment conditions are
 
 ```
 eta V <= r,       eta (V + D/q_min) <= r.
 ```
 
-**Proof.** The Taylor remainder inequality for a function with `L`-Lipschitz
-gradient is
+**Proof.** In this chart and metric, the Taylor remainder inequality for a function
+with `L`-Lipschitz gradient is
 
 ```
 |m_s(theta+h)-m_s(theta)-grad m_s(theta).h| <= (L/2)||h||^2.
@@ -172,22 +184,26 @@ gradient is
 
 Apply it once with `h=eta v` and once with `h=eta v'`. Result 1 gives
 `grad m_s(theta).(v'-v)=0`, so the linear terms cancel. The triangle inequality
-gives the first bound. For the uncapped active correction,
+gives the first bound for the actual velocities, capped or uncapped. For the active
+uncapped correction,
 
 ```
 v'-v = (delta/||q||^2)q,
 ||v'|| <= ||v|| + delta/||q|| <= V + D/q_min,
 ```
 
-which gives the explicit bound. The ball conditions ensure both segments remain in
-the neighbourhood on which smoothness was assumed. □
+which gives the explicit bound; a nonnegative upper cap only decreases the added
+multiple of `q`. The ball conditions ensure both coordinate segments remain in the
+neighbourhood on which smoothness was assumed. □
 
-**Scope.** This is a fixed-state, one-step theorem. It does not give a uniform
-constant as `q -> 0`, does not accumulate over a trajectory, and does not imply
-final strong-response retention. A coefficient cap preserves Result 1 and the
-Taylor bound with the actual `||v'||`, but may fail to attain the weak-drift target.
-Momentum, adaptive preconditioning, weight decay, clipping, stochastic gradients,
-or recomputing the direction inside the step require separate analyses.
+**Scope.** This is a fixed-state, one-step, fixed-coordinate theorem. Its
+`L`, norms, ball, and constants are chart- and metric-dependent. It gives no
+uniform constant as `q -> 0`, does not accumulate over a trajectory, and does not
+imply final strong-response retention. A nonbinding cap leaves Result 2 unchanged;
+a binding cap preserves Result 1 and the Taylor bound with the actual `||v'||` but
+generally fails the weak-drift target, so no target-attaining optimality claim
+applies. Momentum, adaptive preconditioning, weight decay, clipping, stochastic
+gradients, or recomputing the direction inside the step require separate analyses.
 
 **Measured.** `run_e3r` sweeps `eta` and fits the log-log slope of the one-step
 strong-response deviation. The observed slope near 2 checks the predicted order,

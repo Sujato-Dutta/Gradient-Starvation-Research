@@ -106,6 +106,15 @@ def write_environment(path: Path) -> None:
     path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
 
+def sha256_file(path: Path) -> str:
+    """Return the SHA-256 digest of a file's exact bytes."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def atomic_torch_save(value: Any, path: Path) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     torch.save(value, temporary)

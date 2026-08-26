@@ -87,7 +87,35 @@ def test_counterfactual_drift_training_logs_and_meets_instantaneous_target():
     assert len(both_rows) == 3
     assert all(row["cdc_feasible"] for row in both_rows)
     assert all(row["cdc_target_met"] for row in both_rows)
+    assert all(not row["cdc_cap_binding"] for row in both_rows)
+    assert all(row["cdc_alpha"] == row["cdc_uncapped_alpha"] for row in both_rows)
+    assert max(row["cdc_target_residual"] for row in both_rows) < 1e-5
     assert max(abs(row["cdc_strong_drift_change"]) for row in both_rows) < 1e-5
+
+
+def test_counterfactual_drift_training_logs_a_binding_cap_and_raw_residual():
+    spec = SyntheticTaskSpec(sequence_length=6, n_samples=32, rho=3, lag_separation=2)
+    both, weak = make_paired_task(spec, seed=0)
+    history, _ = train_paired(
+        {"kind": "dense_linear", "width": 8, "bulk_gain": 0.3},
+        both,
+        weak,
+        {
+            "steps": 0,
+            "learning_rate": 0.01,
+            "log_every": 1,
+            "full_batch": True,
+            "weight_decay": 0.0,
+        },
+        {"method": "counterfactual_drift", "max_alpha": 0.0},
+        seed=0,
+    )
+    row = next(row for row in history if row["condition"] == "both")
+    assert row["cdc_cap_binding"] is True
+    assert row["cdc_uncapped_alpha"] > 0.0
+    assert row["cdc_alpha"] == 0.0
+    assert row["cdc_target_residual"] > 0.0
+    assert row["cdc_target_met"] is False
 
 
 def test_counterfactual_drift_training_on_dense_linear_preserves_strong_drift():
@@ -141,6 +169,25 @@ def test_counterfactual_drift_rejects_guarantee_breaking_optimizers():
         train_paired(
             model, both, weak, {**base, "gradient_clip": 1.0},
             {"method": "counterfactual_drift"}, seed=14,
+        )
+
+
+def test_counterfactual_drift_rejects_minibatch_training():
+    spec = SyntheticTaskSpec(sequence_length=5, n_samples=16, rho=2, lag_separation=1)
+    both, weak = make_paired_task(spec, seed=15)
+    with pytest.raises(NotImplementedError, match="full_batch: true"):
+        train_paired(
+            {"kind": "dense_linear", "width": 6, "bulk_gain": 0.3},
+            both,
+            weak,
+            {
+                "steps": 1,
+                "learning_rate": 0.01,
+                "log_every": 1,
+                "full_batch": False,
+            },
+            {"method": "counterfactual_drift"},
+            seed=16,
         )
 
 

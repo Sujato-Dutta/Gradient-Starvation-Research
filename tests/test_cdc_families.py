@@ -79,11 +79,94 @@ def test_drift_correction_matches_the_original_cdc_implementation():
     model, both, target = _state_with_deficit()
     legacy = counterfactual_drift_correction(model, both, target)
     generalized = drift_correction(model, both, target, constraint="strong_response")
-    for field in ("weak_drift_before", "weak_drift_after",
-                  "strong_drift_before", "strong_drift_after", "alpha", "deficit"):
+    for field in (
+        "weak_drift_before",
+        "weak_drift_after",
+        "strong_drift_before",
+        "strong_drift_after",
+        "alpha",
+        "uncapped_alpha",
+        "deficit",
+        "target_residual",
+    ):
         torch.testing.assert_close(
             getattr(legacy, field), getattr(generalized, field), rtol=1e-6, atol=1e-9
         )
+    assert legacy.cap_binding is generalized.cap_binding is False
+
+
+def test_cdc_euclidean_solution_is_not_invariant_to_diagonal_rescaling():
+    """A non-isometric coordinate change alters the pushed-forward correction.
+
+    This 3D linear-algebra example isolates the metric issue: each coordinate
+    system computes its own feasible minimum-Euclidean-norm CDC correction, but a
+    diagonal rescaling does not push one solution to the other.
+    """
+    strong = torch.tensor([1.0, 2.0, -1.0], dtype=torch.float64)
+    weak = torch.tensor([2.0, -1.0, 3.0], dtype=torch.float64)
+    rescaling = torch.diag(torch.tensor([2.0, 0.5, 3.0], dtype=torch.float64))
+    deficit = torch.tensor(0.7, dtype=torch.float64)
+
+    def euclidean_cdc(a, b):
+        protected = b - (torch.dot(b, a) / torch.dot(a, a)) * a
+        gain = torch.dot(b, protected)
+        assert gain > 0  # The solution is feasible in this coordinate system.
+        return deficit * protected / gain
+
+    correction = euclidean_cdc(strong, weak)
+    strong_rescaled = rescaling.T @ strong
+    weak_rescaled = rescaling.T @ weak
+    correction_rescaled = euclidean_cdc(strong_rescaled, weak_rescaled)
+    pushed_forward = rescaling @ correction_rescaled
+
+    zero = deficit.new_zeros(())
+    for candidate in (correction, pushed_forward):
+        torch.testing.assert_close(
+            torch.dot(strong, candidate), zero, atol=1e-14, rtol=0
+        )
+        torch.testing.assert_close(
+            torch.dot(weak, candidate), deficit, atol=1e-14, rtol=0
+        )
+    assert not torch.allclose(correction, pushed_forward, rtol=1e-8, atol=1e-10)
+
+
+@pytest.mark.parametrize(
+    "correction_function", [counterfactual_drift_correction, drift_correction]
+)
+def test_correction_reports_a_binding_alpha_cap(correction_function):
+    model, both, target = _state_with_deficit()
+    correction = correction_function(model, both, target, max_alpha=0.0)
+    assert correction.feasible
+    assert correction.cap_binding
+    assert float(correction.uncapped_alpha) > 0.0
+    assert float(correction.alpha) == 0.0
+    torch.testing.assert_close(
+        correction.target_residual, correction.deficit, rtol=1e-6, atol=1e-9
+    )
+
+
+@pytest.mark.parametrize(
+    "correction_function", [counterfactual_drift_correction, drift_correction]
+)
+@pytest.mark.parametrize("feasibility_epsilon", [-1.0, float("nan"), float("inf")])
+def test_correction_rejects_invalid_feasibility_tolerance(
+    correction_function, feasibility_epsilon
+):
+    model, both, target = _state_with_deficit()
+    with pytest.raises(ValueError, match="feasibility_epsilon"):
+        correction_function(
+            model, both, target, feasibility_epsilon=feasibility_epsilon
+        )
+
+
+@pytest.mark.parametrize(
+    "correction_function", [counterfactual_drift_correction, drift_correction]
+)
+@pytest.mark.parametrize("max_alpha", [-1.0, float("nan"), float("inf")])
+def test_correction_rejects_invalid_alpha_cap(correction_function, max_alpha):
+    model, both, target = _state_with_deficit()
+    with pytest.raises(ValueError, match="max_alpha"):
+        correction_function(model, both, target, max_alpha=max_alpha)
 
 
 def test_unknown_constraint_is_rejected():
@@ -129,6 +212,10 @@ def test_every_shadow_method_trains_and_logs_diagnostics(method):
     both_rows = [row for row in history if row["condition"] == "both"]
     assert len(both_rows) == 4
     assert all("cdc_alpha" in row for row in both_rows)
+    assert all("cdc_uncapped_alpha" in row for row in both_rows)
+    assert all("cdc_cap_binding" in row for row in both_rows)
+    assert all("cdc_target_residual" in row for row in both_rows)
+    assert all(not row["cdc_cap_binding"] for row in both_rows)
     assert all(row["cdc_target_met"] for row in both_rows)
     assert set(states) == {"both", "weak_only"}
     if method == "counterfactual_drift":
@@ -164,7 +251,10 @@ def test_bloop_carries_state_across_steps():
     ids=["dense_linear", "low_rank_linear"],
 )
 def test_finite_step_deviation_is_second_order_in_the_learning_rate(model_config):
-    """Result 3 is a target; this measures the scaling it predicts.
+    """The sweep observes the proved conditional Result 3 scaling.
+
+    This test supplies a setting where the local behavior is quadratic, but the
+    sweep itself does not verify the theorem's neighbourhood hypotheses or constants.
 
     Must run in float64. In float32 the deviation reaches the representation floor
     at small eta and the fitted slope drops to ~1.78, which would look like a

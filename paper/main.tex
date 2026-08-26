@@ -47,7 +47,7 @@
 \title{From Rate Suppression to Outcome Starvation:\\
 A Finite-Width Causal Theory of Recurrent Learning}
 \author{Anonymous authors}
-\date{ICLR 2027 submission draft --- 24 August 2026}
+\date{Working draft --- official ICLR 2027 style not yet applied}
 
 \begin{document}
 \maketitle
@@ -59,29 +59,38 @@ question in recurrent binary classifiers using a paired causal intervention: a
 both-feature trajectory is compared with a same-initialization trajectory in which
 only the strong input channel is ablated.  Our contribution is a finite-width
 package rather than a claimed general dynamical mean-field theory (DMFT).  First,
-we derive the exact cross-entropy response flow through a response--logit
-cross-kernel and identify the additional assumption under which it reduces to a
-closed two-mode equation $\dot M=Gg$.  Second, after a transfer-to-suppression
-rate crossing, we prove that outcome starvation occurs if and only if the negative
-post-crossing drift area exhausts the earlier transfer advantage.  Third, for a
-noiseless rank-one cue law, an ordering-invariant log drift ratio gives sufficient
-conditions for a unique rate crossing.  We also prove transverse hitting-time
-stability and an exact six-scalar, zero-disorder/zero-lag wide limit with an explicit
+we derive exact finite-width signed-logit and response dynamics through the full
+sample empirical NTK and response--logit cross-kernel.  Freezing these objects at
+initialization defines a nonlinear logistic tangent surrogate; continuous
+Gr\"onwall and experiment-matched discrete secant-kernel bounds compare it with the
+trained model conditionally on kernel movement.  Second, after a
+transfer-to-suppression rate crossing, we prove that outcome starvation occurs if
+and only if the negative post-crossing drift area exhausts the earlier transfer
+advantage.  Third, for a noiseless rank-one cue law, an ordering-invariant log drift
+ratio gives sufficient conditions for a unique rate crossing.  We also prove
+transverse hitting-time stability under quantitative first-entry hypotheses and an
+exact six-scalar, zero-disorder/zero-lag wide limit with an explicit
 $9/(N\epsilon^2)$ initialization bound.  Finally, we derive Counterfactual Drift
-Correction (CDC), the unique uncapped minimum-norm correction that matches a
-weak-only drift target while preserving instantaneous strong-response drift, and
-prove a local $O(\eta^2)$ one-step deviation bound.
+Correction (CDC), the unique uncapped minimum Euclidean-norm correction in the fixed
+implemented parameter coordinates that matches a weak-only drift target while
+preserving instantaneous strong-response drift, and prove a local $O(\eta^2)$
+one-step deviation bound in that same chart.
 
 Controlled dense-linear experiments exhibit positive weak-learning AUC gaps in
 32/32 seeds at lags 0, 2, and 4.  Under the final direct-autograd nonlinear
-protocol, however, tanh transfer-to-starvation is seed-dependent (3/8 causal
-certificates), while GRU has 5/8 response crossings but 0/8 causal certificates
-because the weak-only model never passes the learnability gate.  CDC uniquely
-preserves instantaneous strong drift, but does not improve weak rescue or final
-strong retention over all shadow-based ablations.  These corrected results delimit
-the claim: the causal and finite-width theorems are established; a general
-positive-disorder/positive-lag optimization-time DMFT, an analytic phase boundary,
-and universal nonlinear crossover remain open.
+protocol, tanh transfer-to-starvation is seed-dependent (3/8 causal certificates),
+while GRU has 5/8 response crossings but 0/8 causal certificates because the
+weak-only model never passes the learnability gate.  A sealed five-endpoint frozen-
+kernel pilot fails its preregistered rule on tanh learnability.  After that failure,
+a fresh restricted $4\times8$ data/model-seed factorial classifies response-
+crossing events in 64/64 architecture--seed records and drift-crossing events in
+60/64; two-way-bootstrap 95\% lower endpoints are 1.0 and 0.8125.  These are event-
+classification results at one controlled cell, not validated phase, causal,
+learnability, time, magnitude, or kernel-stability claims.  CDC uniquely preserves
+instantaneous strong drift, but does not improve weak rescue or final strong
+retention over all shadow-based ablations.  A general positive-disorder/positive-
+lag optimization-time DMFT, an analytic phase boundary, and certified or
+quantitatively accurate nonlinear crossover times remain open.
 \end{abstract}
 
 \section{Introduction}
@@ -117,17 +126,23 @@ response crossings but fails the causal learnability gate in every seed.
   flow.  A closed projected equation $\dot M=Gg$ follows only under exact,
   parameter-independent logit realization; nonlinear probe responses carry an
   explicit residual.
+  \item We prove exact finite-width signed-logit and response dynamics through the
+  full sample empirical NTK and response--logit cross-kernel.  Freezing them gives
+  an initialization-only nonlinear logistic surrogate; conditional continuous and
+  exact secant-SGD bounds transfer supplied kernel-movement control into response,
+  sign, crossing, and hitting-time control.
   \item We give a necessary-and-sufficient negative-tail-area criterion converting
   a unique rate crossover into an outcome crossing, together with quantitative
   crossing-time bounds.
   \item For noiseless rank-one cues, we derive an ordering-invariant log drift
   ratio and sufficient conditions for a unique rate crossover.  Unlike a
   non-canonical additive geometry/field split, the ratio has a fixed meaning.
-  \item We prove stability of transverse first hitting times and an exact
-  zero-disorder, zero-lag six-scalar closure with finite-horizon convergence in
-  probability and explicit constants.
-  \item We prove three local CDC results: exact instantaneous strong-drift
-  preservation, unique uncapped minimum-norm optimality when feasible, and a local
+  \item We prove stability of quantitatively isolated transverse first hitting
+  times and an exact zero-disorder, zero-lag six-scalar closure with finite-horizon
+  convergence in probability and explicit deterministic tube constants.
+  \item In the fixed implemented Euclidean/Frobenius parameter chart, we prove
+  three local CDC results: exact instantaneous strong-drift preservation, unique
+  uncapped minimum Euclidean-norm optimality when feasible, and a local
   $O(\eta^2)$ one-step strong-response deviation bound.
   \item We provide executable theorem contracts and a claim-audited experiment
   suite.  The corrected nonlinear evidence is reported as seed-dependent and the
@@ -136,9 +151,15 @@ response crossings but fails the causal learnability gate in every seed.
 
 \paragraph{Claim boundary.}
 We do not claim that recurrent networks universally undergo transfer-to-starvation,
-that a general joint CE-RNN optimization-time DMFT has been solved, or that a
-crossover time or analytic $\rho_c$ is independently predicted.  The general DMFT
-solver remains deliberately unimplemented where its proof obligations are unmet.
+that a general joint CE-RNN optimization-time DMFT has been solved, or that an
+analytic $\rho_c$ is known.  The frozen empirical-NTK surrogate is exact for its
+initialization-linearized tangent model, not for trained tanh/GRU networks: no
+required instantaneous or secant-kernel stability bound is proved here.  The held-
+out factorial validates only binary drift/response-crossing classification at one
+width/task cell; it does not validate phase, causal starvation, weak-only
+learnability, calibrated trajectories, crossing times, or prevalence.  The general
+DMFT solver remains deliberately unimplemented where its proof obligations are
+unmet.
 
 \section{Related work}
 \paragraph{Gradient starvation.}
@@ -256,6 +277,97 @@ If $r_i^C=z_i^C\cdot M^C+r_i^\perp$, the exact equation instead contains
 \end{equation}
 \end{corollary}
 
+\begin{theorem}[Exact full empirical-NTK dynamics]
+\label{thm:frozen-empirical-ntk}
+Let $J^C(\tau)\in\R^{n_C\times P}$ have row
+$\nabla r_i^C(\theta_C(\tau))^\top$, and define
+\begin{equation}
+ \Theta^C(\tau)=J^C(\tau)J^C(\tau)^\top,
+ \qquad c_a^C(\tau)=J^C(\tau)\nabla M_a^C(\theta_C(\tau)).
+\end{equation}
+Writing $q(r)=\sigm(-r)$ componentwise, the exact finite-width flow is
+\begin{equation}
+ \dot r^C=\frac1{n_C}\Theta^C(\tau)q(r^C),
+ \qquad
+ \dot M_a^C=\frac1{n_C}c_a^C(\tau)^\top q(r^C).
+ \label{eq:full-ntk-flow}
+\end{equation}
+No width limit or response-coordinate realization is required.
+\end{theorem}
+
+\begin{definition}[Initialization-frozen nonlinear logistic surrogate]
+\label{def:frozen-surrogate}
+For one condition, let $\Theta_0=\Theta(0)$ and $c_0=c_a(0)$.  Define
+\begin{equation}
+ \dot{\bar r}=\frac1n\Theta_0q(\bar r),\qquad
+ \dot{\bar M}=\frac1n c_0^\top q(\bar r),\qquad
+ (\bar r(0),\bar M(0))=(r(0),M(0)).
+ \label{eq:frozen-surrogate}
+\end{equation}
+The gate remains nonlinear.  This system is exact for the initialization-linearized
+tangent model, not for the trained nonlinear network.
+\end{definition}
+
+\begin{theorem}[Conditional continuous and secant-SGD comparison]
+\label{thm:frozen-comparison}
+Use Euclidean and induced operator norms.  Suppose on $[0,t]$ that
+$\norm{\Theta(u)-\Theta_0}\le B_\Theta$,
+$\norm{c(u)-c_0}\le B_c$, and both logistic weight vectors have norm at most $V$.
+Set $a=\norm{\Theta_0}/(4n)$,
+\begin{equation}
+ \phi_a(t)=\frac{e^{at}-1}{a},\qquad
+ \psi_a(t)=\frac{e^{at}-1-at}{a^2},
+\end{equation}
+with $\phi_0(t)=t$ and $\psi_0(t)=t^2/2$.  Then
+\begin{align}
+ \norm{r(t)-\bar r(t)}
+ &\le \frac{B_\Theta V}{n}\phi_a(t),\label{eq:frozen-logit-bound}\\
+ |M(t)-\bar M(t)|
+ &\le \frac{B_cV}{n}t
+ +\frac{\norm{c_0}B_\Theta V}{4n^2}\psi_a(t).
+ \label{eq:frozen-response-bound}
+\end{align}
+
+For explicit full-batch SGD, let $\delta\theta_k=\theta_{k+1}-\theta_k$ and define
+exact segment kernels
+\begin{align}
+ \widetilde J_k&=\int_0^1J(\theta_k+s\delta\theta_k)\dd s,&
+ \widetilde\Theta_k&=\widetilde J_kJ(\theta_k)^\top,\\
+ \widetilde m_k&=\int_0^1\nabla M(\theta_k+s\delta\theta_k)\dd s,&
+ \widetilde c_k&=J(\theta_k)\widetilde m_k.
+\end{align}
+The true increments are exactly
+$r_{k+1}-r_k=\eta\widetilde\Theta_kq(r_k)/n$ and
+$M_{k+1}-M_k=\eta\widetilde c_k^\top q(r_k)/n$.  If $\eta>0$ and, for every
+$0\le j<k$,
+$\norm{\widetilde\Theta_j-\Theta_0}\le D_\Theta$,
+$\norm{\widetilde c_j-c_0}\le D_c$, and
+$\norm{q(r_j)},\norm{q(\bar r_j)}\le V$, then the explicit-Euler
+version of Eq.~\eqref{eq:frozen-surrogate} obeys
+\begin{align}
+ \norm{r_k-\bar r_k}&\le\frac{D_\Theta V}{n}\Phi_k,\\
+ |M_k-\bar M_k|&\le\frac{k\eta D_cV}{n}
+ +\frac{\eta\norm{c_0}D_\Theta V}{4n^2}\Psi_k,
+ \label{eq:frozen-discrete-bound}
+\end{align}
+where
+\begin{equation}
+ \Phi_k=\frac{(1+\eta a)^k-1}{a},\qquad
+ \Psi_k=\frac{(1+\eta a)^k-1}{\eta a^2}-\frac{k}{a},
+\end{equation}
+with limits $\Phi_k=k\eta$ and $\Psi_k=\eta k(k-1)/2$ at $a=0$.
+Apply the bounds separately to $\Bcond,\Wcond$ and add them to bound the paired
+response gap.  Frozen signs or brackets transfer only when their strict margins
+exceed the corresponding summed errors; first hitting times additionally require
+Corollary~\ref{cor:hitting}'s prehistory, transversality, radius, and mesh
+hypotheses.
+\end{theorem}
+
+Theorem~\ref{thm:frozen-comparison} is conditional: this paper does not prove the
+required instantaneous or secant-kernel movement bounds for tanh or GRU.  A held-
+out event-classification result cannot substitute for that premise.  In particular,
+the theorem is finite-width and is not a DMFT closure.
+
 For channel-localized modes of the dense linear RNN, differentiation across the
 disjoint $(c,B,W)$ blocks gives the exact finite-width geometry
 \begin{equation}
@@ -363,21 +475,54 @@ Theorem~\ref{thm:tail-area} for an outcome crossing.
 \subsection{Hitting-time stability}
 \begin{corollary}[Transverse first-hit stability]
 \label{cor:hitting}
-Let continuous $x_N,x$ on $[0,H]$ satisfy
-$\norm{x_N-x}_\infty\le\epsilon_N$.  Let $\tau\in(0,H)$ be the first upward
-crossing of $\beta$, separated from earlier times, and suppose
-$x'(t)\ge\kappa>0$ on $[\tau-r,\tau+r]$.  For sufficiently small $\epsilon_N$,
+Let continuous $x_N,x:[0,H]\to\R$ satisfy
+$\norm{x_N-x}_\infty\le\epsilon$, and define
 \begin{equation}
- |\tau_N-\tau|\le\epsilon_N/\kappa.
+ \tau=\inf\{t\in[0,H]:x(t)\ge\beta\},\qquad
+ \tau_N=\inf\{t\in[0,H]:x_N(t)\ge\beta\},
+ \quad \inf\varnothing=\infty.
 \end{equation}
-A logged grid of spacing $h_N$ adds $h_N$.  For paired delays,
+Assume $x$ is absolutely continuous, $x(0)<\beta$, and
+$\tau\in(0,H)$.  Choose $0<r\le\min\{\tau,H-\tau\}$ such that
+$x'(t)\ge\kappa>0$ almost everywhere on $[\tau-r,\tau+r]$, and let
 \begin{equation}
- |\Delta\tau_N-\Delta\tau|
- \le \epsilon_{B,N}/\kappa_B+\epsilon_{W,N}/\kappa_W+2h_N.
+ \eta=\beta-\max_{0\le t\le\tau-r}x(t)>0.
 \end{equation}
+If $\epsilon<\eta$ and $\epsilon/\kappa\le r$, then $\tau_N<\infty$ and
+\begin{equation}
+ |\tau_N-\tau|\le\epsilon/\kappa.
+ \label{eq:hitting-continuous}
+\end{equation}
+For an ordered grid $0=t_0<\cdots<t_m=H$ of maximum mesh
+$h=\max_j(t_j-t_{j-1})$, let $\tau_N^{\rm samp}$ be the first sampled time with
+$x_N(t_j)\ge\beta$, and let $\tau_N^{\rm int}$ be the first hit of the
+piecewise-linear interpolant through the samples.  If
+$\epsilon/\kappa+h\le r$, both are finite and
+\begin{equation}
+ |\tau_N^{\rm samp}-\tau|\le\epsilon/\kappa+h,
+ \qquad
+ |\tau_N^{\rm int}-\tau|\le\epsilon/\kappa+h.
+ \label{eq:hitting-grid}
+\end{equation}
+For a paired delay, if both reference hits are finite and each trajectory satisfies
+its own assumptions, then
+\begin{equation}
+ |(\tau_{N,B}-\tau_{N,W})-(\tau_B-\tau_W)|
+ \le \epsilon_B/\kappa_B+\epsilon_W/\kappa_W+h_B+h_W.
+\end{equation}
+If either hit is infinite, the delay is censored; a common mesh $h$ gives the
+special case with $2h$.
 \end{corollary}
-This transfers an independently proved uniform trajectory limit; it does not prove
-that limit.
+Descending crossings follow by sign reversal and localization after a strict
+excursion.  Since the response gap has $\Delta(0)=0$, its later downward outcome
+crossover must be localized to $[a,H]$ with $\Delta(a)>0$ and treated using
+$x=-\Delta$ and target zero; the hit at time zero is not that later crossover.
+This corollary transfers an independently proved uniform trajectory limit.  It
+does not prove that limit, first-entry semantics, the prehistory margin, or the
+derivative bound.  Thus Theorem~\ref{thm:frozen-comparison}'s summed paired
+response bound licenses a crossing-time statement only after all of these separate
+guards hold; an error formula or empirical event match alone is not a hitting-time
+certificate.
 
 \section{A solvable zero-disorder wide limit}
 Set recurrent gain $g=0$, lag separation zero, and background noise zero in the
@@ -410,27 +555,64 @@ For every $\epsilon>0$,
  \le \min\left\{1,\frac{9}{N\epsilon^2}\right\}.
  \label{eq:init-concentration}
 \end{equation}
-On every fixed horizon $[0,H]$, let $L_H$ be a vector-field Lipschitz constant on
-a common compact tube containing the finite- and infinite-width trajectories.  Then
+Fix a cue law with bounded second moments and define
 \begin{equation}
- \sup_{\tau\le H}\norm{q_N(\tau)-q(\tau)}_\infty
- \le e^{L_HH}\norm{q_N(0)-q_0}_\infty,
+ g_a(M)=\E[z_a\sigm(-z\cdot M)],\quad
+ A=\max_a\E|z_a|,\quad
+ C=\frac14\max_a\sum_b\E|z_az_b|.
+\end{equation}
+Then $\norm{g(M)}_\infty\le A$ and
+\begin{equation}
+ \norm{g(M)-g(\widetilde M)}_\infty
+ \le C\norm{M-\widetilde M}_\infty.
+ \label{eq:g-lipschitz}
+\end{equation}
+Let $q(t)$ be the deterministic solution from $q_0$, let
+$c_\star=W(e^{-1})=\sup_x x\sigm(-x)$, where $W$ is Lambert's function, and set
+\begin{equation}
+ R_H=3+4c_\star H,\qquad B_{H,r}=R_H+r,\qquad
+ L_{H,r}=4(A+B_{H,r}C)
+ \label{eq:deterministic-tube-constants}
+\end{equation}
+for a fixed deterministic radius $r>0$.  The reference Gram energy
+$R=w+u_{ss}+u_{ww}$ obeys $R(0)=3$, $R'\le4c_\star$, and therefore
+$\norm{q(t)}_\infty\le R_H$ on $[0,H]$.  The vector field is
+$L_{H,r}$-Lipschitz in infinity norm on the radius-$r$ tube about this path.
+If
+\begin{equation}
+ \norm{q_N(0)-q_0}_\infty
+ \le e^{-L_{H,r}H}\min\{r,\delta\},
+ \label{eq:tube-bootstrap-event}
+\end{equation}
+then $q_N$ does not leave the tube before $H$ and
+\begin{equation}
+ \sup_{t\le H}\norm{q_N(t)-q(t)}_\infty\le\delta.
  \label{eq:gronwall}
 \end{equation}
-and
+Consequently,
 \begin{equation}
- \Prob\!\left(\sup_{\tau\le H}\norm{q_N(\tau)-q(\tau)}_\infty>\delta\right)
- \le\min\left\{1,\frac{9e^{2L_HH}}{N\delta^2}\right\}.
+ \Prob\!\left(\sup_{t\le H}\norm{q_N(t)-q(t)}_\infty>\delta\right)
+ \le\min\left\{1,
+ \frac{9e^{2L_{H,r}H}}{N\min\{r,\delta\}^2}\right\}.
  \label{eq:trajectory-concentration}
 \end{equation}
-Thus $q_N\to q$ uniformly on fixed horizons in probability, with initialization
-scale $O_{\Prob}(N^{-1/2})$.
+For $r=1$ and $0<\delta\le1$, the denominator reduces to $N\delta^2$ with
+the deterministic constant $L_{H,1}$.  Thus $q_N\to q$ uniformly on fixed
+horizons in probability, with initialization scale $O_{\Prob}(N^{-1/2})$.
+For the paired both/weak-only result, use a common $r$ and the maximum of the two
+deterministic $L_{H,r}$ constants for the two fixed cue laws.
 \end{theorem}
 
 This theorem is intentionally singular: it is a genuine large-width result only at
 zero disorder and zero lag.  It is not a positive-disorder DMFT.
 
 \section{Counterfactual Drift Correction}
+Flatten the implemented trainable tensors into one fixed parameter chart with the
+standard product Euclidean/Frobenius inner product.  Every gradient, dot product,
+norm, projection, Lipschitz ball, and straight segment in this section uses that
+chart and metric; no reparameterization-invariance or natural-gradient claim is
+made.
+
 At a both-feature state $\theta$, let
 \begin{equation}
  a=\nabla m_s(\theta),\quad p=\nabla m_w(\theta),\quad
@@ -451,39 +633,53 @@ A same-initialization weak-only shadow supplies $F_w^{\Wcond}$.  Define
 \end{equation}
 The corrected velocity is $v'=v+\alpha q$.  A positive deficit with $q=0$ is
 infeasible.  The theorems assume full-batch gradients, plain SGD, zero weight
-decay, and no clipping.  A coefficient cap preserves orthogonality but can lose
-target attainment and uncapped optimality.
+decay, and no clipping.  A nonbinding coefficient cap leaves the uncapped result
+unchanged; a binding cap preserves orthogonality but generally loses target
+attainment, so no target-attaining optimality claim then applies.
 
 \begin{theorem}[CDC local guarantees]
 \label{thm:cdc}
-The construction in Eq.~\eqref{eq:cdc} has the following properties.
+The construction in Eq.~\eqref{eq:cdc} has the following fixed-coordinate
+properties.
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Instantaneous preservation:} $a\cdot v'=a\cdot v$ exactly,
   including when $\alpha$ is capped.
-  \item \textbf{Minimum norm:} for the feasible uncapped problem, $d^*=\alpha q$
-  is the unique minimum-norm correction satisfying
-  $a\cdot d=0$ and $p\cdot(v+d)\ge F_w^{\Wcond}$.
-  \item \textbf{Local finite-step bound:} if $\nabla m_s$ is $L$-Lipschitz on a
-  convex neighborhood containing both step segments, then
+  \item \textbf{Minimum Euclidean norm:} for the feasible uncapped problem,
+  $d^*=\alpha q$ is the unique minimum-norm, lower-bound-attaining correction
+  satisfying $a\cdot d=0$ and
+  $p\cdot(v+d)\ge F_w^{\Wcond}$.
+  \item \textbf{Local finite-step bound:} if $\nabla m_s$ is $L$-Lipschitz in
+  the same norm on a convex neighborhood containing both straight coordinate step
+  segments, then
   \begin{equation}
   |m_s(\theta+\eta v')-m_s(\theta+\eta v)|
   \le\frac L2\eta^2(\norm{v'}^2+\norm v^2).
   \label{eq:cdc-step}
   \end{equation}
-  If $\norm v\le V$, $\delta\le D$, and $\norm q\ge q_{\min}>0$, the right side
-  is at most
+  For the active uncapped correction, if $\norm v\le V$, $\delta\le D$, and
+  $\norm q\ge q_{\min}>0$, the right side is at most
   \begin{equation}
   \frac L2\eta^2\left[V^2+(V+D/q_{\min})^2\right].
   \end{equation}
+  This explicit norm bound also remains valid under a nonnegative upper cap,
+  which can only reduce $\alpha$.
 \end{enumerate}
 \end{theorem}
-The result is one-step and local.  It is not a trajectory guarantee and does not
-imply final strong-response retention.
+For a positive raw deficit, exact feasibility can be stated intrinsically only as
+$dm_w$ having a nonzero restriction to $\ker(dm_s)$; in this metric it is
+equivalent to $q\ne0$.  The represented $q$, its norm, the numerical
+\code{feasibility\_epsilon}, and the selected minimum-norm correction are
+metric- and parameter-scale-dependent.  The finite-step result is one-step and
+local in the same chart.  It is not a trajectory guarantee and does not imply
+final strong-response retention.
 
 \section{Executable theorem contracts}
-The implementation makes theorem scope observable rather than silently extending
-it.  Table~\ref{tab:contracts} lists the primary contracts.  Unit tests check these
-software identities and edge cases; tests are not mathematical proofs.
+The implementation evaluates theorem formulas and exposes scope metadata.  It
+enforces the scalar guards represented in helper arguments or trainer
+configuration; callers still establish trajectory, model, first-entry, and
+smoothness hypotheses.  Table~\ref{tab:contracts} lists the primary contracts.
+Unit tests check these software identities and edge cases; tests are not
+mathematical proofs.
 
 \begin{table}[t]
 \centering
@@ -496,12 +692,15 @@ software identities and edge cases; tests are not mathematical proofs.
 Contract & Mathematical object & Scope guard \\
 \midrule
 \code{projected\_statistics} & direct Eq.~\eqref{eq:cross-kernel}, $Gg$, residual & direct drift primary for nonlinear probes \\
+\code{initial\_frozen\_empirical\_kernel} & $J_0,\Theta_0,c_0$ in Theorem~\ref{thm:frozen-empirical-ntk} & initialization only; full sample kernel \\
+\code{integrate\_frozen\_logistic\_sgd} & explicit Euler for Eq.~\eqref{eq:frozen-surrogate} & exact for tangent surrogate, not nonlinear model \\
+\code{frozen\_kernel\_discrete\_error\_bound} & Eq.~\eqref{eq:frozen-discrete-bound} & caller supplies secant-kernel movement bounds \\
 \code{equal\_time\_drift\_difference} & $\Delta'$ and two projected product orderings & exposes non-canonical attribution \\
 \code{rank\_one\_drift\_ratio} & Theorem~\ref{thm:log-ratio} factors and $\Psi$ & caller supplies noiseless/exact hypotheses \\
 \code{discrete\_crossover\_certificate} & telescoping finite-step tail areas & learnability gate required for causal label \\
-\code{transverse\_hitting\_time\_error\_bound} & $\epsilon/\kappa+h$ & caller supplies uniform error/transversality \\
-\code{zero\_disorder\_*\_failure\_bound} & Eqs.~\eqref{eq:init-concentration}, \eqref{eq:trajectory-concentration} & caller supplies valid common-tube $L_H$ \\
-\code{cdc\_finite\_step\_deviation\_bound} & Eq.~\eqref{eq:cdc-step} & caller supplies local smoothness \\
+\code{transverse\_hitting\_time\_error\_bound} & $\epsilon/\kappa+h$ & guards supplied error, pre-hit separation, radius, mesh; caller proves first entry and derivative \\
+\code{zero\_disorder\_*\_failure\_bound} & Eqs.~\eqref{eq:init-concentration}, \eqref{eq:trajectory-concentration} & caller supplies deterministic reference-tube $L_{H,r}$ and bootstrap radius $r$ \\
+\code{cdc\_finite\_step\_deviation\_bound} & Eq.~\eqref{eq:cdc-step} & fixed-coordinate Euclidean evaluator; caller supplies local smoothness and segment containment \\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -535,7 +734,9 @@ Experiment & Model / width & Task grid & Samples & Steps / LR & Seeds & Primary 
 \midrule
 E1 & dense linear / 96 & $\rho\in\{1,2,4,8\}$, lag $\in\{0,2,4,8\}$ & 256 & 500 / .01 & 4--11 & causal phase grid \\
 E2 & dense linear / 32--256 & $(1,0),(2,2),(4,4),(8,8)$ & 1024 & 400 / .01 & 0--7 & held-out closure convergence \\
-E-NL & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & 20--27 & direct-drift crossover certificate \\
+E-NL & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & 20--27 & direct-drift trajectory certificate \\
+NTK pilot & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & $1\times8$ & five-output falsification \\
+NTK factorial & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & $4\times8$ & crossing-event validation \\
 E3 & dense linear / 96 & $\rho=4$, lag 2 & 256 & 500 / .01 & 40--47 & eight-method CDC ablation \\
 \bottomrule
 \end{tabular}}
@@ -545,27 +746,58 @@ E1 uses gain $0.5$, $\beta=0.25$, horizon $H=5$, and a single eight-seed
 negative-control cell $(\rho,\mathrm{lag})=(4,4)$.  E2 uses gain $0.5$ and a
 held-out empirical closure reference with width 384, seeds 100--115, 16 particles,
 and 32,768 field samples.  E-NL uses gain $0.8$, cue noise $0.1$, zero background
-noise, $\beta=0.5$, and direct autograd drift at every logged point.  E3 compares
+noise, $\beta=0.5$, and direct autograd drift at every logged point.  The frozen-
+kernel studies use the same task cell.  An earlier engineering set (data seed 100,
+model seeds 1000--1007) is excluded: a first evaluator grid mismatch stopped before
+training, and a second grid mismatch stopped only after nonlinear outcomes had been
+generated.  No scores were inspected.  The set was used solely to repair CSV-grid
+alignment (integer steps plus a numerical tau check); it did not change labels,
+acceptance thresholds, or the five pilot endpoints.  The valid broad pilot therefore
+uses a fresh unseen data seed and eight unseen model seeds; after it fails, the
+restricted validation uses fresh data seeds 201--204 crossed with model seeds
+2010--2017.  E3 compares
 ERM, Spectral Decoupling, an interaction penalty, CDC, loss-gradient projection,
 unconstrained rescue, Bloop-style, and PCGrad-style methods.  The five rescue
 methods share the same weak-only shadow target and differ in what they protect.
 
+\paragraph{Manifest-sealed prediction protocol.}
+\code{enl-preflight} constructs no optimizer and observes no trained state.  It
+writes the initialization kernels and predictions, verifies state/gradient
+nonmutation, and hashes every declared file and per-record kernel together with the
+resolved config and executable-source fingerprint.  Before constructing an
+optimizer, \code{enl-evaluate} requires the sidecar, actual manifest, and externally
+pinned digest to agree; verifies every hash/size, source, protocol, seed pair, and
+time grid; and loads rather than rebuilds predictions.  It re-hashes all sealed
+inputs after training.  The broad five-endpoint rule was frozen before its pilot;
+after that rule failed, only drift/response crossing was frozen as primary on fresh
+seeds.  The latter crossed design uses a two-way pigeonhole bootstrap with 10,000
+replicates.
+
 \paragraph{Statistics and censoring.}
-Seeds are the unit of replication.  Reported confidence intervals are the
-repository's 95\% seed-level intervals.  Hitting times beyond the horizon are
-right-censored and never converted into finite delays.  Conditional crossing-time
-means are reported only with their number of crossing seeds.  The exploratory E-NL
-$5\times5$ grid uses seeds 0--3 and is explicitly post-hoc; it is not used to select
-a confirmatory condition.
+Independent seed pairs are the unit of replication only when neither seed axis is
+reused.  Under crossed data/model-seed reuse, row-wise Student-$t$ intervals are
+suppressed and the reported two-way percentile interval resamples the observed two
+seed axes independently.  It is conditional on those observed seed levels; in
+particular, the all-correct response table necessarily gives $[1,1]$ and does not
+quantify unseen failure modes.  Hitting
+times beyond the horizon are right-censored and never converted into finite delays.
+Conditional crossing-time means are reported only with their number of crossing
+records.  The exploratory E-NL $5\times5$ grid uses seeds 0--3 and is explicitly
+post-hoc; it is not used to select a confirmatory condition.
 
 \paragraph{Reproducibility.}
-Each run writes a resolved YAML, environment record, trajectories, summary,
-aggregate tables, and vector/raster figures.  The final E-NL rerun is tracked with
-its resolved configuration and SHA-256 fingerprint over \code{run\_experiment.py}
-and \code{src/**/*.py}; its compact outputs and provenance manifest are under
-\code{paper/artifacts}.  Historical E1, E2, E2-R, exploratory E-NL, and E3
-artifacts record dirty Git states but no source fingerprint, so their exact
-executed source cannot be reconstructed retroactively from their commit hashes.
+Ordinary trajectory runs write a resolved YAML, environment record, trajectories,
+summary, aggregate tables, and figures.  Frozen preflights instead write predictions,
+initialization kernels, an acceptance record, and a manifest; evaluations write
+observed trajectories, per-record scores, metrics, acceptance, and provenance.
+The final E-NL rerun is reconstructible from its later frozen repository source at
+commit \code{2d0ee83} / tag \code{theorem-aligned-v1}.  The two frozen studies
+record source fingerprints, but their exact dirty source bytes were not archived;
+the current tree therefore fails their deliberate source guard and cannot replay
+them bit-for-bit.  Their compact archives support an audit of the reported outcomes,
+seals, and configurations, not executable regeneration.  Historical E1, E2, E2-R,
+exploratory E-NL, and E3 artifacts likewise record dirty Git states without
+reconstructible executed source.
 
 \section{Results}
 \subsection{Controlled dense-linear phase grid}
@@ -640,6 +872,50 @@ final definition.
 {Theorem-aligned nonlinear trajectories.  Direct-autograd drift is primary;
 projected and matched-state quantities are separately styled diagnostics.}{fig:enl}
 
+\subsection{Frozen kernels predict crossing events, not broad starvation phase}
+The initialization-frozen predictor was first tested under a sealed five-output
+pilot using one unseen data seed and eight unseen model seeds per architecture.  It
+obtained 12/16 phase, 14/16 drift-crossing, 14/16 response-crossing, 14/16 causal-
+certificate, and 12/16 weak-learnability classifications.  The preregistered rule
+nevertheless \emph{failed}: tanh learnability was 4/8, below the 5/8 per-model
+floor.  We preserve that rejection rather than averaging it away.
+
+Only after this failure did we define the narrower crossing-event hypothesis.  A
+fresh sealed factorial crossed four unseen data seeds with eight unseen model seeds
+for each architecture.  Table~\ref{tab:ntk-heldout} reports classification
+correctness, not observed crossing prevalence.  The restricted rule passed: all
+response-crossing labels and 60/64 drift-crossing labels were correct; the two-way
+bootstrap lower endpoints exceeded the frozen 0.5 floor.
+
+\begin{table}[t]
+\centering
+\caption{Manifest-sealed frozen-kernel evaluations.  The broad pilot's complete
+five-output rule failed.  Only the two event rows in the fresh factorial were
+preregistered primary endpoints.  CIs resample data- and model-seed axes.}
+\label{tab:ntk-heldout}
+\small
+\begin{tabular}{llcccc}
+\toprule
+Protocol & Endpoint & Overall & tanh & GRU & 95\% CI \\
+\midrule
+Broad pilot & phase & 12/16 & 6/8 & 6/8 & diagnostic \\
+Broad pilot & weak learnability & 12/16 & 4/8 & 8/8 & \textbf{failed} \\
+Restricted $4\times8$ & drift event & 60/64 & 32/32 & 28/32 & $[0.8125,1]$ \\
+Restricted $4\times8$ & response event & 64/64 & 32/32 & 32/32 & $[1,1]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The restriction is substantive.  In the factorial, phase, causal-certificate, and
+learnability correctness were only 52/64, 56/64, and 49/64 and were explicitly
+secondary; tanh learnability was 17/32.  Crossing times remained systematically
+early (overall drift/response bias $-0.822/-1.189$), and tanh response-gap and weak-
+response RMSE were 2.455 and 2.489 despite high sign agreement.  Thus the evidence
+supports an uncalibrated event classifier at this one width/task cell.  It neither
+proves Theorem~\ref{thm:frozen-comparison}'s kernel premise nor validates phase,
+causal starvation, learnability, trajectory magnitude, calibrated time, or
+prevalence.
+
 \subsection{CDC has the local guarantee, not the best final tradeoff}
 All five shadow-based methods reduce the causal weak AUC gap from ERM's 10.5155 to
 approximately zero and attain their shared weak-drift target at every logged step.
@@ -683,42 +959,54 @@ retention.}{fig:e3}
 
 \section{Discussion and limitations}
 \paragraph{What is proved.}
-The finite-width cross-kernel identity, exact-realization corollary, dense-linear
-geometry, tail-area equivalence, conditional rank-one crossover criterion,
-transverse hitting-time bound, singular zero-disorder wide limit, and local CDC
-results are mathematical statements with proofs.  Executable contracts reproduce
-their algebra and reject scope violations.
+The finite-width cross-kernel identity, exact full sample-logit/response dynamics,
+initialization-frozen tangent surrogate, conditional continuous/secant-SGD
+comparison, dense-linear geometry, tail-area equivalence, conditional rank-one
+crossover criterion, quantitatively isolated transverse hitting-time bound,
+singular zero-disorder wide limit, and fixed-coordinate local CDC results are
+mathematical statements with proofs.  The frozen comparison does not prove its
+kernel-movement premises.  Executable contracts reproduce the algebra and enforce
+represented scalar guards; callers establish remaining trajectory and model
+hypotheses.
 
 \paragraph{What the experiments establish.}
 The controlled dense model shows robust positive AUC gaps in the learnable region.
-The nonlinear experiment does not establish a universal crossover: tanh is
-seed-dependent, and GRU fails causal learnability despite response crossings.  The
-exploratory search did not find a 4/4 robust cell.  CDC demonstrates its exact local
-constraint but not a superior practical tradeoff.
+The realized nonlinear trajectories do not establish a universal crossover: tanh
+is seed-dependent, and GRU fails causal learnability despite response crossings.
+The broad frozen-kernel pilot also failed.  On fresh seeds, its post-pilot
+restriction predicts drift/response crossing events well at one controlled cell,
+but not broad phase or causal starvation; timing is early and tanh magnitude is
+poor.  The exploratory search did not find a 4/4 robust cell.  CDC demonstrates its
+exact local constraint but not a superior practical tradeoff.
 
 \paragraph{Open mean-field theory.}
 For positive recurrent disorder or positive lag, a joint optimization-time DMFT
 would need (i) an effective single-site process and covariance/response kernels,
 (ii) all visible and loss-invisible closure variables, (iii) finite-horizon
 existence and uniqueness, (iv) joint quenched concentration under shared disorder,
-and (v) discretization and hitting-time control.  None is supplied by fitting an
-empirical closure reference.  We therefore leave an analytic $\rho_c$ and
-independent tanh/GRU $\tau^*$ prediction open.
+and (v) discretization and hitting-time control.  Neither fitting an empirical
+closure reference nor passing an event-classification test supplies these objects
+or proves kernel stability.  We therefore leave an analytic $\rho_c$ and certified
+or quantitatively accurate tanh/GRU crossing-time prediction open.
 
 \paragraph{Data and external validity.}
 All citable results are controlled synthetic experiments.  A Waterbirds adapter
-exists but has not been run.  Its proposed weak coordinate is an intercept rather
-than an identified bird-shape response, and no exact background ablation exists;
-we make no Waterbirds claim.  If pursued, the preregistered sensitivity pilot must
-precede a full run and oracle/group-agnostic information settings must be separated.
+contains an unrun CDC-style minibatch head-coordinate surrogate, but it lies
+outside the full-batch matched-shadow theorem.  Its proposed weak coordinate is an
+intercept rather than an identified bird-shape response, and no exact background
+ablation exists; we make no Waterbirds claim.  If pursued, the preregistered
+sensitivity pilot must precede a full run and oracle/group-agnostic information
+settings must be separated.
 
 \paragraph{Reproducibility and baselines.}
-The final E-NL rerun is content-addressed and compactly archived, but historical
-E1, E2, E2-R, exploratory E-NL, and E3 runs retain a disclosed dirty-source
-provenance limitation.  The Bloop-style and PCGrad-style baselines are repository
-implementations motivated by the cited methods, not yet independently audited
-replicas.  CDC also has a stronger supervision and compute setting than ERM,
-Spectral Decoupling, and the interaction penalty.
+The final E-NL rerun is content-addressed and compactly archived at repository
+commit \code{2d0ee83} / tag \code{theorem-aligned-v1}.  Its recorded digest
+identifies the executed run source, not later descendants or working trees.
+Historical E1, E2, E2-R, exploratory E-NL, and E3 runs retain a disclosed
+dirty-source provenance limitation.  The Bloop-style and PCGrad-style baselines
+are repository implementations motivated by the cited methods, not yet
+independently audited replicas.  CDC also has a stronger supervision and compute
+setting than ERM, Spectral Decoupling, and the interaction penalty.
 
 \paragraph{Submission readiness.}
 The package is scientifically defensible as a controlled theory paper, but the
@@ -734,9 +1022,13 @@ requires weak-only learnability.  This distinction turns an ambiguous mechanism
 into a theorem and an executable certificate.  The same discipline narrows the
 rest of the paper: $\dot M=Gg$ is exact only under explicit realization assumptions;
 the rank-one criterion predicts only when its bounds are independently established;
-the wide limit is singular; and CDC's exact guarantee is local.  The corrected
-nonlinear results are correspondingly modest.  Establishing a general recurrent
-optimization-time theory remains an open problem rather than a numerical placeholder.
+the wide limit is singular; the frozen empirical-NTK comparison is conditional on
+unproved kernel movement; and CDC's exact guarantee is local.  The corrected
+nonlinear results are correspondingly narrow: the broad predictor failed, while a
+fresh factorial supports only drift/response-crossing event classification at one
+controlled cell.  Establishing a general recurrent optimization-time theory,
+causal predictor, or calibrated crossing time remains open rather than a numerical
+placeholder.
 
 \appendix
 \section{Proofs for the finite-width theorem package}
@@ -760,6 +1052,51 @@ sums yield Eq.~\eqref{eq:Gg}.  If an orthogonal residual logit term is present,
 substitution of
 $\nabla r_i^C=\sum_bz_{ib}^C\nabla M_b^C+\nabla r_i^\perp$ instead yields
 Eq.~\eqref{eq:projection-residual}.  \qed
+
+\subsection{Proofs of Theorems~\ref{thm:frozen-empirical-ntk} and
+\ref{thm:frozen-comparison}}
+The parameter flow above can be written
+$\dot\theta=J^\top q(r)/n$.  Therefore the chain rule gives
+$\dot r=J\dot\theta=JJ^\top q(r)/n$ and
+$\dot M=\ip{\nabla M}{\dot\theta}=c^\top q(r)/n$, proving
+Theorem~\ref{thm:frozen-empirical-ntk}.
+
+For the comparison, $q$ is $1/4$-Lipschitz componentwise and hence in Euclidean
+norm.  Subtracting Eq.~\eqref{eq:frozen-surrogate} from
+Eq.~\eqref{eq:full-ntk-flow}, adding and subtracting
+$\Theta_0q(r)$, and writing $e_r=\norm{r-\bar r}$ gives
+\begin{equation}
+ e_r'(u)\le \frac{\norm{\Theta_0}}{4n}e_r(u)+\frac{B_\Theta V}{n}
+ =ae_r(u)+\frac{B_\Theta V}{n}.
+\end{equation}
+Gr\"onwall with $e_r(0)=0$ proves Eq.~\eqref{eq:frozen-logit-bound}.  The same
+add--subtract step gives
+\begin{equation}
+ |\dot M-\dot{\bar M}|\le \frac{B_cV}{n}
+ +\frac{\norm{c_0}}{4n}e_r.
+\end{equation}
+Integrating and using $\int_0^t\phi_a(u)\dd u=\psi_a(t)$ proves
+Eq.~\eqref{eq:frozen-response-bound}.
+
+For SGD, the fundamental theorem of calculus along the straight update segment
+gives
+\begin{align}
+ r_{j+1}-r_j&=\widetilde J_j\delta\theta_j
+ =\frac{\eta}{n}\widetilde\Theta_jq(r_j),\\
+ M_{j+1}-M_j&=\ip{\widetilde m_j}{\delta\theta_j}
+ =\frac{\eta}{n}\widetilde c_j^\top q(r_j).
+\end{align}
+Subtracting the frozen Euler recursion yields scalar recurrences
+\begin{align}
+ e_{j+1}&\le(1+\eta a)e_j+\frac{\eta D_\Theta V}{n},\\
+ E_{j+1}&\le E_j+\frac{\eta D_cV}{n}
+ +\frac{\eta\norm{c_0}}{4n}e_j.
+\end{align}
+Solving the first geometric recurrence and summing it in the second gives
+Eq.~\eqref{eq:frozen-discrete-bound}, including the stated $a=0$ limits.  Paired
+bounds are the triangle inequality.  Error-separated sign transfer follows
+immediately; first-hit transfer requires the additional assumptions of
+Corollary~\ref{cor:hitting}.  \qed
 
 \subsection{Proof of the dense-linear geometry}
 For a unit response mode in channel $a$ at lag $\ell_a$, write $b_a$ for the
@@ -814,13 +1151,32 @@ $t_0+\Psi(t_0)/\kappa\le H$, while strict decrease gives uniqueness.  The
 primitive inequalities imply the derivative bound term by term.  \qed
 
 \subsection{Proof of Corollary~\ref{cor:hitting}}
-Transversality implies locally before $\tau$ that
-$x(t)\le\beta-\kappa(\tau-t)$ and after $\tau$ that
-$x(t)\ge\beta+\kappa(t-\tau)$.  Uniform error excludes an $x_N$ crossing before
-$\tau-\epsilon_N/\kappa$ and forces one by
-$\tau+\epsilon_N/\kappa$.  Separation excludes a spurious earlier crossing.  A
-sampling grid adds at most one spacing, and the paired bound follows by the triangle
-inequality.  \qed
+Continuity and first-entry semantics imply $x(\tau)=\beta$.  Absolute continuity
+and $x'\ge\kappa$ almost everywhere give, by integration,
+\begin{equation}
+ x(t)\le\beta-\kappa(\tau-t)\quad(\tau-r\le t\le\tau),
+ \qquad
+ x(t)\ge\beta+\kappa(t-\tau)\quad(\tau\le t\le\tau+r).
+ \label{eq:hitting-cones}
+\end{equation}
+On $[0,\tau-r]$, the quantitative prehistory margin and $\epsilon<\eta$
+give $x_N<\beta$.  On
+$[\tau-r,\tau-\epsilon/\kappa)$, the left cone and the uniform error again give
+$x_N<\beta$.  Hence $\tau_N\ge\tau-\epsilon/\kappa$.  At
+$t=\tau+\epsilon/\kappa$, the right cone gives $x_N(t)\ge\beta$, so the hit is
+finite and $\tau_N\le\tau+\epsilon/\kappa$.  This proves
+Eq.~\eqref{eq:hitting-continuous}.
+
+For sampled data, the first grid point at or after
+$\tau+\epsilon/\kappa$ is at most $h$ later and, by the radius condition, remains
+inside the right cone; it is therefore at or above $\beta$.  No sampled hit can
+precede the continuous lower bound.  If the piecewise-linear interpolant first
+crosses on $[t_{j-1},t_j]$, then $x_N(t_j)\ge\beta$, so
+$t_j\ge\tau-\epsilon/\kappa$ and
+$t_{j-1}\ge\tau-\epsilon/\kappa-h$; its upper bound is no later than the sampled
+hit.  This proves Eq.~\eqref{eq:hitting-grid}.  Applying the bound separately to
+two finite hits and using the triangle inequality proves the paired statement.
+\qed
 
 \subsection{Proof of Theorems~\ref{thm:six-scalar} and
 \ref{thm:wide-limit}}
@@ -835,18 +1191,52 @@ $u_{ss}-1,u_{ww}-1,w-1$ are $2/N$.  Coordinatewise Chebyshev bounds and a union
 bound sum to $1+1+1+2+2+2=9$, proving
 Eq.~\eqref{eq:init-concentration}.
 
-For bounded second cue moments the CE field is locally Lipschitz.  Define the Gram
-energy $R=w+\operatorname{tr}(u)$.  Along the six-scalar flow,
+The field bound $\norm{g(M)}_\infty\le A$ follows from
+$0\le\sigm\le1$.  Since $\sigm$ is $1/4$-Lipschitz,
+\begin{equation}
+ |g_a(M)-g_a(\widetilde M)|
+ \le\frac14\sum_b\E|z_az_b|\,\norm{M-\widetilde M}_\infty,
+\end{equation}
+which proves Eq.~\eqref{eq:g-lipschitz}.  Define the Gram energy
+$R=w+u_{ss}+u_{ww}$.  Along the deterministic flow,
 \begin{equation}
  R'=4g\cdot M=4\E[X\sigm(-X)],\qquad X=z\cdot M.
 \end{equation}
-The scalar $x\sigm(-x)$ is bounded above and $R\ge0$, so $R$ cannot blow up on a
-finite horizon.  Cauchy--Schwarz bounds all coordinates by $R$, yielding a compact
-forward set and a finite local Lipschitz constant on a common tube.  Gronwall's
-inequality gives Eq.~\eqref{eq:gronwall}.  Substitute
-$\epsilon=\delta e^{-L_HH}$ into Eq.~\eqref{eq:init-concentration} to obtain
-Eq.~\eqref{eq:trajectory-concentration}.  The shared-initialization paired result
-uses the larger of the two finite-horizon Lipschitz constants.  \qed
+Because $x\sigm(-x)\le c_\star=W(e^{-1})$ and $R(0)=3$,
+$R(t)\le R_H$.  Every coordinate of $q$ is a squared norm or inner product of
+$b_s,b_w,c$, so Cauchy--Schwarz gives $\norm{q(t)}_\infty\le R(t)\le R_H$.
+
+Consider two states in the cube $\norm q_\infty,\norm{\widetilde q}_\infty
+\le B_{H,r}$ and set $d=\norm{q-\widetilde q}_\infty$.  Every product in the
+$M$ and $u$ equations satisfies the direct estimate
+\begin{equation}
+ |g_a(M)y-g_a(\widetilde M)\widetilde y|
+ \le (A+B_{H,r}C)d.
+ \label{eq:product-lipschitz}
+\end{equation}
+There are at most three such products in an $M$ equation and two in a $u$
+equation; the factor two and two cue indices give four in the $w$ equation.
+Thus the full vector field is $L_{H,r}=4(A+B_{H,r}C)$-Lipschitz on the cube and
+therefore on the radius-$r$ reference tube.
+
+Let $T_r$ be the first time before $H$ that
+$\norm{q_N(t)-q(t)}_\infty$ reaches the tube boundary.  Up to $T_r$, Gronwall's
+inequality and Eq.~\eqref{eq:tube-bootstrap-event} give
+\begin{equation}
+ \norm{q_N(t)-q(t)}_\infty
+ \le e^{L_{H,r}t}\norm{q_N(0)-q_0}_\infty.
+\end{equation}
+If $L_{H,r}>0$, the initialization event makes this bound strictly less than $r$
+for every $t<H$, so the boundary cannot be reached before $H$.  If $L_{H,r}=0$,
+then $A=C=0$, the cue law is zero almost surely, and the six-scalar vector field
+vanishes; the initial discrepancy is constant and cannot exit the closed tube.
+The endpoint may lie on the boundary.  In either case the same estimate is at most
+$\delta$ throughout $[0,H]$, proving Eq.~\eqref{eq:gronwall}.  Applying
+Eq.~\eqref{eq:init-concentration} with
+$\epsilon=e^{-L_{H,r}H}\min\{r,\delta\}$ proves
+Eq.~\eqref{eq:trajectory-concentration}.  For the shared-initialization pair, use
+a common $r$ and the maximum deterministic constant from the two fixed cue laws;
+the same concentrating initial six scalars control both paths.  \qed
 
 \section{Proofs for Counterfactual Drift Correction}
 \label{app:cdc-proofs}
@@ -859,33 +1249,43 @@ so $a\cdot v'=a\cdot v+\alpha a\cdot q=a\cdot v$.  This argument is independent
 of $\alpha$, hence survives a cap.  \qed
 
 \subsection{Unique minimum-norm correction}
-If $\delta\le0$, $d=0$ is feasible and uniquely norm-minimal.  Suppose
-$\delta>0$.  Any feasible $d$ obeys $a\cdot d=0$ and $p\cdot d\ge\delta$.
-Because $p=q+(p\cdot a/\norm a^2)a$ when $a\ne0$ (and $q=p$ when $a=0$),
-$p\cdot d=q\cdot d$.  Cauchy--Schwarz on the subspace orthogonal to $a$ gives
+Let $\bar\delta=F_w^{\Wcond}-F_w$ be the raw deficit and
+$\delta=[\bar\delta]_+$.  If $\bar\delta\le0$, $d=0$ is feasible and uniquely
+norm-minimal.  Suppose $\bar\delta>0$, so $\delta=\bar\delta$.  Any feasible $d$
+obeys $a\cdot d=0$ and $p\cdot d\ge\delta$.  Because
+$p=q+(p\cdot a/\norm a^2)a$ when $a\ne0$ (and $q=p$ when $a=0$),
+$p\cdot d=q\cdot d$.  Cauchy--Schwarz in the fixed Euclidean subspace orthogonal
+to $a$ gives
 \begin{equation}
  \delta\le q\cdot d\le\norm q\norm d,
  \qquad \norm d\ge\delta/\norm q.
 \end{equation}
-Equality requires a nonnegative multiple of $q$; the unique target-attaining choice
-is $d^*=(\delta/\norm q^2)q$.  A positive deficit is feasible exactly when
-$q\ne0$.  \qed
+Equality requires a nonnegative multiple of $q$.
+The correction $d^*=(\delta/\norm q^2)q$ is feasible and attains this lower
+bound, so it is the unique minimum-norm, lower-bound-attaining feasible correction.
+Larger positive multiples can also attain the target but have larger norm.  A
+positive deficit is feasible exactly when $q\ne0$ in this representation.  A
+nonbinding cap leaves $d^*$ unchanged; a binding cap generally loses target
+attainment, so the target-attaining optimization claim no longer applies.  \qed
 
 \subsection{Local finite-step deviation}
-For an $L$-Lipschitz gradient on both segments, the smoothness remainder satisfies
+In the fixed chart and norm, $L$-Lipschitzness of the gradient on both straight
+segments gives the smoothness remainder
 \begin{equation}
  |m_s(\theta+h)-m_s(\theta)-\nabla m_s(\theta)\cdot h|
  \le\frac L2\norm h^2.
 \end{equation}
 Apply this at $h=\eta v$ and $h=\eta v'$.  Instantaneous preservation cancels the
-linear terms and the triangle inequality yields Eq.~\eqref{eq:cdc-step}.  For
-active uncapped CDC,
+linear terms and the triangle inequality yields Eq.~\eqref{eq:cdc-step} for the
+actual velocities, capped or uncapped.  For active uncapped CDC,
 \begin{equation}
  \norm{v'}\le\norm v+\frac{\delta}{\norm q}\le V+D/q_{\min},
 \end{equation}
-which gives the explicit bound.  If smoothness is known only on
+which gives the explicit bound; a nonnegative upper cap can only decrease the
+added multiple of $q$.  If smoothness is known only on the fixed-coordinate ball
 $B(\theta,r)$, sufficient segment conditions are
-$\eta V\le r$ and $\eta(V+D/q_{\min})\le r$.  \qed
+$\eta V\le r$ and $\eta(V+D/q_{\min})\le r$.  These quantities and $L$ are
+chart- and metric-dependent.  \qed
 
 \section{Discrete certificate and experiment audit}
 For logged values $\Delta_k$, increments telescope exactly:
@@ -904,22 +1304,25 @@ no assertion between logged points.
 \caption{Authoritative artifact map.  Paths are relative to the repository root.}
 \label{tab:artifacts}
 \small
-\begin{tabular}{ll}
+\begin{tabular}{@{}p{0.38\linewidth}p{0.57\linewidth}@{}}
 \toprule
 Claim family & Artifact directory \\
 \midrule
-Controlled dense phase grid & \code{results/e1\_dense\_rerun-20260823-085142} \\
-Finite-width empirical closure & \code{results/e2\_corrected\_validation-20260821-224630} \\
-Exact special solver checks & \code{results/e2r\_solver\_checks-20260823-084911} \\
-Final nonlinear crossover & \code{paper/artifacts/enl\_tanh\_crossover-20260824-141207} \\
-Exploratory nonlinear audit & \code{results/enl\_exact\_regime\_search-20260824-105003} \\
-Dense CDC ablation & \code{results/e3\_cdc\_dense\_ablation-20260823-090702} \\
+Controlled dense phase grid & \path{results/e1_dense_rerun-20260823-085142} \\
+Finite-width empirical closure & \path{results/e2_corrected_validation-20260821-224630} \\
+Exact special solver checks & \path{results/e2r_solver_checks-20260823-084911} \\
+Final nonlinear crossover & \path{paper/artifacts/enl_tanh_crossover-20260824-141207} \\
+Broad frozen-NTK pilot (failed) & \path{paper/artifacts/enl_ntk_pilot-20260825} \\
+Restricted frozen-NTK factorial (passed) & \path{paper/artifacts/enl_ntk_crossing_factorial-20260825} \\
+Exploratory nonlinear audit & \path{results/enl_exact_regime_search-20260824-105003} \\
+Dense CDC ablation & \path{results/e3_cdc_dense_ablation-20260823-090702} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \paragraph{Reproduction commands.}
-From the repository root in the project environment:
+The ordinary runs can be regenerated from the repository root in the project
+environment:
 \begin{verbatim}
 python run_experiment.py e1  --config configs/e1_dense_rerun.yaml
 python run_experiment.py e2  --config configs/e2_corrected_validation.yaml
@@ -927,8 +1330,20 @@ python run_experiment.py e2r --config configs/e2r_solver_checks.yaml
 python run_experiment.py enl --config configs/enl_tanh_crossover.yaml
 python run_experiment.py e3  --config configs/e3_cdc_dense_ablation.yaml
 \end{verbatim}
-The exploratory E-NL command is deliberately omitted from the confirmatory list;
-its complete configuration and negative result remain archived in the repository.
+The checked-in frozen evaluate configs are historical evidence records: they pin the
+original preflights and intentionally fail against later source.  A new protocol run
+must first execute \code{enl-preflight}, then copy the matching evaluate config and
+explicitly repin \code{evaluation.preflight\_dir} and
+\code{evaluation.manifest\_sha256} before \code{enl-evaluate}.  This creates a new
+study; it does not bitwise reproduce the archived dirty-source studies.  The broad
+pilot pins manifest SHA-256
+\code{f186d587...f0ffaf5} and prediction SHA-256
+\code{9787d999...f9dfaa}; its evaluation verdict is failed.  The restricted
+factorial pins manifest SHA-256 \code{bdcf02ab...a0db1} and prediction SHA-256
+\code{c05b3181...6542};
+its crossing-only verdict is passed.  The exploratory E-NL command is deliberately
+omitted from the confirmatory list; its complete configuration and negative result
+remain archived in the repository.
 
 \bibliographystyle{plainnat}
 \bibliography{references}

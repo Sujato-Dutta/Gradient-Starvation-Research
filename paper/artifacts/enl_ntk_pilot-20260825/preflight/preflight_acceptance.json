@@ -1,0 +1,10 @@
+{
+  "stage": "initialization_only_preflight",
+  "optimizer_constructed": false,
+  "training_trajectory_observed": false,
+  "state_unchanged": true,
+  "parameter_gradients_unpopulated": true,
+  "all_kernel_and_prediction_values_finite": true,
+  "max_initial_drift_reconstruction_error": 1.1359861586124342e-08,
+  "passed": true
+}

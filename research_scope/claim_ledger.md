@@ -15,15 +15,45 @@ Tags are used strictly.
 - **BLOCKED** — cannot be evaluated until a named proof obligation is discharged.
 - **RETRACTED** — was believed, and the evidence no longer supports it.
 
-Last updated 2026-08-24 on `codex/corrected-dense-baseline`. The final nonlinear
+Last updated 2026-08-25 on `codex/corrected-dense-baseline`. The final nonlinear
 rerun is archived at `paper/artifacts/enl_tanh_crossover-20260824-141207` with a
 resolved configuration and the executable-source fingerprint
 `a1ce0e85a8c221a13897d18651a8d6234d5f72803c8f29b15dad3480b9729698`. Its
 `git_dirty: true` state is therefore content-addressed over `run_experiment.py`
-and `src/**/*.py`. Historical E1, E2, E2-R, exploratory E-NL, and E3 artifacts
-were also dirty but predate source fingerprinting; their exact executed source
-cannot be reconstructed retroactively. See
-`paper/artifacts/provenance_manifest.json`.
+and `src/**/*.py`. That fingerprint and the unmodified run metadata are frozen at
+repository commit `2d0ee83` / tag `theorem-aligned-v1`; the digest identifies the
+executed run source, not any later descendant or working tree.
+
+The initialization-frozen empirical-NTK studies are separately sealed. The broad
+pilot source evaluation at `results/enl_ntk_pilot_evaluate-20260825-160757`, with
+compact checked-in evidence at `paper/artifacts/enl_ntk_pilot-20260825`, verifies
+manifest
+`f186d587e28f6408b68baf95566d2d1f1c5d5701e205e9a69ce86cbe4f0ffaf5`, frozen
+prediction digest `9787d99953f1046b4934aa6e7b3f969e30a4efafb3d02a67cc95926232f9dfaa`,
+and executable-source digest
+`8d8162558e7d25fff7a5059a4cf49139a354ca211fd6f0759417e75dd87f435c`.
+The restricted fresh factorial source evaluation at
+`results/enl_ntk_crossing_factorial_evaluate-20260825-162949`, with compact
+checked-in evidence at
+`paper/artifacts/enl_ntk_crossing_factorial-20260825`, verifies manifest
+`bdcf02abbef5b9d8f7ce3979d3363ee8d39ab7817a1d554616bc4dd4a22a0db1`, frozen
+prediction digest `c05b31810cb3869e7d051f539741732a8758f6cac542deb448a98d2ada7b6542`,
+and executable-source digest
+`ca878df376b01c0ea45ac352e353530bf20c567de59bb400617e5dd74d5b6b6b`.
+Both evaluations report that all sealed inputs were unchanged. The compact archive
+roots and every archived file's digest/size are indexed by
+`paper/artifacts/provenance_manifest.json`. They omit large kernel tensors and full
+trajectory/prediction tables. More importantly, the exact dirty Python source bytes
+corresponding to the two recorded source fingerprints were not archived and are no
+longer reconstructible; the later tree fails the source guard. Thus a clean checkout
+can audit the compact outcomes and seals but cannot replay either archived study.
+The digests establish artifact identity and record historical source fingerprints;
+they do not reconstruct omitted source, prove kernel stability, or establish
+scientific validity.
+
+Historical E1, E2, E2-R, exploratory E-NL, and E3 artifacts were also dirty but
+predate source fingerprinting; their exact executed source cannot be reconstructed
+retroactively. See `paper/artifacts/provenance_manifest.json`.
 
 ---
 
@@ -53,15 +83,37 @@ one invalidates the rows that use it.
 7. **The Waterbirds "weak coordinate" is an intercept, not an identified feature.**
    Regressing the margin on `(strong, 1)` makes the second coefficient the average
    signed margin unexplained by the strong mode. Nothing identifies a bird-shape
-   response, so Waterbirds is a **surrogate** mechanistic probe only.
+   response. Its CDC-style method is only a minibatch head-coordinate surrogate,
+   outside the full-batch matched-shadow theorem, and has **not been run**; thus
+   Waterbirds is a surrogate mechanistic probe only.
 8. **`degenerate` is an artifact bucket, not a phase.** It marks runs whose target
    was already met at initialization, before any optimization step.
 9. **`closure_reference` is a numerical approximation.** It is a mean over trained
    finite networks pushed through `integrate_projected_flow`. It is not a solved
    theory and must never be called DMFT.
+10. **Full signed-logit empirical NTK versus two-probe Gram matrix.** For sample
+    signed logits `r_i`, `J_r` has rows `grad r_i`, `K=J_r J_r^T`, and the response
+    cross-kernel is `C_i=<grad r_i,grad M_w>`. These full sample-level objects drive
+    the exact finite-width flow. The two-response Gram matrix `G` is not a substitute
+    for `K` or `C` in nonlinear tanh/GRU models.
+11. **Frozen-surrogate exactness is internal.** Freezing `K` and `C` at initialization
+    gives an exact nonlinear logistic flow, and an exact explicit-Euler recursion,
+    for the initialization-linearized tangent surrogate. Agreement with a trained
+    nonlinear network is a conditional approximation requiring kernel-movement
+    control; it is not an identity for tanh or GRU training.
+12. **Crossing-event prediction is not causal prediction.** Correctly classifying a
+    drift or response crossing does not predict the weak-only learnability gate,
+    certify causal starvation, estimate event prevalence, or validate crossing
+    times and trajectory magnitudes.
+13. **Manifest verification is an integrity contract.** It establishes that a
+    preflight did not train, that evaluation consumed the externally pinned files,
+    config and executable source, and that those files remained unchanged. It does
+    not establish kernel stability or any scientific approximation assumption.
 
 Implemented in `metrics.CAUSAL_REGIMES` and `metrics.classify_causal_regime`;
-enforced by `tests/test_causal_regimes.py`.
+enforced by `tests/test_causal_regimes.py`. The signed-kernel definitions and frozen
+recursion are implemented in `theory.initial_frozen_empirical_kernel` and
+`theory.integrate_frozen_logistic_sgd`.
 
 ---
 
@@ -76,22 +128,29 @@ enforced by `tests/test_causal_regimes.py`.
 | T5 | Both equal-time product-difference orderings reconstruct the projected drift exactly; neither attribution is canonical | **PROVED** | `theory.equal_time_drift_difference`; both algebraic reconstructions tested |
 | T6 | Tail-area criterion: after a unique transfer-to-suppression drift crossing, an outcome crossing occurs iff accumulated negative drift reaches the positive peak area | **PROVED** | `e2_theorem.md`, Theorem B.1; executable finite-step analogue in `discrete_crossover_certificate` |
 | T7 | Noiseless rank-one cue log drift ratio and monotone sufficient condition for a unique **rate** crossover | **PROVED WITH ASSUMPTIONS** | `e2_theorem.md`, Theorem C and Corollary C.1; does not imply outcome starvation without T6 |
-| T8 | Transverse first hitting times are stable under uniform trajectory convergence | **PROVED WITH ASSUMPTIONS** | `e2_theorem.md`, Corollary D |
-| T9 | Zero-disorder projected dynamics close exactly on six scalars at `g=0, lag=0` | **PROVED** | `dmft.solve_zero_disorder`; `e2_theorem.md`, Theorem E.1 |
-| T10 | The zero-disorder six-scalar process converges uniformly on fixed horizons from an explicit `9/(N ε²)` initialization bound and Grönwall propagation | **PROVED WITH LOCAL-LIPSCHITZ TUBE** | `e2_theorem.md`, Theorem E.2; bound evaluators in `theory.py` |
+| T8 | Quantitatively isolated transverse first hitting times are stable under uniform trajectory error, with radius/mesh guards and finite paired hits | **PROVED WITH ASSUMPTIONS** | `e2_theorem.md`, Corollary D; caller establishes first-entry semantics, prehistory margin, derivative bound, and any grid validity |
+| T9 | In the dense linear full-batch CE flow with zero bulk gain, zero lag, and zero background noise, the projected dynamics close exactly on six scalars at every width | **PROVED** | `e2_theorem.md`, Theorem E.1 and proof; `dmft.solve_zero_disorder` is an executable realization, not the proof |
+| T10 | With iid `N(0,1/N)` input/readout initialization, a fixed bounded-second-moment cue law, fixed horizon, and deterministic radius `r`, the zero-disorder six-scalar process converges uniformly with initialization bound `9/(N ε²)` and trajectory bound `9 exp(2L_(H,r)H)/(N min(r,δ)²)` | **PROVED WITH ASSUMPTIONS** | `e2_theorem.md`, Theorem E.2; deterministic `A,C,L_(H,r)` and exit-time bootstrap are proved there; helpers only evaluate caller-supplied constants/radius |
 | T11 | CDC Result 1: exact instantaneous strong-drift preservation | **PROVED** | `cdc_theorem.md`, Result 1 |
-| T12 | CDC Result 2: unique uncapped minimum-norm target-attaining correction when feasible | **PROVED WITH ASSUMPTIONS** | `cdc_theorem.md`, Result 2; a binding cap loses target-attaining optimality |
-| T13 | CDC Result 3: one-step strong-response deviation is `O(η²)` under local `L`-smoothness, bounded velocity/deficit, and `||q||>=q_min` | **PROVED WITH ASSUMPTIONS** | `cdc_theorem.md`, Result 3; `cdc_finite_step_deviation_bound` |
-| T14 | General joint paired CE-RNN optimization-time DMFT at positive disorder/lag | **BLOCKED CONJECTURE** | `e2_theorem.md` obligations 1–4; all dependent solver surfaces still raise `NotImplementedError` |
-| T15 | Independent tanh/GRU crossover-time prediction and analytic learnability/starvation boundary `rho_c` | **BLOCKED** | requires T14 or another independent closure; trajectory certificates are not predictions |
+| T12 | CDC Result 2: unique uncapped minimum Euclidean-norm, lower-bound-attaining feasible correction in the fixed implemented Euclidean/Frobenius chart | **PROVED WITH ASSUMPTIONS** | `cdc_theorem.md`, Result 2; exact positive-deficit feasibility is `q!=0`, numerical `feasibility_epsilon` is only a tolerance, and a binding cap loses target-attaining optimality |
+| T13 | CDC Result 3: fixed-chart one-step strong-response deviation is `O(η²)` when local `L`-smoothness holds on both straight coordinate segments; the explicit bound also assumes bounded velocity/deficit and `norm(q)>=q_min` | **PROVED WITH ASSUMPTIONS** | `cdc_theorem.md`, Result 3; actual-velocity bound is cap-compatible, explicit `D/q_min` derivation is active uncapped (or reduced by a nonnegative cap), and the helper does not establish smoothness or segment containment |
+| T14 | The full finite-width signed-logit/response empirical-NTK flow is exact: `dot r=K(theta) sigma(-r)/n` and `dot M=C(theta)^T sigma(-r)/n` | **PROVED** | Chain rule as in `e2_theorem.md`, Theorem A.1; sample-level signed Jacobians and the initial identity are implemented in `theory.initial_frozen_empirical_kernel` and tested for tanh/GRU |
+| T15 | Freezing the full signed-logit NTK `K_0` and response cross-kernel `C_0` defines an exact nonlinear logistic tangent-surrogate ODE; `integrate_frozen_logistic_sgd` is the exact explicit-Euler recursion of that surrogate under the experiment's mean-BCE scaling and `tau=eta k` convention | **PROVED** | `theory.integrate_frozen_logistic_sgd`; initial drift and grid conventions tested. Exactness is for the surrogate, not the trained nonlinear model |
+| T16 | Continuous true-flow versus frozen-flow error, and discrete nonlinear-SGD versus frozen-Euler error, are bounded conditionally by uniform instantaneous/secant drift bounds for `K` and `C`; zero movement gives exact agreement | **PROVED WITH ASSUMPTIONS** | Derivation in `oral_theorem_package.md`, “Conditional secant-kernel comparison”; discrete evaluator `theory.frozen_kernel_discrete_error_bound` is tested. The caller must prove the kernel bounds |
+| T17 | General joint paired CE-RNN optimization-time DMFT at positive disorder/lag | **BLOCKED CONJECTURE** | `e2_theorem.md` obligations 1–4; all dependent solver surfaces still raise `NotImplementedError` |
+| T18 | Certified or quantitatively accurate tanh/GRU crossover-time prediction and an analytic learnability/starvation boundary `rho_c` | **OPEN / BLOCKED** | The frozen surrogate supplies an empirical event classifier, not certified kernel control or calibrated times; T17 or another independent closure/bound is still required |
 
 The established headline is now the **finite-width causal theorem package**
-(T1–T13), not the blocked DMFT conjecture. T6 proves precisely what a rate crossover
+(T1–T16), not the blocked DMFT conjecture. T6 proves precisely what a rate crossover
 must additionally satisfy to become an outcome crossing. It does not prove that an
 arbitrary RNN develops the required drift sign pattern. T7 supplies sufficient rate-
 crossover conditions in the noiseless rank-one setting, but checking those
-conditions on the same trajectory is certification rather than independent
-prediction.
+conditions on the same trajectory is certification, not a prospectively certified
+or quantitatively accurate prediction. T14–T16 add a full sample-level initialization-frozen route: the
+signed-logit/response flow and the frozen surrogate are exact in their stated
+objects, while approximation of nonlinear tanh/GRU training remains conditional on
+unproved kernel-movement bounds. Certified or quantitatively accurate nonlinear
+crossing-time prediction remains open.
 
 ---
 
@@ -100,8 +159,8 @@ prediction.
 | # | Statement | Status | Backing run |
 |---|---|---|---|
 | E1 | Under the final common-probe/direct-autograd protocol, tanh exhibits an exact drift crossing, response crossing, and causal tail-area certificate in **3/8** seeds | **EMPIRICAL** | `paper/artifacts/enl_tanh_crossover-20260824-141207`; conditional on the three crossing seeds, exact drift `tau*` mean `0.1942` and response-crossing mean `0.3890` |
-| E2 | The other **5/8 tanh seeds are suppressed from initialization**, not transfer-to-starvation; each of the three crossing seeds has one exact `+ -> -` sign change | **EMPIRICAL** | same; phases are `suppression_throughout|transfer_then_starvation` |
-| E3 | In each of the three tanh crossing seeds, exact drift suppression precedes response equality; conditional mean lead `0.1947` in optimization time | **EMPIRICAL** | same; this is conditional descriptive evidence, not an independent `tau*` prediction |
+| E2 | The other **5/8 tanh seeds are suppressed from initialization**, not transfer-to-starvation; each of the three crossing seeds has one exact `+ -> -` sign change | **EMPIRICAL** | same; phases are `suppression_throughout` or `transfer_then_starvation` |
+| E3 | In each of the three tanh crossing seeds, exact drift suppression precedes response equality; conditional mean lead `0.1947` in optimization time | **EMPIRICAL** | same; this is conditional descriptive evidence, not a certified or quantitatively accurate `tau*` prediction |
 | E4 | GRU has exact drift and response crossings in **5/8** seeds, but weak-only never reaches `beta=0.5` in **8/8** seeds, so causal starvation is certified in **0/8** | **EMPIRICAL** | same; outcome crossings without the learnability gate must not be called causal starvation |
 | E14 | ~~tanh late-time suppression is geometry-dominated~~ | **RETRACTED** | See R9. The additive projected attribution is not ordering-invariant and does not replace the exact nonlinear response drift |
 | E15 | Direct-versus-projected drift residuals are nonzero and exposed: maximum absolute residual `0.02197` for tanh and `0.002986` for GRU | **EMPIRICAL** | `paper/artifacts/enl_tanh_crossover-20260824-141207`; confirms that projected `Gg` cannot be silently treated as exact for nonlinear probes |
@@ -117,6 +176,11 @@ prediction.
 | E11 | All five shadow-based methods are *numerically similar* on the causal weak gap, agreeing to ~4 decimal places | **EMPIRICAL** | `e3_cdc_dense_ablation-20260823-090702`. **Not** statistically indistinguishable: 9 of 10 direct pairwise tests are significant at 0.05 (e.g. CDC − bloop `−0.000720`, `p = 2.9e-07`). Differences are detectable and practically negligible against the `≈ −10.5` effect versus ERM. Equivalence would need a preregistered margin |
 | E12 | Only CDC preserves the instantaneous strong drift: `4.77e-07` against `1.5e-01`–`3.8e-01` | **EMPIRICAL** | same |
 | E13 | `unconstrained_rescue` and `pcgrad` end with a *higher* final strong response than CDC (`1.295` vs `1.042`) | **EMPIRICAL** | same |
+| E19 | The sealed broad empirical-NTK pilot **failed** its preregistered acceptance rule: classifier correctness was phase `12/16`, drift crossing `14/16`, response crossing `14/16`, causal certificate `14/16`, and weak-only learnability `12/16`; tanh learnability was only `4/8`, below the `0.625` per-model threshold | **EMPIRICAL NEGATIVE RESULT** | `results/enl_ntk_pilot_evaluate-20260825-160757`; manifest `f186d587...`, predictions `9787d999...`, source `8d816255...` |
+| E20 | On the fresh restricted `4` data-seed by `8` model-seed factorial for each architecture (`64` records), the frozen surrogate classified response-crossing events correctly in `64/64` and drift-crossing events in `60/64` (`32/32` tanh, `28/32` GRU); two-way-bootstrap 95% lower bounds were respectively `1.0` and `0.8125` | **EMPIRICAL, RESTRICTED SUCCESS** | `results/enl_ntk_crossing_factorial_evaluate-20260825-162949`; only drift/response crossing were preregistered primary outputs; manifest `bdcf02ab...`, predictions `c05b3181...`, source `ca878df3...` |
+| E21 | In that factorial, phase `52/64`, causal-certificate `56/64`, and learnability `49/64` are classifier-correctness counts, not event prevalence, and were explicitly secondary/rejected after the failed broad pilot | **EMPIRICAL, NON-PRIMARY** | same; these endpoints cannot be promoted to causal prediction or used to rescue the broad hypothesis |
+| E22 | Restricted-factorial crossing times were systematically early (bias: tanh drift `−0.0593`, tanh response `−0.1380`, GRU drift `−1.4330`, GRU response `−1.8199`), and tanh trajectory magnitudes were poor (`2.455` response-gap RMSE, `2.489` weak-response RMSE, `0.490` drift RMSE) | **EMPIRICAL LIMITATION** | same; times and trajectory magnitudes were secondary and uncalibrated, so quantitatively accurate time prediction remains open |
+| E23 | Preflight/evaluation integrity passed for both studies: the evaluator verified `24` pilot and `72` factorial sealed files before training and re-hashed them unchanged afterward | **EMPIRICAL SOFTWARE/PROVENANCE** | each evaluation's `provenance.json`; this does not prove tanh/GRU kernel stability or surrogate accuracy |
 
 ---
 
@@ -131,9 +195,13 @@ prediction.
 | R5 | "BOTH-feature E2 RMSE worsens with width, so the closure is incomplete" | **RETRACTED** | True only of `e2_width_extension-20260821-134952` (`19.862 → 25.975`), which is superseded. The corrected run improves (`0.09084 → 0.02958`, non-monotone at N=128). The solver is still needed, for the epistemic reason that a reference calibrated from trained networks cannot falsify the theory |
 | R6 | "CDC beats Bloop and the ablations on the causal weak gap" | **RETRACTED** | It does not; see E11. The defensible claim is narrower: CDC is the unique family member preserving the instantaneous first-order response of a theory-identified feature, and this run does not demonstrate that the property has practical value |
 | R7 | The old E-NL 8/8 tanh crossover, `tau*=1.6112`, and GRU 0/8 narrative | **RETRACTED AND SUPERSEDED** | Those values used a condition-dependent/projection-based response convention. Under the final common symmetric probe and universal direct-autograd drift, `paper/artifacts/enl_tanh_crossover-20260824-141207` gives tanh 3/8 exact drift/response/causal crossings and GRU 5/8 exact drift/response crossings but 0/8 causal certifications. The old numerical `tau*` is invalid for the final response definition |
-| R9 | "Late tanh suppression is geometry-driven" (E14) | **RETRACTED** | Two defects. First the split was algebraically wrong: it paired ordering A's geometry term with ordering B's field term, reconstructing nothing — mismatch up to `0.753`, e.g. a row with `d_w = 0.011` reported `geometry 0.923`, `field −0.159`, summing to `0.764`. Second, and fatally for the claim, splitting a product difference admits two exact orderings and they **disagree**: at the final point only 1/8 tanh seeds agree on which channel dominates. Both orderings are now computed with per-row reconstruction tests, and a `dominance_ordering_invariant` flag gates any dominance statement. The tanh claim is withdrawn; the GRU one survives as E16 because it *is* invariant |
+| R9 | "Late tanh suppression is geometry-driven" (E14) | **RETRACTED** | Two defects. First the split was algebraically wrong: it paired ordering A's geometry term with ordering B's field term, reconstructing nothing — mismatch up to `0.753`, e.g. a row with `d_w = 0.011` reported `geometry 0.923`, `field −0.159`, summing to `0.764`. Second, and fatally for the universal claim, splitting a product difference admits two exact orderings. At the final logged point they agree on which channel dominates in 7/8 tanh seeds, not all 8/8; across the full trajectories the ordering-invariant fractions are only `0.188–0.426`. Both orderings are now computed with per-row reconstruction tests, and a `dominance_ordering_invariant` flag gates any per-point dominance statement. The universal tanh claim is withdrawn; the GRU final-point statement survives as E16 because it is invariant in 8/8 seeds |
 | R10 | "A drift crossing necessarily precedes a response crossing" | **RETRACTED as stated** | A `+ -> -` derivative crossing establishes a local maximum of the response gap, not that the gap later reaches zero. The negative tail-area condition in T6 is necessary and sufficient. In the final tanh run the ordering holds only for the 3/8 crossing seeds; the other 5/8 are suppressed from initialization. In GRU it holds for 5/8 outcome-crossing seeds, but none passes the weak-only learnability gate |
-| R8 | "Waterbirds CDC preserves the instantaneous strong drift" | **RETRACTED as previously implemented** | Two defects, both fixed. The correction wrote gradients only for the head, leaving the backbone at `grad = None` and silently frozen while baselines fine-tuned the whole network. And the optimizer was AdamW with weight decay, whose preconditioned, momentum-carrying, decayed update is not the corrected gradient the guarantee is stated for. The runner now requires SGD with zero decay for *every* arm whenever a CDC arm is present, so the constraint cannot become an optimizer confound |
+| R8 | "Waterbirds CDC preserves the instantaneous strong drift" | **RETRACTED as previously implemented; corrected surrogate not run** | The former code froze the backbone by writing only head gradients and used AdamW with decay, so it was outside the theorem. Those implementation defects are fixed, but the remaining CDC-style method is a minibatch head-coordinate surrogate outside the full-batch matched-shadow theorem. No corrected Waterbirds run or result exists |
+| R11 | "The broad initialization-frozen empirical-NTK predictor passed held-out evaluation" | **RETRACTED** | The 16-record pilot failed because tanh weak-only-learnability correctness was `4/8`; aggregate correctness on other labels does not override the preregistered per-model failure |
+| R12 | "The initialization-frozen surrogate is the exact tanh/GRU training dynamics" or "tanh/GRU kernels are stable" | **RETRACTED / UNPROVED** | The signed-logit/response flow is exact with time-varying kernels, and the frozen recursion is exact for its own tangent surrogate. Relating it to nonlinear training requires uniform instantaneous/secant kernel-movement bounds that have not been proved or certified for either architecture |
+| R13 | "The restricted factorial validates phase, causal starvation, or learnability prediction" | **NARROWED** | Only drift- and response-crossing event classification were frozen as primary after the broad pilot failed. Phase, causal certificate, and learnability were explicitly rejected as primary and retained as uncalibrated secondary diagnostics |
+| R14 | "High crossing-event accuracy establishes calibrated crossing times, causal prevalence, or universal recurrent behavior" | **RETRACTED** | Classifier correctness is not prevalence. Predictions were systematically early, tanh trajectory magnitudes were poor, the experiment covered one width/task cell, and GRU outcome crossings still failed the causal learnability gate |
 
 ---
 
@@ -201,4 +269,16 @@ stated as "does not beat our Bloop-style baseline" until the primary text is che
 5. Any quantitative claim sourced from `e2_medium_validation`,
    `e2_high_confidence`, `e2_width_extension`, or the 13:xx E1/E3 batch.
 6. Any Waterbirds result. Nothing has been run.
-7. Anything about acceptance outcome or oral readiness.
+7. The broad empirical-NTK pilot passed, or aggregate accuracy rescues its failed
+   tanh learnability criterion.
+8. The initialization-frozen surrogate is exact for trained tanh/GRU networks, or
+   the manifest/preflight establishes nonlinear kernel stability.
+9. The restricted factorial predicts phase, weak-only learnability, causal
+   starvation, calibrated crossing times, or trajectory magnitudes.
+10. Crossing-event classifier correctness is causal-event prevalence or evidence
+    of universal recurrent behavior.
+11. The manifest hashes prove the scientific approximation rather than artifact,
+    configuration, and executable-source integrity.
+12. Certified or quantitatively accurate tanh/GRU crossing-time prediction is
+    complete; it remains open.
+13. Any guarantee of paper acceptance, oral selection, or oral readiness.
