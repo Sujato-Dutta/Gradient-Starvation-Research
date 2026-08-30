@@ -8,6 +8,21 @@
 > `oral_theorem_package.md`. The general positive-disorder/positive-lag DMFT remains
 > blocked; the established replacement is the finite-width causal theorem package.
 
+> **Final-state reconciliation (2026-08-29).** The completed work distinguishes
+> relative transfer, rate suppression, outcome suppression, and causal starvation;
+> the last additionally requires the weak-only first-hit gate. Corrected E1 has 32
+> `rho`–seed cells per lag from four strengths and eight seed IDs, not 32 independent
+> seeds. The post-hoc terminal beta audit was derived without training and is not a
+> first-hit replacement or architecture ranking. The sealed E19 five-endpoint pilot
+> failed; E20 succeeded only for restricted drift/response crossing-event labels.
+> CDC's established result is the feasible uncapped target-attaining minimum-norm
+> correction in the fixed chart plus local first-order/one-step guarantees, not
+> broad practical superiority. All citable experiments are synthetic; E-NL uses
+> eight seeds per architecture and no real-data experiment has been run. The final
+> E-NL source fingerprint was frozen later, whereas exact dirty E19/E20 source bytes
+> are unavailable and unreconstructible. Positive-disorder/positive-lag DMFT remains
+> blocked. See the authoritative files above for claim details.
+
 Derived from `Gradient Starvation ICLR'27.docx` (the "note"), cross-checked
 against `a.md`, `research_scope/e2_theorem.md`,
 `research_scope/oral_theorem_package.md`, and the actual source tree on
@@ -285,7 +300,7 @@ Holds as written:
 **Corrected.** The original wording expected every positive cell at lag 0/2/4 to
 classify as `starvation`. That conflated two different metrics. `a.md` §10's
 actual claim is about the trajectory **AUC gap**, which reproduces exactly:
-32/32 positive at each of lag 0, 2 and 4, with per-cell means matching the quoted
+32/32 `ρ`–seed cells positive at each of lag 0, 2 and 4, with per-cell means matching the quoted
 ranges (`11.9377–23.3264` at lag 0, `8.1710–9.3633` at lag 2, `1.4513–1.5170` at
 lag 4). The hitting-time delay is a *different* measurement, and the 96 positive
 lag-0/2/4 rows partition as:
@@ -442,15 +457,15 @@ and the model family — the same grid was also run with
 |---|---|---|---|
 | run | `e1_corrected_validation-20260821-144112` | `e1_lowrank_rescaled-20260823-085409` | `e1_dense_rerun-20260823-085142` |
 | AUC gap by lag 0/2/4 | 19.20 / 8.96 / 1.49 | 6.11 / 1.02 / 0.055 | 5.76 / 8.93 / 6.11 |
-| AUC gap > 0, lag 0/2/4 | 32/32 each | 32/32, 32/32, 31/32 | 32/32 each |
+| AUC gap > 0, lag 0/2/4 | 32/32 `ρ`–seed cells each | 32/32 `ρ`–seed cells, 32/32 `ρ`–seed cells, 31/32 | 32/32 `ρ`–seed cells each |
 | negative control | −0.750 | −0.032 | **−4.038** |
 | min final accuracy | 1.000 | **0.492** | 1.000 |
 | `degenerate` rows | 8 / 136 | — | **0 / 136** |
 | lag 8 | unlearnable | unlearnable | unlearnable |
 
-**What holds.** The directional claims survive: a positive AUC gap for every seed
-at lag 0/2/4, a negative control that comes out `transfer`, and lag 8 `unlearnable`
-across all `ρ`.
+**What holds.** The directional claims survive: a positive AUC gap for every
+`ρ`–seed cell at lag 0/2/4 (four strengths by eight seed IDs), a negative control
+that comes out `transfer`, and lag 8 `unlearnable` across all `ρ`.
 
 **What does not.** The lag-magnitude ordering. The superseded run decays
 monotonically with lag (19.2 → 8.96 → 1.49); the dense run peaks at lag 2
@@ -522,9 +537,10 @@ State that cost and supervision requirement in every table where CDC appears.
 `a.md` §11.1 predates the input-scaling fix. The nonlinear tanh results are
 unaffected and stand.
 
-Acceptance: CDC beats Bloop and both ablations on the causal weak gap at equal
-information setting, with paired CIs; or the result is reported honestly as not
-beating them.
+Historical acceptance rule: either CDC beat Bloop and both ablations on the causal
+weak gap at equal information setting, or the result would be reported honestly.
+The completed run took the second branch: CDC did not beat those shadow-based arms;
+its supported distinction is instantaneous strong-drift preservation.
 
 ---
 

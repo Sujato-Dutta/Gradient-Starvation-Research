@@ -338,7 +338,8 @@ def test_enl_phase_does_not_call_an_unlearnable_outcome_crossing_starvation():
 
     assert result["drift_crossed"]
     assert result["response_crossed"]
-    assert result["tail_strict_outcome_starvation"]
+    assert result["tail_strict_outcome_suppression"]
+    assert "tail_strict_outcome_starvation" not in result
     assert not result["tail_causal_starvation_certified"]
     assert result["phase"] == "transfer_then_outcome_crossing_unlearnable"
 

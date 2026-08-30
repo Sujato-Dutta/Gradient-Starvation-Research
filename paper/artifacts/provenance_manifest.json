@@ -18,9 +18,67 @@
       "enl_tanh_crossover-20260824-141207/summary.csv",
       "enl_tanh_crossover-20260824-141207/crossover.csv",
       "enl_tanh_crossover-20260824-141207/aggregate.csv",
-      "enl_tanh_crossover-20260824-141207/enl_crossover.pdf"
+      "enl_tanh_crossover-20260824-141207/enl_crossover.pdf",
+      "enl_tanh_crossover-20260824-141207/learnability_profile.csv",
+      "enl_tanh_crossover-20260824-141207/learnability_profile_summary.csv",
+      "enl_tanh_crossover-20260824-141207/enl_learnability_profile.pdf",
+      "enl_tanh_crossover-20260824-141207/enl_learnability_profile.png",
+      "enl_tanh_crossover-20260824-141207/learnability_profile_provenance.json"
     ]
   },
+  "post_hoc_derived_audits": [
+    {
+      "audit_id": "E-NL-terminal-learnability-profile",
+      "source_run_id": "enl_tanh_crossover-20260824-141207",
+      "analysis_status": "post_hoc_threshold_sensitivity_audit",
+      "new_training_outcomes_generated": false,
+      "scope": "Terminal weak-only response sensitivity across candidate beta values; not a replacement for the first-hitting-time learnability gate on nonmonotone trajectories and not evidence for an architecture ranking.",
+      "input_signatures": [
+        {
+          "path": "paper/artifacts/enl_tanh_crossover-20260824-141207/summary.csv",
+          "sha256": "664af9f5a88bdd8d132e262f6f41ad25b801e724e0dd9994daf58fa1f180b138",
+          "bytes": 12874
+        },
+        {
+          "path": "paper/artifacts/enl_tanh_crossover-20260824-141207/config.resolved.yaml",
+          "sha256": "a4fbd0128ec6e02af7cc257698a22f3967a6786a67ca2204596cd1e54e98ce7a",
+          "bytes": 544
+        }
+      ],
+      "generator": {
+        "path": "scripts/build_enl_learnability_profile.py",
+        "sha256": "fbf54fcfcd165086ff89a2cd2a57edcc5118bdec7018caa00ccdd54bb588bc98",
+        "bytes": 11269
+      },
+      "output_signatures": [
+        {
+          "path": "paper/artifacts/enl_tanh_crossover-20260824-141207/learnability_profile.csv",
+          "sha256": "711dd34aa5a1e8e80d09f5b2e8d82b06dabe4aded8367d5191b5bf19ea08f530",
+          "bytes": 1069
+        },
+        {
+          "path": "paper/artifacts/enl_tanh_crossover-20260824-141207/learnability_profile_summary.csv",
+          "sha256": "ad0607329a13883764d53b3ad4fcc5fe641f5d5e18dd13db1ab37ad7f1021256",
+          "bytes": 333
+        },
+        {
+          "path": "paper/artifacts/enl_tanh_crossover-20260824-141207/enl_learnability_profile.pdf",
+          "sha256": "6158bcbd6dce94aab3e64d378e36ebc027ecb7ae10cc7f572341ac48fefb9784",
+          "bytes": 22070
+        },
+        {
+          "path": "paper/artifacts/enl_tanh_crossover-20260824-141207/enl_learnability_profile.png",
+          "sha256": "17895f782f738be922f479b38e4625a8a98e7565d4cafb4ba28dbc12441ab260",
+          "bytes": 75323
+        },
+        {
+          "path": "paper/artifacts/enl_tanh_crossover-20260824-141207/learnability_profile_provenance.json",
+          "sha256": "97de3f55ce0c77fc9bf279af7f80cb53382a31e79c79a076d94743b58ad4528b",
+          "bytes": 2141
+        }
+      ]
+    }
+  ],
   "frozen_empirical_ntk_studies": [
     {
       "claim_id": "E19",

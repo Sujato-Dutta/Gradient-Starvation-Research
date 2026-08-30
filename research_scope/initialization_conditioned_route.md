@@ -64,8 +64,8 @@ d(0)/Lambda <= tau_d <= d(0)/lambda,
 A_+ = Delta(tau_d) <= d(0)^2/(2 lambda).
 ```
 
-Combined with a certified post-crossover bound `d <= -kappa`, Theorem B.1/B.2 then
-bounds the response crossing. These are conditional implications; evaluating only
+Combined with a certified post-crossover bound `d <= -kappa`, Corollaries
+B.2--B.3 then bound the response crossing. These are conditional implications; evaluating only
 `j(0)` does not establish the required tube bounds.
 
 For explicit-Euler SGD, `d(0)` is the continuous-field derivative, not the exact
@@ -125,7 +125,7 @@ For each causal condition, the implemented predictor materializes the complete
 signed sample-logit Jacobian `J`, empirical NTK `Theta=J J^T`, and weak-response
 cross-kernel `c=J grad M_w` at initialization. It then integrates the nonlinear
 logistic tangent recursion with `Theta` and `c` frozen while the margin gate evolves.
-This is the finite-width surrogate of Theorem A.4, not the two-probe Gram
+This is the finite-width surrogate of Corollary A.4, not the two-probe Gram
 approximation. At initialization its paired response drift agrees with the direct
 jet; automated tanh/GRU tests also check the kernel identities, symmetry, absence of
 state mutation, and unpopulated parameter gradients.

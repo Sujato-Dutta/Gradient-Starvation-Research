@@ -2,16 +2,19 @@
 
 Scope of this module
 --------------------
-This is **not** a DMFT solver.  The joint cross-entropy recurrent mean-field
-theory of ``research_scope/e2_theorem.md`` is unproved, so the general solve is a
-blocked surface that raises :class:`NotImplementedError` naming the specific unmet
-proof obligation.  What is implemented here are two *exact special cases* that
-require no part of that derivation and that can be validated against machinery the
-repository already trusts:
+This is **not** a general DMFT solver.  The joint cross-entropy recurrent
+mean-field theory of ``research_scope/e2_theorem.md`` is unproved, so the general
+positive-lag solve is a blocked surface that raises :class:`NotImplementedError`
+naming the specific unmet proof obligation.  What is implemented here are two
+*exact special cases* that require no part of that derivation and that can be
+validated against machinery the repository already trusts:
 
-``check A`` -- zero disorder
-    At ``bulk_gain == 0`` and ``lag_separation == 0`` the projected dynamics close
-    exactly on six scalars at every width.  See :func:`solve_zero_disorder`.
+``check A`` -- recurrence-invisible zero lag
+    At ``lag_separation == 0`` with zero background input, all cues arrive at the
+    final step.  The projected dynamics therefore close exactly on six scalars at
+    every width for any finite realized recurrent matrix.  See
+    :func:`solve_zero_disorder`; its historical name is retained for API
+    compatibility, although zero recurrent gain is not required.
 
 ``check C`` -- frozen geometry
     With the projected metric held fixed, the mode dynamics reduce to a plain ODE
@@ -58,9 +61,9 @@ def _blocked(summary: str, *obligations: int) -> NotImplementedError:
 class DMFTSpec:
     """Problem specification for a deterministic solve.
 
-    ``frozen_geometry`` selects the check-C path when supplied.  ``bulk_gain == 0``
-    with ``lag_separation == 0`` selects the check-A path.  Anything else is
-    blocked.
+    ``frozen_geometry`` selects the check-C path when supplied.
+    ``lag_separation == 0`` selects the exact recurrence-invisible check-A path
+    for any non-negative ``bulk_gain`` metadata. Anything else is blocked.
     """
 
     sequence_length: int = 20
@@ -90,8 +93,8 @@ class DMFTSpec:
             raise ValueError("tau_max must be positive.")
         if self.dtau <= 0 or self.dtau > self.tau_max:
             raise ValueError("dtau must be positive and no larger than tau_max.")
-        if self.bulk_gain < 0:
-            raise ValueError("bulk_gain must be non-negative.")
+        if not np.isfinite(self.bulk_gain) or self.bulk_gain < 0:
+            raise ValueError("bulk_gain must be finite and non-negative.")
         if self.rho <= 0:
             raise ValueError("rho must be positive.")
         if not 0 <= self.lag_separation < self.sequence_length:
@@ -165,48 +168,95 @@ def cross_entropy_field(
 
 
 # ---------------------------------------------------------------------------
-# Check A: zero disorder
+# Check A: recurrence-invisible zero lag
 # ---------------------------------------------------------------------------
 
 
-def solve_zero_disorder(spec: DMFTSpec) -> DMFTSolution:
-    """Exact projected dynamics at ``bulk_gain == 0`` and ``lag_separation == 0``.
+def zero_lag_six_scalar_rhs(
+    state: np.ndarray,
+    coordinates: np.ndarray,
+    weights: np.ndarray,
+) -> np.ndarray:
+    """Return the exact zero-lag six-scalar gradient-flow vector field.
 
-    Why this closes without any mean-field argument.  With a zero recurrent
-    initialization and both cues at the final step, every mode response is
-    ``m_a = c . b_a`` with no dependence on the recurrent block, so
-    ``dm_a/dW = 0``.  Since the synthetic logits depend on the parameters only
-    through the two mode responses, the recurrent gradient vanishes identically and
-    ``W`` stays exactly zero for the whole trajectory.  Gradient flow then reduces
-    to
+    ``state`` is ordered as ``(M_s, M_w, u_ss, u_sw, u_ww, w)``. The cue
+    coordinates and weights specify any fixed final-step cue law with finite
+    moments. This vector field contains no recurrent matrix or bulk-gain term:
+    under zero background input, all states entering the final update are zero,
+    so every finite realized recurrent matrix is loss-invisible at zero lag.
+    """
+    state = np.asarray(state, dtype=float)
+    coordinates = np.asarray(coordinates, dtype=float)
+    weights = np.asarray(weights, dtype=float)
+    if state.shape != (6,):
+        raise ValueError("state must have shape (6,).")
+    if coordinates.ndim != 2 or coordinates.shape[1] != 2:
+        raise ValueError("coordinates must have shape (n, 2).")
+    if weights.shape != (coordinates.shape[0],):
+        raise ValueError("weights must have one entry per coordinate.")
+
+    mode = state[:2]
+    input_gram = np.array(
+        [[state[2], state[3]], [state[3], state[4]]], dtype=float
+    )
+    readout_norm_sq = float(state[5])
+    field = cross_entropy_field(mode, coordinates, weights)
+    mode_derivative = field * readout_norm_sq + input_gram @ field
+    input_gram_derivative = np.outer(field, mode) + np.outer(mode, field)
+    readout_derivative = 2.0 * float(field @ mode)
+    return np.array(
+        [
+            mode_derivative[0],
+            mode_derivative[1],
+            input_gram_derivative[0, 0],
+            input_gram_derivative[0, 1],
+            input_gram_derivative[1, 1],
+            readout_derivative,
+        ]
+    )
+
+
+def solve_zero_disorder(spec: DMFTSpec) -> DMFTSolution:
+    """Exact projected dynamics at zero lag for any finite realized recurrence.
+
+    The function name and returned ``path='zero_disorder'`` are retained for API
+    compatibility; zero recurrent gain is not a premise. With zero background
+    input and both cues at the final step, the zero initial hidden state gives
+    ``h_t=0`` before the final update and
+
+        h_T = W h_(T-1) + B x_(T-1) = B x_(T-1).
+
+    Thus ``M_a=c.b_a`` is independent of every finite realized ``W``. Every
+    derivative with respect to ``W`` also contains a zero incoming state, so
+    ``grad_W L=0`` and the arbitrary initial recurrent block stays fixed under the
+    unregularized full-batch flow. The remaining equations are
 
         db_a/dtau = g_a c,      dc/dtau = sum_b g_b b_b,
 
-    which closes on six scalars -- the two modes ``m_a = c . b_a``, the input Gram
-    ``u_ab = b_a . b_b`` and the readout norm ``w = c . c``:
+    which close on six scalars -- the two modes ``M_a=c.b_a``, the input Gram
+    ``u_ab=b_a.b_b`` and readout norm ``w=c.c``:
 
-        dm_a/dtau = g_a w + sum_b g_b u_ab
-        du_ab/dtau = g_a m_b + g_b m_a
-        dw/dtau    = 2 sum_b g_b m_b
+        dM_a/dtau = g_a w + sum_b g_b u_ab
+        du_ab/dtau = g_a M_b + g_b M_a
+        dw/dtau    = 2 sum_b g_b M_b
 
-    and the projected metric is exactly ``G_ab = u_ab + delta_ab w``, matching
-    ``theory.exact_dense_linear_geometry`` term by term (``p_a . p_b = u_ab``,
-    the same-channel ``q_a . q_b = w``, and ``S_a = 0``).
+    and the projected metric is exactly ``G_ab=u_ab+delta_ab w``, matching
+    ``theory.exact_dense_linear_geometry`` term by term. The closure allows any
+    fixed final-step cue law represented by :func:`cue_quadrature`; the noiseless
+    positive rank-one specialization used by P.11--P.13 additionally requires
+    ``cue_noise == 0``.
 
-    This system is exact at *every* width, not only in the limit; width enters only
-    through the initial conditions, which concentrate on ``u = I`` and ``w = 1``.
-
-    Restricted to ``lag_separation == 0`` on purpose.  At any positive lag the
-    recurrent block is no longer inert -- verified numerically -- so the projected
-    system is not known to close on finitely many scalars without the derivation.
+    This system is exact at every width; width enters only through the initial
+    conditions, which concentrate on ``u=I`` and ``w=1``. Positive lag remains
+    blocked because earlier cue-induced states generally expose ``W`` and its
+    gradients, so no general finite closure has been proved there.
     """
-    if spec.bulk_gain != 0:
-        raise ValueError("solve_zero_disorder requires bulk_gain == 0.")
     if spec.lag_separation != 0:
         raise _blocked(
-            "The zero-disorder reduction is exact only at lag_separation == 0, "
-            "where the recurrent block is inert. At positive lag the recurrent "
-            "block evolves and the projected system is not known to close on "
+            "The recurrence-invisible reduction is exact only at "
+            "lag_separation == 0, where all cues arrive at the final step. At "
+            "positive lag the recurrent block generally affects the responses "
+            "and gradients, and the projected system is not known to close on "
             "finitely many order parameters.",
             1,
             2,
@@ -222,21 +272,18 @@ def solve_zero_disorder(spec: DMFTSpec) -> DMFTSolution:
 
     def unpack(state: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
         mode = state[:2]
-        u = np.array([[state[2], state[3]], [state[3], state[4]]])
-        return mode, u, float(state[5])
-
-    def derivative(state: np.ndarray) -> np.ndarray:
-        mode, u, readout = unpack(state)
-        g = cross_entropy_field(mode, coordinates, weights)
-        d_mode = g * readout + u @ g
-        d_u = np.outer(g, mode) + np.outer(mode, g)
-        d_readout = 2.0 * float(g @ mode)
-        return np.array([d_mode[0], d_mode[1], d_u[0, 0], d_u[0, 1], d_u[1, 1], d_readout])
+        input_gram = np.array(
+            [[state[2], state[3]], [state[3], state[4]]]
+        )
+        return mode, input_gram, float(state[5])
 
     state = np.array(
         [
-            spec.initial_mode[0], spec.initial_mode[1],
-            gram[0, 0], gram[0, 1], gram[1, 1],
+            spec.initial_mode[0],
+            spec.initial_mode[1],
+            gram[0, 0],
+            gram[0, 1],
+            gram[1, 1],
             float(spec.initial_readout_norm_sq),
         ],
         dtype=float,
@@ -244,21 +291,29 @@ def solve_zero_disorder(spec: DMFTSpec) -> DMFTSolution:
     modes = np.zeros((n_steps + 1, 2))
     geometry = np.zeros((n_steps + 1, 2, 2))
     for index in range(n_steps + 1):
-        mode, u, readout = unpack(state)
+        mode, input_gram, readout_norm_sq = unpack(state)
         modes[index] = mode
-        geometry[index] = u + readout * np.eye(2)
+        geometry[index] = input_gram + readout_norm_sq * np.eye(2)
         if index == n_steps:
             break
         dt = spec.dtau
-        k1 = derivative(state)
-        k2 = derivative(state + 0.5 * dt * k1)
-        k3 = derivative(state + 0.5 * dt * k2)
-        k4 = derivative(state + dt * k3)
+        k1 = zero_lag_six_scalar_rhs(state, coordinates, weights)
+        k2 = zero_lag_six_scalar_rhs(
+            state + 0.5 * dt * k1, coordinates, weights
+        )
+        k3 = zero_lag_six_scalar_rhs(
+            state + 0.5 * dt * k2, coordinates, weights
+        )
+        k4 = zero_lag_six_scalar_rhs(state + dt * k3, coordinates, weights)
         state = state + dt * (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0
 
     return DMFTSolution(
-        tau=tau, m_s=modes[:, 0], m_w=modes[:, 1], geometry=geometry,
-        path="zero_disorder", spec=spec,
+        tau=tau,
+        m_s=modes[:, 0],
+        m_w=modes[:, 1],
+        geometry=geometry,
+        path="zero_disorder",
+        spec=spec,
     )
 
 
@@ -324,12 +379,13 @@ def solve_dmft(
 
     ``frozen_geometry`` supplied
         Check C, :func:`solve_frozen_geometry`.
-    ``bulk_gain == 0`` and ``lag_separation == 0``
-        Check A, :func:`solve_zero_disorder`.
+    ``lag_separation == 0``
+        Recurrence-invisible check A, :func:`solve_zero_disorder`, for any
+        non-negative ``bulk_gain`` metadata.
     anything else
-        :class:`NotImplementedError`.  The general solve needs the effective
-        single-site process and the enumerated closure set, neither of which has
-        been derived.
+        :class:`NotImplementedError`. The general positive-lag solve needs the
+        effective single-site process and enumerated closure set, neither of which
+        has been derived.
     """
     if objective == "mse":
         raise _blocked(
@@ -344,15 +400,16 @@ def solve_dmft(
         raise ValueError(f"Unknown objective: {objective!r}")
     if spec.frozen_geometry is not None:
         return solve_frozen_geometry(spec)
-    if spec.bulk_gain == 0 and spec.lag_separation == 0:
+    if spec.lag_separation == 0:
         return solve_zero_disorder(spec)
     raise _blocked(
-        "The general joint cross-entropy recurrent mean-field solve is not "
-        "available: the effective single-site process and its covariance/response "
-        "kernels have not been derived, and the closure set of visible and "
-        "loss-invisible order parameters has not been enumerated. Implemented "
-        "special cases are bulk_gain == 0 with lag_separation == 0 (zero disorder) "
-        "and a supplied frozen_geometry.",
+        "The general positive-lag joint cross-entropy recurrent mean-field solve "
+        "is not available: the effective single-site process and its "
+        "covariance/response kernels have not been derived, and the closure set "
+        "of visible and loss-invisible order parameters has not been enumerated. "
+        "Implemented special cases are recurrence-invisible lag_separation == 0 "
+        "for arbitrary finite realized recurrence and a supplied "
+        "frozen_geometry.",
         1,
         2,
     )
@@ -368,14 +425,15 @@ def solve_weak_only_reduction(spec: DMFTSpec) -> DMFTSolution:
 
     Reducing the joint both/weak-only system to a weak-only mean-field theory
     presupposes the covariance and response kernels of that theory, so there is
-    nothing to reduce *to*.  Imposing ``bulk_gain == 0`` as well would collapse the
-    check into check A, so it would not be an independent test either way.
+    nothing to reduce *to*. At zero lag its recurrence-invisible dynamics overlap
+    with check A, but this API does not specify the separate weak-only cue law;
+    unblocking it here would still fabricate an unsupported result.
     """
     raise _blocked(
         "The weak-only reduction has no target: a weak-only mean-field theory is "
         "itself defined by the covariance and response kernels that have not been "
-        "derived. Note also that imposing bulk_gain == 0 would collapse this into "
-        "check A rather than providing an independent test.",
+        "derived. The zero-lag recurrence-invisible special case overlaps with "
+        "check A but does not supply this API's missing weak-only formulation.",
         1,
         2,
     )

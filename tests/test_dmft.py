@@ -26,6 +26,7 @@ from gradient_starvation.dmft import (
     solve_frozen_geometry,
     solve_weak_only_reduction,
     solve_zero_disorder,
+    zero_lag_six_scalar_rhs,
 )
 from gradient_starvation.losses import base_objective, training_objective
 from gradient_starvation.models.recurrent import DenseLinearRNN
@@ -120,6 +121,14 @@ def test_solutions_are_bitwise_reproducible(spec):
     assert np.array_equal(first.geometry, second.geometry)
 
 
+@pytest.mark.parametrize(
+    "bulk_gain", [float("nan"), float("inf"), float("-inf"), -0.1]
+)
+def test_dmft_spec_requires_finite_non_negative_bulk_gain(bulk_gain):
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        DMFTSpec(bulk_gain=bulk_gain)
+
+
 def test_unpopulated_kernels_are_empty_not_fabricated():
     """The special-case paths must not invent covariance or response kernels."""
     solution = solve_dmft(DMFTSpec(bulk_gain=0.0, lag_separation=0, tau_max=0.2, dtau=0.05))
@@ -142,14 +151,15 @@ def _zero_disorder_discrepancy(learning_rate: float, tau_max: float = 2.0) -> fl
     )
     both, _ = make_paired_task(task, seed=0)
     torch.manual_seed(4)
-    model = DenseLinearRNN(width=64, bulk_gain=0.0)
+    model = DenseLinearRNN(width=64, bulk_gain=0.7)
     with torch.no_grad():
+        initial_recurrent = model.recurrent.clone()
         b_s = model.input[:, 0].clone()
         b_w = model.input[:, 1].clone()
         c = model.readout.clone()
     solution = solve_zero_disorder(
         DMFTSpec(
-            sequence_length=5, bulk_gain=0.0, lag_separation=0, rho=2.0, cue_noise=0.0,
+            sequence_length=5, bulk_gain=0.7, lag_separation=0, rho=2.0, cue_noise=0.0,
             tau_max=tau_max, dtau=min(learning_rate / 50, 1e-3),
             initial_mode=(float(c @ b_s), float(c @ b_w)),
             initial_input_gram=(
@@ -167,8 +177,8 @@ def _zero_disorder_discrepancy(learning_rate: float, tau_max: float = 2.0) -> fl
         loss, _ = training_objective(model, both, {"method": "erm"})
         loss.backward()
         optimizer.step()
-    # The premise of the reduction: the recurrent block never moves.
-    assert float(model.recurrent.detach().abs().max()) == 0.0
+    # The premise of the reduction: an arbitrary finite recurrent block never moves.
+    assert torch.equal(model.recurrent.detach(), initial_recurrent)
     observed = np.array(observed)
     grid = np.arange(steps + 1) * learning_rate
     predicted = np.stack(
@@ -212,14 +222,14 @@ def test_check_a_matches_the_network_exactly_at_initialization():
         sequence_length=5, n_samples=256, rho=2.0, lag_separation=0, cue_noise=0.0
     )
     torch.manual_seed(4)
-    model = DenseLinearRNN(width=64, bulk_gain=0.0)
+    model = DenseLinearRNN(width=64, bulk_gain=1.1)
     with torch.no_grad():
         b_s = model.input[:, 0].clone()
         b_w = model.input[:, 1].clone()
         c = model.readout.clone()
     solution = solve_zero_disorder(
         DMFTSpec(
-            sequence_length=5, bulk_gain=0.0, lag_separation=0, rho=2.0, cue_noise=0.0,
+            sequence_length=5, bulk_gain=1.1, lag_separation=0, rho=2.0, cue_noise=0.0,
             tau_max=0.1, dtau=0.05,
             initial_mode=(float(c @ b_s), float(c @ b_w)),
             initial_input_gram=(
@@ -240,7 +250,7 @@ def test_check_a_geometry_matches_the_exact_analytic_gram():
     task = SyntheticTaskSpec(
         sequence_length=4, n_samples=64, rho=2.0, lag_separation=0, cue_noise=0.0
     )
-    model = DenseLinearRNN(width=48, bulk_gain=0.0)
+    model = DenseLinearRNN(width=48, bulk_gain=0.9)
     autograd, _ = gradient_gram(model.mode_responses(task), model)
     analytic = exact_dense_linear_geometry(model, task)
 
@@ -249,7 +259,7 @@ def test_check_a_geometry_matches_the_exact_analytic_gram():
         b_w = model.input[:, 1].clone()
         c = model.readout.clone()
     spec = DMFTSpec(
-        sequence_length=4, bulk_gain=0.0, lag_separation=0, tau_max=0.1, dtau=0.05,
+        sequence_length=4, bulk_gain=0.9, lag_separation=0, tau_max=0.1, dtau=0.05,
         initial_mode=(float(c @ b_s), float(c @ b_w)),
         initial_input_gram=(
             (float(b_s @ b_s), float(b_s @ b_w)),
@@ -264,14 +274,172 @@ def test_check_a_geometry_matches_the_exact_analytic_gram():
     torch.testing.assert_close(autograd, analytic, rtol=2e-5, atol=2e-6)
 
 
-def test_check_a_refuses_positive_lag_because_the_recurrent_block_is_not_inert():
+def test_check_a_refuses_positive_lag_where_recurrence_is_generally_visible():
     with pytest.raises(NotImplementedError, match="lag_separation == 0"):
-        solve_zero_disorder(DMFTSpec(bulk_gain=0.0, lag_separation=2))
+        solve_zero_disorder(DMFTSpec(bulk_gain=0.8, lag_separation=2))
+    with pytest.raises(NotImplementedError, match="positive-lag"):
+        solve_dmft(DMFTSpec(bulk_gain=0.8, lag_separation=2))
 
 
-def test_check_a_requires_zero_bulk_gain():
-    with pytest.raises(ValueError, match="bulk_gain == 0"):
-        solve_zero_disorder(DMFTSpec(bulk_gain=0.5, lag_separation=0))
+def test_check_a_solution_and_dispatch_are_bulk_gain_invariant_at_zero_lag():
+    common = dict(
+        lag_separation=0,
+        rho=2.5,
+        cue_noise=0.15,
+        tau_max=0.4,
+        dtau=0.02,
+    )
+    zero = solve_zero_disorder(DMFTSpec(bulk_gain=0.0, **common))
+    positive = solve_zero_disorder(DMFTSpec(bulk_gain=1.7, **common))
+    dispatched = solve_dmft(DMFTSpec(bulk_gain=1.7, **common))
+
+    assert np.array_equal(zero.modes, positive.modes)
+    assert np.array_equal(zero.geometry, positive.geometry)
+    assert np.array_equal(positive.modes, dispatched.modes)
+    assert np.array_equal(positive.geometry, dispatched.geometry)
+
+
+@pytest.mark.parametrize("condition", ["both", "weak_only"])
+def test_zero_lag_network_loss_and_gradients_ignore_realized_recurrence(condition):
+    task = SyntheticTaskSpec(
+        sequence_length=5,
+        n_samples=32,
+        rho=2.0,
+        lag_separation=0,
+        cue_noise=0.0,
+        background_noise=0.0,
+    )
+    both, weak = make_paired_task(task, seed=3)
+    batch = both if condition == "both" else weak
+    torch.manual_seed(12)
+    first = DenseLinearRNN(width=7, bulk_gain=0.2)
+    second = DenseLinearRNN(width=7, bulk_gain=1.4)
+    with torch.no_grad():
+        second.input.copy_(first.input)
+        second.readout.copy_(first.readout)
+    assert not torch.equal(first.recurrent, second.recurrent)
+
+    for model in (first, second):
+        hidden = batch.x.new_zeros(batch.x.shape[0], model.width)
+        for time in range(task.sequence_length - 1):
+            hidden = (
+                hidden @ model.recurrent.T
+                + batch.x[:, time] @ model.input.T
+            )
+            assert torch.count_nonzero(hidden) == 0
+
+    torch.testing.assert_close(
+        first(batch.x), second(batch.x), rtol=0.0, atol=0.0
+    )
+    torch.testing.assert_close(
+        first.mode_responses(task),
+        second.mode_responses(task),
+        rtol=0.0,
+        atol=0.0,
+    )
+    torch.testing.assert_close(
+        exact_dense_linear_geometry(first, task),
+        exact_dense_linear_geometry(second, task),
+        rtol=0.0,
+        atol=0.0,
+    )
+
+    first_loss, _ = training_objective(first, batch, {"method": "erm"})
+    second_loss, _ = training_objective(second, batch, {"method": "erm"})
+    first_gradients = torch.autograd.grad(first_loss, tuple(first.parameters()))
+    second_gradients = torch.autograd.grad(second_loss, tuple(second.parameters()))
+    assert torch.count_nonzero(first_gradients[0]) == 0
+    assert torch.count_nonzero(second_gradients[0]) == 0
+    torch.testing.assert_close(first_gradients[1], second_gradients[1])
+    torch.testing.assert_close(first_gradients[2], second_gradients[2])
+
+
+def test_positive_lag_can_expose_the_realized_recurrence():
+    task = SyntheticTaskSpec(
+        sequence_length=3,
+        n_samples=8,
+        rho=2.0,
+        lag_separation=1,
+        cue_noise=0.0,
+        background_noise=0.0,
+    )
+    zero = DenseLinearRNN(width=2, bulk_gain=0.0)
+    identity = DenseLinearRNN(width=2, bulk_gain=0.0)
+    with torch.no_grad():
+        zero.recurrent.zero_()
+        identity.recurrent.copy_(torch.eye(2))
+        zero.input.zero_()
+        zero.input[0, 1] = 1.0
+        zero.readout.copy_(torch.tensor([1.0, 0.0]))
+        identity.input.copy_(zero.input)
+        identity.readout.copy_(zero.readout)
+
+    assert zero.mode_responses(task)[1] == 0.0
+    assert identity.mode_responses(task)[1] == 1.0
+
+
+@pytest.mark.parametrize("rho", [0.5, 2.0, 4.0])
+def test_p11_zero_lag_initial_suppression_identity(rho):
+    state = np.array([0.0, 0.0, 1.0, 0.0, 1.0, 1.0])
+    weights = np.array([1.0])
+    both_coordinates = np.array([[rho, 1.0]])
+    weak_coordinates = np.array([[0.0, 1.0]])
+    both_rhs = zero_lag_six_scalar_rhs(state, both_coordinates, weights)
+    weak_rhs = zero_lag_six_scalar_rhs(state, weak_coordinates, weights)
+
+    assert both_rhs[1] - weak_rhs[1] == pytest.approx(0.0, abs=1e-15)
+    epsilon = 1e-5
+    both_acceleration = (
+        zero_lag_six_scalar_rhs(
+            state + epsilon * both_rhs, both_coordinates, weights
+        )[1]
+        - zero_lag_six_scalar_rhs(
+            state - epsilon * both_rhs, both_coordinates, weights
+        )[1]
+    ) / (2.0 * epsilon)
+    weak_acceleration = (
+        zero_lag_six_scalar_rhs(
+            state + epsilon * weak_rhs, weak_coordinates, weights
+        )[1]
+        - zero_lag_six_scalar_rhs(
+            state - epsilon * weak_rhs, weak_coordinates, weights
+        )[1]
+    ) / (2.0 * epsilon)
+    assert both_acceleration == pytest.approx(-(rho**2 + 1.0) / 2.0, rel=1e-8)
+    assert weak_acceleration == pytest.approx(-0.5, rel=1e-8)
+    assert both_acceleration - weak_acceleration == pytest.approx(
+        -(rho**2) / 2.0, rel=1e-8
+    )
+
+
+def test_p12_p13_weak_only_invariant_and_target_speed_bound():
+    beta = 2.0
+    coordinates = np.array([[0.0, 1.0]])
+    weights = np.array([1.0])
+    lower_speed = 2.0 / (1.0 + np.exp(beta))
+
+    for weak_response in np.linspace(0.0, beta, 9):
+        norm = np.sqrt(1.0 + weak_response**2)
+        state = np.array(
+            [0.0, weak_response, 1.0, 0.0, norm, norm]
+        )
+        rhs = zero_lag_six_scalar_rhs(state, coordinates, weights)
+        expected_speed = (
+            2.0 * norm / (1.0 + np.exp(weak_response))
+        )
+        assert rhs[1] == pytest.approx(expected_speed)
+        assert rhs[1] >= lower_speed
+        assert rhs[4] == pytest.approx(rhs[5])
+        invariant_derivative = (
+            2.0 * state[4] * rhs[4]
+            - 2.0 * weak_response * rhs[1]
+        )
+        assert invariant_derivative == pytest.approx(0.0, abs=1e-14)
+
+    target_time_upper_bound = beta / lower_speed
+    assert target_time_upper_bound == pytest.approx(
+        beta * (1.0 + np.exp(beta)) / 2.0
+    )
 
 
 # ---------------------------------------------------------------------------

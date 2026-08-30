@@ -1,0 +1,152 @@
+{
+  "schema_version": "semi-real-preregistration-v1",
+  "study_id": "semi-real-generated-cue-v1",
+  "freeze_revision": 1,
+  "status": "design_frozen_execution_blocked",
+  "execution_authorized": false,
+  "scope": "Two semi-real binary image benchmarks with real core pixels and an exactly removable generated strong cue. No outcome has been generated.",
+  "datasets": [
+    {
+      "name": "mnist",
+      "negative_class": 3,
+      "positive_class": 8,
+      "train_per_class": 256,
+      "probe_per_class": 128,
+      "evaluation_per_class": 128,
+      "source": "official torchvision train/test files",
+      "download": false
+    },
+    {
+      "name": "fashion_mnist",
+      "negative_class": 0,
+      "positive_class": 6,
+      "train_per_class": 256,
+      "probe_per_class": 128,
+      "evaluation_per_class": 128,
+      "source": "official torchvision train/test files",
+      "download": false
+    }
+  ],
+  "preprocessing": {
+    "raw_dtype": "uint8",
+    "value_map": "x/127.5-1",
+    "resize": {"height": 14, "width": 14, "mode": "area"},
+    "augmentation": "none",
+    "probe_and_evaluation_disjoint_from_training": true,
+    "probe_and_evaluation_disjoint_from_each_other": true
+  },
+  "intervention": {
+    "both": "real image in channel 0 plus label-aligned generated patch in channel 1",
+    "weak_only": "bitwise-identical channel 0 with channel 1 exactly zero",
+    "cue_strength": 4.0,
+    "cue_patch": {"top": 0, "left": 0, "height": 2, "width": 2},
+    "preservation_checks": [
+      "labels_equal",
+      "sample_ids_equal",
+      "core_channel_bitwise_equal",
+      "weak_generated_channel_all_zero",
+      "only_generated_channel_differs"
+    ]
+  },
+  "response_functionals": {
+    "weak_core": "mean signed logit on fixed cue-free real-image probe",
+    "strong_generated": "one-half mean signed aligned-minus-conflicted cue logit on the same probe",
+    "common_across_conditions": true,
+    "initial_response_gap_required": 0.0,
+    "primary_derivative": "exact full-batch direct autograd Lie derivative",
+    "two_mode_Gg_promotable": false,
+    "reported_as_gain_from_shared_initialization": true
+  },
+  "model": {
+    "kind": "semi_real_cnn",
+    "input_channels": 2,
+    "hidden_channels": [16, 32],
+    "pretrained": false
+  },
+  "optimization": {
+    "objective": "mean_binary_cross_entropy_with_logits",
+    "optimizer": "sgd",
+    "full_batch": true,
+    "learning_rate": 0.01,
+    "steps": 500,
+    "log_every": 5,
+    "momentum": 0.0,
+    "weight_decay": 0.0,
+    "gradient_clip": null,
+    "paired_mode": "lockstep_shared_initialization"
+  },
+  "seed_design": {
+    "data_seeds": [4101, 4102, 4103, 4104],
+    "model_seeds": [5101, 5102, 5103, 5104, 5105, 5106, 5107, 5108],
+    "crossed": true,
+    "engineering_seeds_excluded": true,
+    "selection_manifest_required_before_evaluation": true
+  },
+  "causal_gate": {
+    "beta_core_response_gain": 0.5,
+    "tau_max": 5.0,
+    "delay_tolerance": 0.05,
+    "crossing_direction": "positive_to_negative",
+    "interpolation": "linear_between_logged_points",
+    "outcome_suppression_requires_response_gap_below_zero": true,
+    "causal_starvation_requires_weak_only_first_hit": true,
+    "multi_crossing_count_reported": true,
+    "tail_area_certificate_reported": true
+  },
+  "primary_endpoints": [
+    "weak_core_response_auc_gap",
+    "causal_starvation_certificate",
+    "weak_only_learnability"
+  ],
+  "secondary_endpoints": [
+    "exact_drift_crossing",
+    "response_crossing",
+    "crossing_times",
+    "core_only_accuracy",
+    "both_accuracy",
+    "cue_conflict_accuracy",
+    "gsi5"
+  ],
+  "inference": {
+    "unit": "data_seed_by_model_seed_pair",
+    "seed_axis_reuse": true,
+    "method": "two_way_pigeonhole_bootstrap",
+    "bootstrap_replicates": 5000,
+    "bootstrap_seed": 6201,
+    "multiplicity": "dataset-stratified primary endpoints reported jointly; no architecture ranking"
+  },
+  "acceptance": {
+    "required_record_coverage": 1.0,
+    "minimum_weak_only_learnability_per_dataset": 0.75,
+    "minimum_causal_certificate_rate_per_dataset": 0.5,
+    "weak_auc_gap_two_way_ci95_lower_strictly_positive": true,
+    "all_intervention_preservation_checks": true,
+    "all_initial_response_gaps_zero": true
+  },
+  "prohibited_promotions": [
+    "A drift crossing alone is not causal starvation.",
+    "The generated patch benchmark is semi-real, not an unmodified real-world causal intervention.",
+    "The two-probe Gg projection is not the exact nonlinear image-model drift.",
+    "Failure of weak-only learnability makes the causal endpoint indeterminate.",
+    "No outcome may be generated while execution_authorized is false."
+  ],
+  "authorization_gates": {
+    "reviewed_clean_git_source": false,
+    "committed_preregistration_git_sha": null,
+    "vision_environment_lock_path": null,
+    "vision_environment_lock_sha256": null,
+    "mnist_raw_data_sha256": null,
+    "fashion_mnist_raw_data_sha256": null,
+    "selection_manifest_sha256": null,
+    "untouched_seed_attestation": false,
+    "submission_claim_set_allows_new_outcomes": false
+  },
+  "blocked_reasons": [
+    "The working tree is not a reviewed clean source state.",
+    "No exact torchvision environment lock is present.",
+    "MNIST and FashionMNIST raw data are absent locally.",
+    "Exact selected-index and raw-data digests cannot be frozen before data are present.",
+    "The preregistration has not been committed, and commit permission was not granted.",
+    "research_scope/submission_claim_set.yaml forbids new confirmatory outcomes."
+  ]
+}

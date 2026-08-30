@@ -1,7 +1,7 @@
 {
   "schema_version": "submission-claim-set-v1",
   "format_note": "This file uses the JSON subset of YAML 1.2 so it can be validated with the Python standard library.",
-  "freeze_revision": 1,
+  "freeze_revision": 3,
   "source_of_truth": {
     "claim_ledger": "research_scope/claim_ledger.md",
     "provenance_manifest": "paper/artifacts/provenance_manifest.json",
@@ -28,7 +28,7 @@
   "venue": {
     "target": "ICLR 2027",
     "official_venue_requirements_verified": true,
-    "verification_scope": "Official ICLR 2027 web guidance was checked. The official style-package URL is verified, but its contents have not yet been integrated or audited in this repository.",
+    "verification_scope": "Official ICLR 2027 web guidance was checked. The official style package is now vendored byte-for-byte in paper/iclr2027, checksummed, and applied through the anonymous submission wrapper; final account- and author-specific obligations remain external.",
     "requirements_summary_note": "The requirement summaries are paraphrased from the cited official pages for licensing compliance.",
     "official_sources": [
       {
@@ -74,19 +74,23 @@
     "official_style_package": {
       "url": "https://media.iclr.cc/Conferences/ICLR2027/iclr-2027-style-files.zip",
       "advertised_by_official_author_guidelines": true,
-      "downloaded_into_repository": false,
-      "checksum_recorded": false,
-      "applied_to_manuscript": false
+      "downloaded_into_repository": true,
+      "repository_path": "paper/iclr2027/iclr2027_conference.sty",
+      "sha256": "797deef41724e93761426ac0cbcca46279a91cc650dd1f0ce76a4f08d2098ea6",
+      "checksum_recorded": true,
+      "applied_to_manuscript": true,
+      "wrapper_path": "paper/iclr2027/submission.tex"
     }
   },
   "headline_claim": {
     "label": "finite-width causal theorem package",
     "included_theory_claim_ids": [
       "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8",
-      "T9", "T10", "T11", "T12", "T13", "T14", "T15", "T16"
+      "T9", "T10", "T11", "T12", "T13", "T14", "T15", "T16",
+      "T19", "T20"
     ],
     "blocked_or_excluded_theory_claim_ids": ["T17", "T18"],
-    "interpretation": "The exact identities and conditional comparison bounds are the theory contribution. They do not establish a general positive-disorder RNN DMFT, nonlinear kernel stability, calibrated crossing times, or a universal causal-starvation boundary."
+    "interpretation": "The exact finite-width identities, initialization-conditioned dense-linear threshold, singular zero-disorder corollary, and conditional comparison/tube bounds are the theory contribution. They do not establish a general positive-disorder RNN DMFT, computable nonvacuous parameter-ball constants, a universal rho-lag boundary, nonlinear kernel stability, calibrated crossing times, or a universal causal-starvation boundary."
   },
   "theory_claims": [
     {
@@ -122,7 +126,7 @@
     {
       "id": "T6",
       "status": "proved",
-      "statement": "After a unique transfer-to-suppression drift crossing, an outcome crossing occurs exactly when accumulated negative drift reaches the positive peak area.",
+      "statement": "After a unique transfer-to-rate-suppression crossing, an outcome crossing occurs exactly when accumulated negative drift reaches the positive peak area.",
       "evidence": ["research_scope/e2_theorem.md#theorem-b1", "src/gradient_starvation/theory.py"]
     },
     {
@@ -196,6 +200,18 @@
       "status": "open_blocked",
       "statement": "Certified or quantitatively accurate tanh/GRU crossover-time prediction and an analytic learnability/starvation boundary rho_c remain open.",
       "evidence": ["research_scope/claim_ledger.md"]
+    },
+    {
+      "id": "T19",
+      "status": "proved_with_assumptions",
+      "statement": "For the noiseless positive rank-one dense-linear pair, the exact realized initialization determines d0=s_B(rho*K+A)-s_W*A and its transfer threshold; independently proved uniform product-ball constants then imply unique rate crossing, outcome suppression, optional weak-only learnability, or finite-horizon safe transfer.",
+      "evidence": ["research_scope/parameter_prediction_theorem.md", "src/gradient_starvation/theory.py", "tests/test_theory.py"]
+    },
+    {
+      "id": "T20",
+      "status": "proved_with_assumptions",
+      "statement": "At zero bulk gain, zero lag, and zero background noise, the deterministic symmetric reference has d(0)=0 and d'(0)=-rho^2/2, so suppression starts immediately, while the weak-only response reaches every finite positive target; the corresponding finite-width conclusion requires T10 witness margins.",
+      "evidence": ["research_scope/parameter_prediction_theorem.md", "research_scope/e2_theorem.md", "tests/test_theory.py"]
     }
   ],
   "empirical_claims": {
@@ -313,6 +329,33 @@
         "name": "event_prevalence_or_universal_generalization",
         "promotion_allowed": false,
         "reason": "Classifier correctness in one task/width cell is not prevalence or architecture-wide validity."
+      }
+    ]
+  },
+  "prospective_designs": {
+    "empirical_claim_ids_assigned": false,
+    "outcomes_generated": false,
+    "execution_authorized": false,
+    "designs": [
+      {
+        "id": "semi_real_generated_cue",
+        "status": "blocked_unexecuted",
+        "outcome_records": 0,
+        "design": "MNIST 3-vs-8 and FashionMNIST 0-vs-6 real core images with an exactly removable generated cue channel under paired BOTH/WEAK intervention.",
+        "frozen_record_count": 64,
+        "evidence": ["configs/semi_real_preregistration.yaml", "research_scope/semi_real_preregistration.md", "scripts/check_semi_real_preregistration.py"],
+        "blockers": ["exact Torch/torchvision environment lock", "raw-data and split-index digests", "selection manifest", "reviewed committed preregistration", "claim-set authorization"]
+      },
+      {
+        "id": "expanded_nonlinear_cdc",
+        "status": "blocked_unexecuted",
+        "outcome_records": 0,
+        "design": "Prospective beta-robust nonlinear evaluation over 192 records and a 256-method-record CDC tradeoff study using ERM, CDC, Bloop-style shadow-target rescue, and PCGrad-style shadow-target rescue.",
+        "frozen_nonlinear_record_count": 192,
+        "frozen_cdc_method_record_count": 256,
+        "canonical_named_baseline_count": 0,
+        "evidence": ["configs/expanded_nonlinear_cdc_preregistration.yaml", "research_scope/expanded_nonlinear_cdc_preregistration.md", "scripts/check_expanded_studies_preregistration.py"],
+        "blockers": ["fresh preflight digest", "untouched-seed attestation", "isolated-process peak-memory telemetry", "reviewed committed preregistration", "canonical baseline parity audit", "claim-set authorization"]
       }
     ]
   },

@@ -11,8 +11,12 @@
 #   counterfactual_drift      project rescue orthogonal to grad(m_s)   <- CDC
 #   loss_gradient_projection  project rescue orthogonal to grad(L)     <- ablation iii
 #   unconstrained_rescue      no projection                            <- ablation ii
-#   bloop                     loss-gradient projection, EMA rescue     <- closest prior work
-#   pcgrad                    symmetric conflict removal               <- secondary baseline
+#   bloop                     Bloop-style EMA/projection shadow-target rescue
+#   pcgrad                    PCGrad-style one-sided rescue conflict projection
+#
+# These two labels are motifs, not canonical-algorithm parity claims. The Bloop-style
+# arm uses grad(m_w) plus a privileged weak-only target; the PCGrad-style arm projects
+# only the rescue direction and does not implement randomized multi-task-loss PCGrad.
 #
 # INFORMATION SETTING: every shadow-based method above trains a second, weak-only
 # model in lockstep on strong-ablated data using full-batch gradients. That roughly

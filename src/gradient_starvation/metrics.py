@@ -200,9 +200,9 @@ def sign_crossing_time(
 
     With ``descending=True`` (the default) this locates the first ``+ -> -``
     transition, which for the causal weak-drift difference ``d_w`` is the
-    transfer-to-starvation crossover time ``tau*``.  Set ``descending=False`` to
-    locate the first ``- -> +`` transition instead, which is what a
-    starvation-to-transfer architecture would show.
+    transfer-to-rate-suppression crossing time ``tau*``.  Set ``descending=False``
+    to locate the first ``- -> +`` transition instead, which is what a
+    rate-suppression-to-transfer trajectory would show.
 
     Return values are deliberately distinguishable:
 

@@ -49,9 +49,9 @@ with `W_ij(0) ~ N(0,g^2/N)`, `B_ia(0) ~ N(0,1/N)`, and
 `c_i(0) ~ N(0,1/N)`. The `B` scaling is load-bearing: input-dimension scaling
 would make the projected metric diverge with width.
 
-## Theorem A — exact finite-width CE response flow
+## Proposition A — exact finite-width CE response flow
 
-**Theorem A.1 (universal cross-kernel form).** At every finite width and every
+**Proposition A.1 (universal cross-kernel form).** At every finite width and every
 optimization time at which the responses are differentiable,
 
 ```
@@ -86,7 +86,7 @@ g_b^C = n_C^{-1} sum_i z_ib^C sigma(-z_i^C . M^C).
 ```
 
 **Proof.** Exact realization gives
-`grad r_i^C = sum_b z_ib^C grad M_b^C`. Substitute this into Theorem A.1 and
+`grad r_i^C = sum_b z_ib^C grad M_b^C`. Substitute this into Proposition A.1 and
 exchange the finite sums. □
 
 **Residual qualification.** If instead
@@ -124,7 +124,7 @@ inner products. The channel indicator is required because different input column
 are distinct parameter blocks. `theory.exact_dense_linear_geometry` implements
 this expression and tests it against autograd.
 
-**Theorem A.4 (exact full empirical-NTK equations and frozen surrogate).** Fix one
+**Corollary A.4 (exact full empirical-NTK equations and frozen surrogate).** Fix one
 condition and suppress its superscript. Let `theta in R^p`, let
 `r(theta) in R^n` be the signed-logit vector, and define
 
@@ -163,7 +163,7 @@ r_bar_(l+1) = r_bar_l + eta Theta_0 q_l/n,
 M_bar_(l+1) = M_bar_l + eta c_0^T q_l/n.        (A.6)
 ```
 
-**Proof.** The parameter equation is the logistic-loss calculation in Theorem A.1.
+**Proof.** The parameter equation is the logistic-loss calculation in Proposition A.1.
 The chain rule gives `dot r=J dot theta` and
 `dot M=<grad M,dot theta>`, yielding (A.4). Replacing `Theta(theta),c(theta)` by
 their initial values defines (A.5), and explicit Euler gives (A.6). No width limit
@@ -262,7 +262,7 @@ transfers with the bounds of Corollary D only when its prehistory separation,
 transversality, and mesh hypotheses also hold; use the summed paired response error
 for a response-gap hit, the summed drift error for a drift-gap hit, and the
 single-condition response error for weak-only learnability. A starvation claim
-still additionally requires Theorem B's tail-area condition and the learnability
+still additionally requires Proposition B.1's cumulative-balance condition and the learnability
 gate.
 
 **Proof.** The scalar sigmoid is `1/4`-Lipschitz, hence
@@ -314,9 +314,9 @@ conclusions are exactly Corollary D applied with the stated single or summed err
 The constants `B_Theta` and `B_c` are caller-supplied uniform movement bounds. No
 current result derives them for trained tanh or GRU networks, and the held-out
 frozen-kernel experiment is empirical evidence rather than a proof of them.
-Theorems A.4--A.5 are finite-width comparison statements, not DMFT.
+Corollary A.4 and Theorem A.5 are finite-width comparison statements, not DMFT.
 
-## Theorem B — transfer, rate suppression, and outcome starvation
+## Proposition B — cumulative drift balance and outcome suppression
 
 Define the equal-time weak-response gap and its exact derivative
 
@@ -328,11 +328,36 @@ d(tau) = Delta'(tau) = F_w^B(tau) - F_w^W(tau).
 Here `d>0` means relative transfer, `d<0` means relative rate suppression, and
 `Delta<0` means the both-feature weak response has fallen below its matched
 weak-only counterfactual. The matched-state drift deficit is a different quantity
-and cannot replace `d` in this theorem.
+and cannot replace `d` in this proposition.
 
-**Theorem B.1 (necessary and sufficient tail-area criterion).** Let `Delta` be
-absolutely continuous on `[0,H]`, with `Delta(0)=0`. Suppose there is
-`tau_d in (0,H)` such that
+**Proposition B.1 (cumulative drift balance).** Let `Delta` be absolutely continuous
+on `[0,H]`, with `Delta(0)=0` and `d=Delta'` almost everywhere. Define
+
+```
+d_+(t) = max(d(t),0),          d_-(t) = max(-d(t),0),
+P(t) = integral_0^t d_+(u) du, N(t) = integral_0^t d_-(u) du.
+```
+
+Then, for every `t in [0,H]`,
+
+```
+Delta(t) = P(t) - N(t).
+```
+
+Consequently, strict outcome suppression occurs by `H` if and only if
+`N(t)>P(t)` for some `t in (0,H]`. This statement allows arbitrary sign changes,
+including oscillatory drift and suppression from initialization.
+
+**Proof.** The positive and negative parts satisfy `d=d_+-d_-` almost everywhere.
+Absolute continuity and the fundamental theorem of calculus give
+`Delta(t)=Delta(0)+integral_0^t d=P(t)-N(t)`. The pointwise sign equivalence follows
+immediately. □
+
+This is deliberately a bookkeeping proposition: its contribution is the causal
+separation it enforces, not proof difficulty.
+
+**Corollary B.2 (single-crossing tail-area criterion).** Suppose additionally that
+there is `tau_d in (0,H)` such that
 
 ```
 d(tau) > 0  for almost every tau in (0,tau_d),
@@ -342,39 +367,33 @@ d(tau) < 0  for almost every tau in (tau_d,H).
 Define
 
 ```
-A_+ = integral_0^tau_d d(u) du = Delta(tau_d) > 0,
-N(t) = integral_tau_d^t [-d(u)] du.
+A_+ = P(tau_d) = Delta(tau_d) > 0.
 ```
 
-Then, for `t >= tau_d`,
+Then `P(t)=A_+` and
 
 ```
-Delta(t) = A_+ - N(t).
+Delta(t) = A_+ - N(t),       t >= tau_d.
 ```
 
 Consequently:
 
 1. a later equality `Delta(t)=0` is reached by `H` iff `N(H) >= A_+`;
-2. strict outcome starvation, `Delta(t)<0` for some `t<=H`, occurs iff
+2. strict outcome suppression, `Delta(t)<0` for some `t<=H`, occurs iff
    `N(H) > A_+`;
 3. if `d<0` on every nontrivial post-crossover interval, the later equality is
    unique whenever it exists.
 
-**Proof.** Absolute continuity and the fundamental theorem of calculus give
+**Proof.** The sign pattern gives `d_-=0` before `tau_d` and `d_+=0` afterward, so
+`P(t)=P(tau_d)=A_+` for `t>=tau_d`. Proposition B.1 gives the displayed identity.
+The post-crossing assumptions make `N` continuous and strictly increasing on every
+nontrivial post-crossing interval, yielding the three conclusions. □
 
-```
-Delta(tau_d)=Delta(0)+integral_0^tau_d d=A_+,
-Delta(t)=Delta(tau_d)+integral_tau_d^t d=A_+-N(t).
-```
-
-The sign assumptions make `N` continuous and strictly increasing on every
-nontrivial post-crossover interval. The three conclusions follow immediately. □
-
-This theorem repairs the false statement that a drift crossing necessarily causes
+The corollary repairs the false statement that a drift crossing necessarily causes
 a response crossing. The additional tail-area condition is both necessary and
-sufficient.
+sufficient under its single-crossing hypotheses.
 
-**Corollary B.2 (quantitative crossing bounds).**
+**Corollary B.3 (quantitative crossing bounds).**
 
 - If `d(t)<=-kappa<0` on `[t_0,H]`, where `t_0>tau_d`, then, provided the right
   side lies within the horizon,
@@ -397,11 +416,11 @@ sufficient.
   tau_response <= tau_d + sqrt(2 A_+/lambda).
   ```
 
-**Proof.** Integrate the stated lower bounds on `-d` and apply Theorem B.1. □
+**Proof.** Integrate the stated lower bounds on `-d` and apply Corollary B.2. □
 
 A causal **starvation** label additionally requires the preregistered learnability
-gate: the weak-only trajectory must reach its target. Theorem B by itself proves a
-response ordering, not learnability.
+gate: the weak-only trajectory must reach its target. Proposition B.1 and its
+corollaries prove response orderings, not learnability.
 
 ## Theorem C — ordering-invariant rank-one drift crossover
 
@@ -480,8 +499,10 @@ bound through Theorem C. □
 `Psi` avoids the non-unique additive geometry/field attribution. It predicts a
 rate crossover only when its bounds are established independently. Evaluating
 `Psi` on the same trained trajectory is an exact diagnostic certificate, not an
-independent prediction. Outcome starvation still requires Theorem B's tail area.
-For noisy cues, the rank-one factorization generally fails and Theorem A.1 must be
+independent prediction. Outcome suppression still requires Proposition B.1's
+cumulative balance (or Corollary B.2 in the single-crossing case); causal
+starvation additionally requires the independent weak-only first-hit gate.
+For noisy cues, the rank-one factorization generally fails and Proposition A.1 must be
 used instead.
 
 ## Corollary D — stability of target and crossover hitting times
@@ -716,7 +737,7 @@ positive lag.
 
 ## General paired CE-RNN DMFT — conjecture, not theorem
 
-The full empirical-NTK equations in Theorem A.4 are exact at finite width, but they
+The full empirical-NTK equations in Corollary A.4 are exact at finite width, but they
 do not close because the sample NTK and response cross-kernel move with the trained
 parameters. Theorem A.5 converts independently established movement bounds into a
 trajectory comparison; freezing measured initialization kernels without such
@@ -758,7 +779,7 @@ hypotheses and does not replace the proofs.
 - `projected_statistics`: exact cross-kernel drift when direct autograd is enabled,
   plus the `Gg` projected component and its residual;
 - `empirical_logit_jacobian` and `initial_frozen_empirical_kernel`: materialize
-  Theorem A.4's complete signed sample-logit Jacobian, `Theta_0`, and `c_0` without
+  Corollary A.4's complete signed sample-logit Jacobian, `Theta_0`, and `c_0` without
   training or populating parameter gradients;
 - `integrate_frozen_logistic_sgd`: evaluates the initialization-frozen nonlinear
   logistic recursion (A.6) on the experiment's optimization-time grid;
@@ -773,8 +794,8 @@ hypotheses and does not replace the proofs.
 - `equal_time_drift_difference`: projected equal-time decomposition and, when
   available, the exact direct gap derivative;
 - `rank_one_drift_ratio`: Theorem C factorization and log-ratio diagnostic;
-- `discrete_crossover_certificate`: exact finite-step analogue of Theorem B using
-  realized response increments;
+- `discrete_crossover_certificate`: exact finite-step analogue of the
+  single-crossing Corollary B.2 using realized response increments;
 - `transverse_hitting_time_error_bound`: evaluates Corollary D's bound and guards
   supplied uniform error, quantitative pre-hit separation, transversality radius,
   and mesh; the caller establishes directional first-entry semantics, derivative

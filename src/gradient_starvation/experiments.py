@@ -388,8 +388,8 @@ def _enl_summary(frame: pd.DataFrame, beta: float, phase_delay: float) -> dict[s
         "tail_response_equality_reached": (
             finite_step_certificate.response_equality_reached
         ),
-        "tail_strict_outcome_starvation": (
-            finite_step_certificate.strict_outcome_starvation
+        "tail_strict_outcome_suppression": (
+            finite_step_certificate.strict_outcome_suppression
         ),
         "tail_causal_starvation_certified": (
             finite_step_certificate.causal_starvation_certified
@@ -498,8 +498,15 @@ def _write_enl_crossover_report(summary: pd.DataFrame, run_dir: Path) -> None:
         row["n_tail_response_equality"] = int(
             group.tail_response_equality_reached.sum()
         )
-        row["n_tail_strict_starvation"] = int(
-            group.tail_strict_outcome_starvation.sum()
+        # Historical summaries retain the pre-repair column name. Read it only as
+        # a compatibility alias; all newly emitted summaries use "suppression".
+        strict_outcome_column = (
+            "tail_strict_outcome_suppression"
+            if "tail_strict_outcome_suppression" in group.columns
+            else "tail_strict_outcome_starvation"
+        )
+        row["n_tail_strict_suppression"] = int(
+            group[strict_outcome_column].sum()
         )
         row["n_tail_causal_starvation_certified"] = int(
             group.tail_causal_starvation_certified.sum()
@@ -625,7 +632,7 @@ def _frozen_enl_summary(
         "weak_only_learnable": weak_only_learnable,
         "tail_single_transfer_to_suppression": finite_step.single_transfer_to_suppression,
         "tail_response_equality_reached": finite_step.response_equality_reached,
-        "tail_strict_outcome_starvation": finite_step.strict_outcome_starvation,
+        "tail_strict_outcome_suppression": finite_step.strict_outcome_suppression,
         "tail_causal_starvation_certified": finite_step.causal_starvation_certified,
         "tail_positive_area": finite_step.positive_area,
         "tail_negative_area": finite_step.negative_tail_area,

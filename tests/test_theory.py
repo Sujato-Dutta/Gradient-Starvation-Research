@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 import torch
 
@@ -8,6 +10,7 @@ from gradient_starvation.theory import (
     cdc_finite_step_deviation_bound,
     counterfactual_drift_correction,
     crossover_decomposition,
+    dense_linear_initial_gap_certificate,
     discrete_crossover_certificate,
     exact_dense_linear_geometry,
     gradient_gram,
@@ -16,12 +19,292 @@ from gradient_starvation.theory import (
     frozen_kernel_discrete_error_bound,
     matched_weak_drift_decomposition,
     paired_initial_response_jet,
+    parameter_tube_certificate,
     projected_statistics,
     rank_one_drift_ratio,
     transverse_hitting_time_error_bound,
     zero_disorder_initialization_failure_bound,
     zero_disorder_trajectory_failure_bound,
 )
+
+
+def test_dense_linear_initial_gap_formula_matches_exact_autograd_jet():
+    torch.manual_seed(1)
+    spec = SyntheticTaskSpec(
+        sequence_length=7,
+        n_samples=32,
+        rho=3.0,
+        lag_separation=3,
+        cue_noise=0.0,
+        background_noise=0.0,
+    )
+    both, weak = make_paired_task(spec, seed=2)
+    both_model = DenseLinearRNN(width=8, bulk_gain=0.4)
+    weak_model = DenseLinearRNN(width=8, bulk_gain=0.4)
+    weak_model.load_state_dict(both_model.state_dict())
+
+    certificate = dense_linear_initial_gap_certificate(both_model, spec)
+    jet = paired_initial_response_jet(both_model, weak_model, both, weak)
+
+    torch.testing.assert_close(
+        torch.tensor(certificate.d_0), jet.d_0, rtol=2e-5, atol=2e-6
+    )
+    assert certificate.d_0 == certificate.initial_gap_rate
+    assert certificate.classification_tolerance == 0.0
+    assert certificate.initial_gap_rate == pytest.approx(
+        certificate.rho * certificate.both_gate * certificate.geometry_margin,
+        rel=2e-6,
+        abs=2e-7,
+    )
+    assert (certificate.geometry_margin > 0) == (certificate.initial_gap_rate > 0)
+    if certificate.d_0 > 0:
+        assert certificate.initial_regime == "initial_transfer"
+        assert certificate.local_outcome_regime == "strict_local_transfer"
+        assert certificate.local_outcome_transfer_certified
+        assert not certificate.local_outcome_suppression_certified
+    else:
+        assert certificate.initial_regime == "initial_rate_suppression"
+        assert certificate.local_outcome_regime == "strict_local_suppression"
+        assert not certificate.local_outcome_transfer_certified
+        assert certificate.local_outcome_suppression_certified
+
+
+@pytest.mark.parametrize(
+    ("cross_sign", "initial_regime", "local_regime", "transfer", "suppression"),
+    [
+        (1.0, "initial_transfer", "strict_local_transfer", True, False),
+        (
+            -1.0,
+            "initial_rate_suppression",
+            "strict_local_suppression",
+            False,
+            True,
+        ),
+    ],
+)
+def test_dense_linear_initial_gap_covers_both_strict_local_signs(
+    cross_sign, initial_regime, local_regime, transfer, suppression
+):
+    spec = SyntheticTaskSpec(
+        sequence_length=3,
+        n_samples=8,
+        rho=2.0,
+        lag_separation=0,
+        cue_noise=0.0,
+        background_noise=0.0,
+    )
+    model = DenseLinearRNN(width=2, bulk_gain=1.0)
+    with torch.no_grad():
+        model.input.zero_()
+        model.input[0, 0] = cross_sign
+        model.input[0, 1] = 1.0
+        model.readout.zero_()
+
+    certificate = dense_linear_initial_gap_certificate(model, spec)
+    assert certificate.d_0 == pytest.approx(cross_sign)
+    assert certificate.initial_regime == initial_regime
+    assert certificate.local_outcome_regime == local_regime
+    assert certificate.local_outcome_transfer_certified is transfer
+    assert certificate.local_outcome_suppression_certified is suppression
+
+
+def test_paper_source_has_no_unexpected_ascii_control_bytes():
+    source = (
+        Path(__file__).resolve().parents[1] / "paper" / "main.tex"
+    ).read_bytes()
+    unexpected = [byte for byte in source if byte < 32 and byte not in (9, 10, 13)]
+    assert unexpected == []
+
+
+def test_dense_linear_initial_gap_tolerance_fails_closed_on_local_outcome():
+    torch.manual_seed(1)
+    spec = SyntheticTaskSpec(
+        sequence_length=7,
+        n_samples=32,
+        rho=3.0,
+        lag_separation=3,
+        cue_noise=0.0,
+        background_noise=0.0,
+    )
+    model = DenseLinearRNN(width=8, bulk_gain=0.4)
+    exact = dense_linear_initial_gap_certificate(model, spec)
+    assert exact.d_0 != 0.0
+
+    boundary = dense_linear_initial_gap_certificate(
+        model, spec, tolerance=abs(exact.d_0)
+    )
+    assert boundary.classification_tolerance == abs(exact.d_0)
+    assert boundary.initial_regime == "initial_boundary_or_undetermined"
+    assert boundary.local_outcome_regime == "boundary_or_undetermined"
+    assert not boundary.local_outcome_transfer_certified
+    assert not boundary.local_outcome_suppression_certified
+
+    for invalid in (-1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="finite and non-negative"):
+            dense_linear_initial_gap_certificate(model, spec, tolerance=invalid)
+
+
+def test_initial_response_jet_second_derivative_matches_finite_difference():
+    old_dtype = torch.get_default_dtype()
+    torch.set_default_dtype(torch.float64)
+    try:
+        torch.manual_seed(3)
+        spec = SyntheticTaskSpec(
+            sequence_length=5,
+            n_samples=24,
+            rho=2.0,
+            lag_separation=2,
+            cue_noise=0.0,
+            background_noise=0.0,
+        )
+        both, weak = make_paired_task(spec, seed=4)
+        both_model = DenseLinearRNN(width=5, bulk_gain=0.25)
+        weak_model = DenseLinearRNN(width=5, bulk_gain=0.25)
+        weak_model.load_state_dict(both_model.state_dict())
+        jet = paired_initial_response_jet(both_model, weak_model, both, weak)
+
+        def fixed_direction_derivative(model, batch):
+            parameters = list(model.parameters())
+            loss, _ = training_objective(model, batch, {"method": "erm"})
+            velocity = [
+                -gradient.detach()
+                for gradient in torch.autograd.grad(loss, parameters)
+            ]
+            initial = [parameter.detach().clone() for parameter in parameters]
+
+            def weak_drift(sign):
+                with torch.no_grad():
+                    for parameter, value, direction in zip(
+                        parameters, initial, velocity
+                    ):
+                        parameter.copy_(value + sign * 1e-5 * direction)
+                direct = projected_statistics(
+                    model, batch, compute_direct_drift=True
+                ).direct_drift
+                assert direct is not None
+                return direct[1].detach()
+
+            plus = weak_drift(1.0)
+            minus = weak_drift(-1.0)
+            with torch.no_grad():
+                for parameter, value in zip(parameters, initial):
+                    parameter.copy_(value)
+            return (plus - minus) / (2e-5)
+
+        both_reference = fixed_direction_derivative(both_model, both)
+        weak_reference = fixed_direction_derivative(weak_model, weak)
+        torch.testing.assert_close(jet.both_j_0, both_reference, rtol=2e-5, atol=2e-8)
+        torch.testing.assert_close(
+            jet.weak_only_j_0, weak_reference, rtol=2e-5, atol=2e-8
+        )
+        torch.testing.assert_close(
+            jet.j_0,
+            both_reference - weak_reference,
+            rtol=2e-5,
+            atol=2e-8,
+        )
+    finally:
+        torch.set_default_dtype(old_dtype)
+
+
+def test_parameter_tube_certificate_separates_crossing_and_safe_paths():
+    crossing = parameter_tube_certificate(
+        initial_gap_rate=2.0,
+        parameter_ball_radius=10.0,
+        joint_speed_upper_bound=1.0,
+        rate_decrease_lower_bound=0.5,
+        rate_decrease_upper_bound=1.0,
+        weak_only_drift_lower_bound=0.25,
+        weak_initial_response=0.0,
+        weak_target=1.0,
+    )
+    assert crossing.certified_horizon == 10.0
+    assert crossing.rate_crossing_certified
+    assert crossing.rate_crossing_time_lower_bound == 2.0
+    assert crossing.rate_crossing_time_upper_bound == 4.0
+    assert crossing.outcome_suppression_certified
+    assert crossing.outcome_suppression_witness_after == 8.0
+    assert crossing.target_met_at_initialization is False
+    assert crossing.weak_only_learnability_certified
+    assert crossing.weak_only_target_time_upper_bound == 4.0
+    assert crossing.causal_starvation_certified
+    assert not crossing.safe_transfer_horizon_certified
+
+    safe = parameter_tube_certificate(
+        initial_gap_rate=2.0,
+        parameter_ball_radius=1.0,
+        joint_speed_upper_bound=1.0,
+        absolute_rate_derivative_bound=0.5,
+    )
+    assert safe.safe_transfer_horizon_certified
+    assert safe.rate_gap_lower_bound_at_horizon == 1.5
+    assert safe.response_gap_lower_bound_at_horizon == 1.75
+    assert not safe.rate_crossing_certified
+    assert not safe.outcome_suppression_certified
+    assert safe.target_met_at_initialization is None
+    assert not safe.causal_starvation_certified
+
+
+@pytest.mark.parametrize("weak_target", [0.0, -1.0])
+def test_parameter_tube_initial_target_is_degenerate_not_learnability(weak_target):
+    certificate = parameter_tube_certificate(
+        initial_gap_rate=2.0,
+        parameter_ball_radius=10.0,
+        joint_speed_upper_bound=1.0,
+        rate_decrease_lower_bound=0.5,
+        rate_decrease_upper_bound=1.0,
+        weak_only_drift_lower_bound=0.25,
+        weak_initial_response=0.0,
+        weak_target=weak_target,
+    )
+
+    assert certificate.outcome_suppression_certified
+    assert certificate.target_met_at_initialization is True
+    assert certificate.weak_only_target_time_upper_bound == 0.0
+    assert not certificate.weak_only_learnability_certified
+    assert not certificate.causal_starvation_certified
+
+
+def test_parameter_tube_learnability_requires_strictly_positive_time_before_horizon():
+    certificate = parameter_tube_certificate(
+        initial_gap_rate=1.0,
+        parameter_ball_radius=2.0,
+        joint_speed_upper_bound=1.0,
+        weak_only_drift_lower_bound=0.5,
+        weak_initial_response=0.0,
+        weak_target=1.0,
+    )
+
+    assert certificate.target_met_at_initialization is False
+    assert certificate.weak_only_target_time_upper_bound == 2.0
+    assert not certificate.weak_only_learnability_certified
+    assert not certificate.causal_starvation_certified
+
+
+def test_parameter_tube_certificate_fails_closed_without_interval_premises():
+    certificate = parameter_tube_certificate(
+        initial_gap_rate=1.0,
+        parameter_ball_radius=2.0,
+        joint_speed_upper_bound=1.0,
+    )
+    assert not certificate.rate_crossing_certified
+    assert not certificate.outcome_suppression_certified
+    assert not certificate.weak_only_learnability_certified
+    assert not certificate.causal_starvation_certified
+    assert not certificate.safe_transfer_horizon_certified
+
+    with pytest.raises(ValueError, match="Both rate-decrease bounds"):
+        parameter_tube_certificate(
+            1.0, 2.0, 1.0, rate_decrease_lower_bound=0.5
+        )
+    with pytest.raises(ValueError, match="lambda <= Lambda"):
+        parameter_tube_certificate(
+            1.0,
+            2.0,
+            1.0,
+            rate_decrease_lower_bound=1.0,
+            rate_decrease_upper_bound=0.5,
+        )
 
 
 def test_finite_width_geometry_matches_autograd():
@@ -276,13 +559,14 @@ def test_discrete_tail_area_certificate_distinguishes_suppression_from_starvatio
     assert starved.positive_area == 2.0
     assert starved.negative_tail_area == 3.0
     assert starved.tail_area_margin == 1.0
-    assert starved.strict_outcome_starvation
+    assert starved.strict_outcome_suppression
+    assert starved.strict_outcome_starvation  # Deprecated read-only compatibility alias.
     assert starved.causal_starvation_certified
 
     suppressed_only = discrete_crossover_certificate([0.0, 1.0, 2.0, 1.5, 1.0])
     assert suppressed_only.single_transfer_to_suppression
     assert not suppressed_only.response_equality_reached
-    assert not suppressed_only.strict_outcome_starvation
+    assert not suppressed_only.strict_outcome_suppression
     assert suppressed_only.tail_area_margin == -1.0
 
 

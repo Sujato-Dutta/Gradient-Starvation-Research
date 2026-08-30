@@ -24,8 +24,12 @@ ALLOWED_READINESS_STATUSES = {
     "unknown",
     "not_applicable",
 }
-THEORY_IDS = [f"T{index}" for index in range(1, 19)]
-INCLUDED_THEORY_IDS = [f"T{index}" for index in range(1, 17)]
+THEORY_IDS = [f"T{index}" for index in range(1, 21)]
+INCLUDED_THEORY_IDS = [
+    *[f"T{index}" for index in range(1, 17)],
+    "T19",
+    "T20",
+]
 BLOCKED_THEORY_IDS = ["T17", "T18"]
 PRIMARY_ENDPOINTS = ["drift_crossing", "response_crossing"]
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
@@ -223,7 +227,7 @@ def validate_claim_set(
     _require(isinstance(headline, dict), "headline_claim must be a mapping.")
     _require(
         headline.get("included_theory_claim_ids") == INCLUDED_THEORY_IDS,
-        "The included theorem package must be exactly T1--T16.",
+        "The included theorem package must be exactly T1--T16 plus T19--T20.",
     )
     _require(
         headline.get("blocked_or_excluded_theory_claim_ids") == BLOCKED_THEORY_IDS,
@@ -232,11 +236,45 @@ def validate_claim_set(
     theory_claims = claims.get("theory_claims")
     _require(isinstance(theory_claims, list), "theory_claims must be a list.")
     ids = [entry.get("id") for entry in theory_claims if isinstance(entry, dict)]
-    _require(ids == THEORY_IDS, "Theory claims must appear once each in T1--T18 order.")
+    _require(ids == THEORY_IDS, "Theory claims must appear once each in T1--T20 order.")
+    theory_by_id = {
+        entry.get("id"): entry for entry in theory_claims if isinstance(entry, dict)
+    }
     _require(
-        theory_claims[-2].get("status") == "blocked_conjecture"
-        and theory_claims[-1].get("status") == "open_blocked",
+        theory_by_id["T17"].get("status") == "blocked_conjecture"
+        and theory_by_id["T18"].get("status") == "open_blocked",
         "T17 and T18 must remain blocked.",
+    )
+    _require(
+        theory_by_id["T19"].get("status") == "proved_with_assumptions"
+        and theory_by_id["T20"].get("status") == "proved_with_assumptions",
+        "T19 and T20 must remain assumption-scoped proved claims.",
+    )
+
+    prospective = claims.get("prospective_designs")
+    _require(isinstance(prospective, dict), "prospective_designs must be a mapping.")
+    _require(
+        prospective.get("empirical_claim_ids_assigned") is False
+        and prospective.get("outcomes_generated") is False
+        and prospective.get("execution_authorized") is False,
+        "Prospective designs must remain outcome-free, unauthorized, and outside E-claims.",
+    )
+    designs = prospective.get("designs")
+    _require(isinstance(designs, list), "prospective_designs.designs must be a list.")
+    prospective_by_id = {
+        design.get("id"): design for design in designs if isinstance(design, dict)
+    }
+    _require(
+        set(prospective_by_id) == {"semi_real_generated_cue", "expanded_nonlinear_cdc"},
+        "The prospective design set must contain exactly the two frozen blocked studies.",
+    )
+    _require(
+        all(
+            design.get("status") == "blocked_unexecuted"
+            and design.get("outcome_records") == 0
+            for design in prospective_by_id.values()
+        ),
+        "Every prospective design must remain blocked, unexecuted, and outcome-free.",
     )
 
     empirical = claims.get("empirical_claims")

@@ -1,0 +1,335 @@
+{
+  "schema_version": "semi-real-execution-v1",
+  "study_id": "semi-real-generated-cue-v1",
+  "contract_revision": 2,
+  "status": "scientific_execution_requires_external_authorization_seal",
+  "publication_scope": "semi-real",
+  "evidence_label": "generated-cue intervention on official real-image benchmarks; not unmodified real-world evidence",
+  "local_workspace": {
+    "root": "data/semi_real_generated_cue_v1",
+    "required_path_roles": [
+      "data",
+      "preflight",
+      "authorization_seal",
+      "engineering_smoke",
+      "scientific_run"
+    ],
+    "strict_descendants_only": true,
+    "symlink_components_forbidden": true,
+    "artifact_tree_symlinks_forbidden": true,
+    "git_ignored_required": true,
+    "tracked_workspace_paths_forbidden": true,
+    "git_cleanliness_rationale": "ignored local artifacts do not affect git cleanliness"
+  },
+  "historical_contract": {
+    "path": "configs/semi_real_preregistration.yaml",
+    "schema_version": "semi-real-preregistration-v1",
+    "sha256": "4886fdba9a66609110ede3ec3b783b9a0bb68fdb0a2ce765b177fa437e00f8ba",
+    "must_remain_execution_blocked": true
+  },
+  "execution_environment": {
+    "device": "cpu",
+    "dtype": "float32",
+    "python_version": "3.12.4",
+    "deterministic_algorithms": true,
+    "deterministic_warn_only": false,
+    "intraop_threads": 1,
+    "interop_threads": 1,
+    "serial_records": true,
+    "environment_lock_path": "requirements-lock-semi-real-py312.txt",
+    "environment_lock_sha256": "651ba112e67b38f80eb60d26ef92a348b3e3228fbb0a7aae8a0f24930b823c1c",
+    "required_exact_packages": {
+      "numpy": "2.5.2",
+      "torch": "2.13.0",
+      "torchvision": "0.28.0"
+    }
+  },
+  "datasets": [
+    {
+      "name": "mnist",
+      "torchvision_class": "MNIST",
+      "torchvision_directory": "MNIST",
+      "negative_class": 3,
+      "positive_class": 8,
+      "train_source_split": "train",
+      "probe_source_split": "test",
+      "evaluation_source_split": "test",
+      "train_per_class": 256,
+      "probe_per_class": 128,
+      "evaluation_per_class": 128,
+      "raw_image_shape": [28, 28],
+      "official_download_mirrors": [
+        "https://ossci-datasets.s3.amazonaws.com/mnist/",
+        "http://yann.lecun.com/exdb/mnist/"
+      ],
+      "official_archives": [
+        {"filename": "train-images-idx3-ubyte.gz", "md5": "f68b3c2dcbeaaa9fbdd348bbdeb94873"},
+        {"filename": "train-labels-idx1-ubyte.gz", "md5": "d53e105ee54ea40749a09fcbcd1e9432"},
+        {"filename": "t10k-images-idx3-ubyte.gz", "md5": "9fb629c4189551a2d022fa330f9573f3"},
+        {"filename": "t10k-labels-idx1-ubyte.gz", "md5": "ec29112dd5afa0611ce80d1b7f02629c"}
+      ],
+      "required_extracted_raw_files": [
+        "t10k-images-idx3-ubyte",
+        "t10k-labels-idx1-ubyte",
+        "train-images-idx3-ubyte",
+        "train-labels-idx1-ubyte"
+      ]
+    },
+    {
+      "name": "fashion_mnist",
+      "torchvision_class": "FashionMNIST",
+      "torchvision_directory": "FashionMNIST",
+      "negative_class": 0,
+      "positive_class": 6,
+      "train_source_split": "train",
+      "probe_source_split": "test",
+      "evaluation_source_split": "test",
+      "train_per_class": 256,
+      "probe_per_class": 128,
+      "evaluation_per_class": 128,
+      "raw_image_shape": [28, 28],
+      "official_download_mirrors": [
+        "http://fashion-mnist.s3-website.eu-central-1.amazonaws.com/"
+      ],
+      "official_archives": [
+        {"filename": "train-images-idx3-ubyte.gz", "md5": "8d4fb7e6c68d591d4c3dfef9ec88bf0d"},
+        {"filename": "train-labels-idx1-ubyte.gz", "md5": "25c81989df183df01b3e8a0aad5dffbe"},
+        {"filename": "t10k-images-idx3-ubyte.gz", "md5": "bef4ecab320f06d8554ea6380940ec79"},
+        {"filename": "t10k-labels-idx1-ubyte.gz", "md5": "bb300cfdad3c16e7a12a480ee83cd310"}
+      ],
+      "required_extracted_raw_files": [
+        "t10k-images-idx3-ubyte",
+        "t10k-labels-idx1-ubyte",
+        "train-images-idx3-ubyte",
+        "train-labels-idx1-ubyte"
+      ]
+    }
+  ],
+  "selection": {
+    "algorithm": "sha256-keyed-per-class-order-v1",
+    "key_fields": ["study_id", "dataset", "official_split", "data_seed", "source_class", "source_index"],
+    "ordering": "ascending_sha256_then_source_index",
+    "training_rule": "first_256_per_class_from_seeded_train_order",
+    "test_rule": "first_128_per_class_probe_then_next_128_per_class_evaluation_from_one_seeded_test_order",
+    "stable_id_format": "{dataset}:{official_split}:{source_index_8_digit_zero_padded}",
+    "split_qualified_ids": true,
+    "role_order": ["train", "probe", "evaluation"],
+    "within_role_tensor_order": "binary_label_0_seeded_order_then_binary_label_1_seeded_order",
+    "selected_tensor_binding": "sha256_and_size_of_ordered_raw_uint8_pixels_and_big_endian_int64_source_labels",
+    "within_selection_cross_role_disjoint": true,
+    "cross_data_seed_overlap": "allowed_and_disclosed_by_full_role_pair_matrix",
+    "manifest_schema": "semi-real-selection-manifest-v1",
+    "manifest_serialization": "utf8-canonical-json-sort-keys-compact-newline"
+  },
+  "preprocessing": {
+    "raw_dtype": "uint8",
+    "source_decoder": "direct_big_endian_idx_decode_from_hashed_extracted_raw_files",
+    "torchvision_processed_cache_policy": "never_read",
+    "value_map": "x/127.5-1",
+    "resize": {"height": 14, "width": 14, "mode": "area"},
+    "augmentation": "none"
+  },
+  "intervention": {
+    "both": "channel_0_real_core_plus_channel_1_label_aligned_generated_patch",
+    "weak_only": "bitwise_identical_channel_0_and_channel_1_exactly_zero",
+    "cue_strength": 4.0,
+    "cue_patch": {"top": 0, "left": 0, "height": 2, "width": 2},
+    "required_checks": [
+      "labels_equal",
+      "sample_ids_equal",
+      "core_channel_bitwise_equal",
+      "weak_generated_channel_all_zero",
+      "only_generated_channel_differs"
+    ]
+  },
+  "response_functionals": {
+    "core": "mean_signed_logit_on_fixed_cue_free_test_probe",
+    "cue": "one_half_mean_signed_aligned_minus_conflicted_logit_on_same_test_probe",
+    "common_across_arms": true,
+    "reported_values": "gain_from_each_models_bitwise_shared_initial_value",
+    "initial_both_minus_weak_gap": 0.0,
+    "drift": "exact_full_batch_direct_autograd_negative_inner_product_response_gradient_loss_gradient",
+    "drift_diagnostics_do_not_populate_parameter_grad": true,
+    "two_mode_Gg_promotable": false
+  },
+  "model": {
+    "kind": "semi_real_cnn",
+    "input_channels": 2,
+    "hidden_channels": [16, 32],
+    "pretrained": false,
+    "initialization": "torch_manual_seed_model_seed_then_deepcopy_shared_model",
+    "arm_state_after_initialization": "independent"
+  },
+  "optimization": {
+    "objective": "mean_binary_cross_entropy_with_logits",
+    "optimizer": "sgd",
+    "full_batch": true,
+    "learning_rate": 0.01,
+    "steps": 500,
+    "log_every": 5,
+    "logged_step_start": 0,
+    "logged_step_end": 500,
+    "logged_point_count": 101,
+    "momentum": 0.0,
+    "weight_decay": 0.0,
+    "gradient_clip": null,
+    "arm_pairing": "both_and_weak_from_identical_real_core_images",
+    "update_order": ["both", "weak_only"],
+    "optimizer_state": "independent_per_arm"
+  },
+  "seed_design": {
+    "data_seeds": [4101, 4102, 4103, 4104],
+    "model_seeds": [5101, 5102, 5103, 5104, 5105, 5106, 5107, 5108],
+    "crossed": true,
+    "records_per_dataset": 32,
+    "total_records": 64,
+    "record_id_format": "sr-{dataset}-d{data_seed}-m{model_seed}",
+    "scientific_seeds_forbidden_in_engineering_smoke": true
+  },
+  "primary_endpoints": {
+    "weak_auc_gap": {
+      "integrand": "weak_only_core_gain_minus_both_core_gain",
+      "integration": "trapezoid_over_tau",
+      "positive_sign": "weak_only_gain_exceeds_both_gain"
+    },
+    "weak_only_learnability": {
+      "target_core_gain": 0.5,
+      "first_hit": "first_upward_threshold_hit_linear_interpolation",
+      "nondegenerate": "finite_and_strictly_after_tau_zero",
+      "horizon_tau": 5.0
+    },
+    "outcome_suppression": {
+      "response_gap": "both_core_gain_minus_weak_only_core_gain",
+      "criterion": "strict_outcome_suppression_from_realized_logged_response_tail_certificate",
+      "tail_certificate": "one_strict_positive_increment_block_then_one_strict_negative_increment_block_and_post_peak_gap_below_initial",
+      "tolerance": 1e-10
+    },
+    "causal_certificate": "outcome_suppression_and_nondegenerate_weak_only_learnability"
+  },
+  "trajectory_diagnostics": {
+    "drift_gap": "both_exact_core_drift_minus_weak_only_exact_core_drift",
+    "response_gap": "both_core_gain_minus_weak_only_core_gain",
+    "crossing_direction": "positive_to_negative",
+    "crossing_interpolation": "linear_between_logged_points",
+    "report_first_drift_crossing": true,
+    "report_first_response_crossing": true,
+    "report_all_sign_change_counts": true,
+    "report_positive_and_negative_drift_areas": true,
+    "drift_area_integration": "exact_piecewise_linear_sign_split_trapezoid_over_tau",
+    "delay_tolerance": 0.05
+  },
+  "evaluation": {
+    "source": "fixed_evaluation_role_from_official_test_split_disjoint_from_probe",
+    "trained_arms": ["both", "weak_only"],
+    "input_conditions": ["cue_free", "aligned", "conflicted"],
+    "accuracy": "mean_true_binary_label_accuracy_at_logit_zero",
+    "gsi5": {
+      "policy": "omitted_fail_closed",
+      "artifact_marker": "missing_secondary_not_defined_for_evaluation_matrix",
+      "required_for_acceptance": false
+    }
+  },
+  "inference": {
+    "unit": "paired_record_data_seed_by_model_seed",
+    "complete_factorial_required_per_dataset": {"data_seeds": 4, "model_seeds": 8, "records": 32},
+    "method": "two_way_pigeonhole_bootstrap",
+    "row_iid_intervals_forbidden": true,
+    "bootstrap_replicates": 5000,
+    "bootstrap_seed": 6201,
+    "axis_resampling": "independently_sample_4_data_and_8_model_indices_with_replacement_then_average_cross_product",
+    "ci": {"lower_quantile": 0.025, "upper_quantile": 0.975, "quantile_method": "linear"},
+    "metrics": ["mean_weak_auc_gap", "weak_only_learnability_rate", "causal_certificate_rate"],
+    "reporting": "dataset_specific"
+  },
+  "acceptance": {
+    "required_records_per_dataset": 32,
+    "required_total_records": 64,
+    "minimum_weak_only_learnable_count_per_dataset": 24,
+    "minimum_causal_certificate_count_per_dataset": 16,
+    "weak_auc_gap_ci95_lower_strictly_greater_than": 0.0,
+    "all_intervention_checks_required": true,
+    "all_initial_response_gaps_exactly_zero": true,
+    "all_datasets_must_pass": true
+  },
+  "preflight": {
+    "schema_version": "semi-real-preflight-v1",
+    "default_download": false,
+    "download_requires_explicit_cli_flag": true,
+    "download_provider": "official_torchvision_resource_urls_without_dataset_construction",
+    "official_archive_identity": "frozen_torchvision_resource_md5_verified_before_local_sha256_manifest",
+    "raw_file_scope": "every_regular_file_under_each_torchvision_dataset_raw_directory",
+    "raw_file_symlinks_forbidden": true,
+    "hash_algorithm": "sha256",
+    "source_files": [
+      "scripts/check_semi_real_execution.py",
+      "scripts/run_semi_real_study.py"
+    ],
+    "source_globs": ["src/gradient_starvation/**/*.py"],
+    "source_scope": "both_execution_scripts_and_every_python_file_in_the_gradient_starvation_package",
+    "model_construction_forbidden": true,
+    "optimizer_construction_forbidden": true,
+    "model_outcome_inspection_forbidden": true
+  },
+  "authorization": {
+    "seal_schema_version": "semi-real-authorization-seal-v1",
+    "external_seal_required": true,
+    "code_must_not_create_seal": true,
+    "expected_git_clean": true,
+    "expected_git_commit_length": 40,
+    "untouched_seed_attestation_text": "I attest that no scientific model seed in this contract has been used to inspect semi-real optimizer outcomes before this authorization.",
+    "explicit_authorization_text": "I explicitly authorize generation of the 64 semi-real scientific records bound by this seal.",
+    "required_bindings": [
+      "execution_contract_sha256",
+      "preflight_manifest_sha256",
+      "historical_contract_sha256",
+      "source_manifest_sha256",
+      "source_aggregate_sha256",
+      "environment_lock_sha256",
+      "raw_data_manifest_sha256",
+      "raw_dataset_aggregate_sha256",
+      "selection_manifest_sha256",
+      "expected_record_ids"
+    ],
+    "fail_before_model_and_optimizer_construction": true,
+    "fail_before_output_directory_creation": true
+  },
+  "artifacts": {
+    "record_write": "atomic_input_bound_trajectory_csv_summary_json_then_complete_marker",
+    "resume": "verify_complete_marker_hashes_or_fail_on_drift",
+    "required_final_files": [
+      "contract.resolved.json",
+      "preflight.manifest.json",
+      "authorization.seal.json",
+      "environment.json",
+      "provenance.json",
+      "record_summary.csv",
+      "record_summary.json",
+      "inference.json",
+      "acceptance.json",
+      "resource_usage.json",
+      "artifact_manifest.json",
+      "artifact_manifest.sha256"
+    ],
+    "artifact_manifest_scope": "all_regular_run_files_except_manifest_and_its_sidecar",
+    "analyzer_recomputes_inference_and_acceptance": true
+  },
+  "engineering_smoke": {
+    "scope_label": "engineering_smoke_non_scientific_toy_data",
+    "data_seed": 900001,
+    "model_seed": 900101,
+    "per_class": 4,
+    "image_size": 4,
+    "hidden_channels": [2, 3],
+    "steps": 2,
+    "log_every": 1,
+    "scientific_acceptance_forbidden": true
+  },
+  "prohibited_promotions": [
+    "A drift crossing alone is not causal starvation.",
+    "The generated patch benchmark is semi-real, not an unmodified real-world causal intervention.",
+    "The two-probe Gg projection is not the exact nonlinear image-model drift.",
+    "Failure of weak-only learnability makes the causal endpoint indeterminate.",
+    "Engineering smoke outcomes are not scientific records or evidence.",
+    "No scientific outcome may be generated without a valid external authorization seal."
+  ]
+}

@@ -9,7 +9,7 @@ what remains open. `claim_ledger.md` is the statement-level authority;
 The paper no longer presents a general paired CE-RNN DMFT as an established
 result. Its rigorous contribution is a finite-width causal package.
 
-### Theorem A: exact finite-width CE response flow
+### Proposition A: exact finite-width CE response flow
 
 For any differentiable response, full-batch logistic gradient flow induces the
 exact response/logit cross-kernel dynamics. If signed logits are exactly linear in
@@ -28,7 +28,7 @@ drift must be computed by the universal cross-kernel/direct-autograd form, with 
 For one finite training set, let `r(theta)` be the vector of signed logits, let
 `J_r(theta)` have rows `grad r_i`, define the full signed-logit empirical NTK
 `K(theta)=J_r J_r^T`, and define the response cross-kernel
-`C_i(theta)=<grad r_i,grad M(theta)>`. With `w(r)=sigma(-r)`, Theorem A.1 applied
+`C_i(theta)=<grad r_i,grad M(theta)>`. With `w(r)=sigma(-r)`, Proposition A.1 applied
 also to each `r_i` gives the exact coupled finite-width flow
 
 ```text
@@ -107,17 +107,22 @@ from caller-supplied constants; it does not establish them. No uniform
 instantaneous or secant-kernel movement bound has been proved for the tanh or GRU
 experiments, so their frozen-surrogate agreement is empirical and conditional.
 
-### Theorem B: when rate suppression becomes outcome starvation
+### Proposition B: cumulative drift balance and the single-crossing corollary
 
-For `Delta=m_w^B-m_w^W` and exact equal-time derivative `d=Delta'`, assume one
-`+ -> -` drift crossing at `tau_d`. Then the response later reaches equality iff
-the accumulated post-crossover negative area reaches the positive area stored at
-the peak. Strict starvation requires strict excess negative area. This condition is
-necessary and sufficient, and quantitative drift bounds yield explicit upper bounds
-on the response crossing time.
+For `Delta=m_w^B-m_w^W` and exact equal-time derivative `d=Delta'`, split the
+drift into positive and negative parts and let `P,N` be their cumulative areas.
+Absolute continuity gives the general identity `Delta(t)=P(t)-N(t)` under arbitrary
+sign changes. Strict outcome suppression therefore occurs exactly when cumulative
+negative drift exceeds cumulative positive drift at some time. If there is one
+`+ -> -` drift crossing at `tau_d`, the single-crossing corollary reduces this to
+the familiar tail-area statement: the response later reaches equality iff the
+post-crossover negative area reaches the positive area stored at the peak, and
+strict suppression requires strict excess negative area. Quantitative drift bounds
+yield explicit upper bounds on the response crossing time.
 
 This is the exact correction to the retracted statement that a drift crossing
-necessarily causes a response crossing.
+necessarily causes a response crossing. It also covers oscillatory drift and
+suppression from initialization, which the single-crossing corollary does not.
 
 ### Theorem C: ordering-invariant noiseless rank-one criterion
 
@@ -131,7 +136,9 @@ Psi = log(F_w^B/F_w^W)
 has an exact derivative separating total geometry-ratio growth from margin-gate
 contraction without choosing either non-canonical additive decomposition. A positive
 `Psi` followed by a uniform negative derivative produces one rate crossover and an
-explicit time bound. Outcome starvation still requires Theorem B.
+explicit time bound. Outcome suppression still requires Proposition B's cumulative
+balance; causal starvation additionally requires the independent weak-only first-
+hit learnability gate.
 
 **Prediction discipline:** bounds on `Psi'` proved before outcomes can prospectively
 bound a crossover. Evaluating `Psi` on a completed trajectory certifies it but is
@@ -207,7 +214,8 @@ Use only final-scale artifacts named in `claim_ledger.md`.
 
 `results/e1_dense_rerun-20260823-085142`
 
-- positive weak AUC gap in 32/32 seeds at lags 0, 2, and 4;
+- positive weak AUC gap in all 32 `rho`–seed cells per lag (four strengths
+  by eight seed IDs) at lags 0, 2, and 4;
 - negative-control transfer in 8/8 seeds;
 - lag 8 is unlearnable under the preregistered target and therefore not labelled
   starved;
@@ -301,8 +309,19 @@ responses and the universal direct-autograd response drift at every logged point
 - GRU: exact drift and response crossings in **5/8** seeds, but weak-only reaches
   neither the preregistered `beta=0.5` target nor causal learnability in any seed;
   therefore causal starvation is certified in **0/8**.
+- A post-hoc terminal-response profile derived from the tracked per-seed summary,
+  without training, gives tanh `B_W(H)` min/mean/max
+  `4.41313266754 / 4.49664855003 / 4.67605876923` (8/8 above `0.5`) and GRU
+  `0.0828229486942 / 0.129690139554 / 0.187142759562` (0/8). This shows that the
+  GRU result is not marginal at the preregistered operating point; terminal reach
+  is not generally a first-hit replacement and the audit supports no architecture
+  ranking.
 - maximum direct-versus-projected drift residual: `0.02197` for tanh and
   `0.002986` for GRU. Projected and matched-state quantities remain diagnostics.
+
+The profile table, figure, and portable provenance record are stored under the
+same artifact directory and can be rebuilt with
+`python scripts/build_enl_learnability_profile.py`.
 
 The old tanh 8/8 result and `tau*=1.6112` are invalid under the final response
 definition. Crossing-time means above are conditional descriptive statistics and
@@ -337,6 +356,13 @@ the full-batch matched-shadow theorem, and it has **not been run**. The weak
 coordinate is an intercept, not an identified bird-shape feature. No Waterbirds
 result belongs in the main result table until the pilot is run.
 
+### Empirical scope
+
+All citable outcomes are controlled synthetic experiments. E1 has eight seed IDs
+reused over four strengths at each lag; E-NL has eight seeds per architecture at
+one task cell. These counts are descriptive rather than event-prevalence estimates,
+and no real-data experiment has been run.
+
 ## 4. Novelty boundary after reading the 2026 literature
 
 Ger and Barak (2026) derive exact/asymptotic low-rank overlap learning equations and
@@ -348,8 +374,9 @@ Langevin/Gibbs equilibrium and explicitly state that it does not track noiseless
 optimization-time gradient flow. Their theory covers structure/disorder and learned
 representations, but not this paired CE causal weak-feature trajectory.
 
-Accordingly, the defensible novelty is the causal paired intervention, the exact
-rate-versus-outcome theorem, the ordering-invariant rank-one drift criterion, and
+Accordingly, the defensible novelty is the causal paired intervention, the general
+cumulative drift balance and its single-crossing tail-area corollary, the ordering-
+invariant rank-one drift criterion, and
 the theorem-aligned recurrent experiments—not “the first theory of learning in
 RNNs” and not a completed general recurrent DMFT. The nonlinear evidence is
 seed-dependent and cannot support a claim of a universal recurrent crossover.
@@ -372,7 +399,8 @@ Allowed:
 > 0.8125. Phase, causal certification, learnability, crossing times, and trajectory
 > magnitudes were not validated by that restricted result.
 
-> Separately, we prove that a rate crossover becomes outcome starvation exactly
+> Separately, we prove the cumulative drift balance for arbitrary sign changes; in
+> the single-crossing case, a rate crossover becomes outcome suppression exactly
 > when its negative tail area exhausts the earlier transfer advantage. In a
 > noiseless rank-one cue model, an ordering-invariant log drift ratio gives
 > sufficient conditions for a unique rate crossover. Under the theorem-aligned
@@ -395,28 +423,3 @@ Not allowed:
 - “Late tanh suppression is geometry-dominated.”
 - “CDC preserves the final strong feature or beats its ablations.”
 - “Tests prove the theorem.”
-- Any guarantee of paper acceptance, oral selection, or oral readiness.
-
-## 6. Readiness status
-
-The theorem package, theorem-aligned nonlinear rerun, and sealed frozen-surrogate
-studies are complete as scoped. The broad surrogate pilot failed; the fresh
-factorial supports only the revised crossing-event classifier at one controlled
-cell. It does not establish tanh/GRU kernel stability, causal prediction,
-universal prevalence, or calibrated times.
-
-The theorem-aligned rerun fingerprint and original metadata are frozen at
-repository commit `2d0ee83` / tag `theorem-aligned-v1`; the pilot and factorial
-have their own manifest, prediction, and recorded source-fingerprint digests listed
-above, but their exact dirty source snapshots are unavailable. These records make
-the named outcomes and seals auditable and scientifically scoped, not executable
-historical reruns or automatically oral-ready. Historical E1, E2, E2-R, exploratory
-E-NL, and E3 runs
-remain dirty and cannot be reconstructed exactly because they predate content
-fingerprinting. Paper readiness also requires verification of the external
-baseline implementations and external review. The seed-dependent nonlinear
-crossover materially weakens an oral-level empirical headline. The still-unrun
-Waterbirds CDC-style minibatch head-coordinate surrogate is optional only if the
-paper is explicitly framed as a controlled synthetic/theory paper; if included,
-the mandatory pilot must precede any full run. Nothing here guarantees acceptance
-or oral selection.

@@ -1,0 +1,3 @@
+model_kind,n_seeds,beta,B_W_H_terminal_min,B_W_H_terminal_median,B_W_H_terminal_mean,B_W_H_terminal_max,n_terminal_reach_at_beta,fraction_terminal_reach_at_beta,n_first_hit_by_horizon
+tanh,8,0.5,4.41313266754,4.4734711647,4.49664855003,4.67605876923,8,1,8
+gru,8,0.5,0.0828229486942,0.111582230777,0.129690139554,0.187142759562,0,0,0

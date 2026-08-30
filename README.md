@@ -7,7 +7,7 @@ The codebase implements five experiment blocks:
 - **E1 - causal phase diagram:** sweeps feature-strength ratio and temporal separation, measures weak-feature hitting-time delay, and includes a negative-control data regime. Classification is gated on weak-only learnability, so a point where the counterfactual never learns is reported as indeterminate rather than starved.
 - **E2 - width convergence against an empirical reference:** checks the exact finite-width projected-flow identity, compares network trajectories with a held-out numerical closure reference, and measures error versus width. The reference is a mean over trained finite networks, not a solved theory.
 - **E2-R - solver checks:** exercises the two mean-field special cases that are exact without the undelivered closure derivation, and records the remaining checks as blocked. Its acceptance record reports `passed: false` by construction.
-- **E-NL - theorem-aligned crossover and frozen-kernel falsification:** uses common symmetric unit-probe responses for tanh/GRU, computes the universal direct-autograd response drift at every logged point, reports the projected `Gg` residual separately, and evaluates the exact finite-step tail-area certificate distinguishing rate suppression from outcome starvation. A separate `enl-preflight`/`enl-evaluate` path freezes the full signed-logit empirical NTK and response cross-kernel before training, then tests its crossing-event predictions against held-out nonlinear trajectories.
+- **E-NL - theorem-aligned crossover and frozen-kernel falsification:** uses common symmetric unit-probe responses for tanh/GRU, computes the universal direct-autograd response drift at every logged point, reports the projected `Gg` residual separately, and evaluates the exact finite-step tail-area certificate distinguishing rate suppression from outcome suppression; causal starvation additionally requires weak-only first-hit learnability. A separate `enl-preflight`/`enl-evaluate` path freezes the full signed-logit empirical NTK and response cross-kernel before training, then tests its crossing-event predictions against held-out nonlinear trajectories.
 - **E3 - mitigation and transfer:** compares ERM, Spectral Decoupling, an interaction penalty, and a five-way ablation of constrained weak-rescue methods including Counterfactual Drift Correction plus Bloop-style and PCGrad-style baselines. The Waterbirds adapter contains a CDC-style minibatch head-coordinate surrogate outside the full-batch matched-shadow theorem, but it **has never been run**; see `research_scope/waterbirds_setup.md`.
 
 ### Read this before quoting any number
@@ -20,8 +20,10 @@ conjecture. The ledger exists so that checking which is which is faster than
 rediscovering it. Five things worth knowing before reading anything else:
 
 - The repository **proves** the exact finite-width CE cross-kernel flow, the
-  transfer/suppression tail-area criterion, a conditional noiseless rank-one rate-
-  crossover theorem, conditional quantitatively isolated hitting-time stability,
+  general cumulative drift balance and its single-crossing tail-area corollary, a
+  conditional noiseless rank-one rate-
+  crossover theorem, and stability of quantitatively isolated transverse first
+  hits under uniform-error, radius, and mesh hypotheses,
   the singular zero-disorder/zero-lag six-scalar limit, and three fixed-coordinate
   local CDC results. See `research_scope/e2_theorem.md` and
   `research_scope/cdc_theorem.md`.
@@ -46,11 +48,16 @@ The older `gsi_pipeline/` and `legacy_docs/` directories are retained for proven
 
 ## Manuscript
 
-The complete scientific draft is `paper/main.tex`, with bibliography in
-`paper/references.bib` and a compiled artifact at `paper/main.pdf`. It contains the
-finite-width proofs, executable-certificate map, full synthetic protocol, corrected
-results, novelty boundary, and limitations. It is a scientifically defensible
-submission draft, not a guarantee of ICLR acceptance or oral selection.
+The complete scientific source is `paper/main.tex`, with bibliography in
+`paper/references.bib` and the generic compiled artifact at `paper/main.pdf`. The
+official anonymous ICLR rendering is `paper/iclr2027/submission.pdf`; its wrapper
+defines `\ICLRSubmission` and reuses `paper/main.tex`. In that mode, the compact
+reviewer-facing synthesis is an additional claim-bearing surface before the shared
+detailed theorem/result/proof package, so both surfaces must stay synchronized.
+See `paper/iclr2027/review_resolution.md` for their cross-check and final build
+record. Together they contain the finite-width proofs, executable-certificate map,
+full synthetic protocol, corrected results, novelty boundary, and scientific
+limitations.
 
 ## Setup
 
@@ -156,7 +163,28 @@ The authoritative completed run is
 suppressed from initialization. GRU has 5/8 exact drift and response crossings, but
 weak-only never reaches `beta=0.5`, hence 0/8 causal certificates. The historical
 tanh 8/8 result and `tau*=1.6112` used a superseded response convention and must
-not be quoted. The post-hoc grid
+not be quoted.
+
+A post-hoc threshold-sensitivity audit uses the tracked terminal weak-only response
+`B_W(H)=M_w^W(H)` for each of those seeds. Tanh terminal min/mean/max are
+`4.41313266754 / 4.49664855003 / 4.67605876923` (8/8 above `beta=0.5`), whereas
+GRU min/mean/max are `0.0828229486942 / 0.129690139554 / 0.187142759562` (0/8),
+so the GRU failure is not marginal at that operating point. Rebuild the audit
+without training:
+
+```bash
+MPLBACKEND=Agg python scripts/build_enl_learnability_profile.py
+```
+
+The command reads only the tracked `summary.csv` and resolved config and writes
+`learnability_profile.csv`, `learnability_profile_summary.csv`,
+`enl_learnability_profile.pdf`, `enl_learnability_profile.png`, and
+`learnability_profile_provenance.json` in the authoritative artifact directory.
+This terminal-response profile is not generally equivalent to the preregistered
+first-hit gate for a nonmonotone trajectory, is not a confirmatory endpoint, and
+does not support an architecture ranking.
+
+The post-hoc grid
 `results/enl_exact_regime_search-20260824-105003` found no 4/4 condition and is
 exploratory negative evidence only.
 
@@ -246,7 +274,7 @@ times were systematically early, and tanh trajectory magnitudes were poor
 therefore narrow: the sealed frozen surrogate classified crossing events well on
 this fresh restricted single-cell factorial after the broad predictor failed.
 It does **not** establish causal prediction, universal prevalence, tanh/GRU kernel
-stability, calibrated crossing times, or an oral/acceptance guarantee. Certified or
+stability, calibrated crossing times, or general recurrent behavior. Certified or
 quantitatively accurate nonlinear crossing-time prediction remains open.
 
 ### E3: mitigation

@@ -1,0 +1,186 @@
+{
+  "schema_version": "expanded-nonlinear-cdc-preregistration-v1",
+  "study_id": "expanded-nonlinear-beta-cdc-tradeoff-v1",
+  "freeze_revision": 1,
+  "status": "design_frozen_execution_blocked",
+  "execution_authorized": false,
+  "shared_task": {
+    "sequence_length": 20,
+    "n_samples": 256,
+    "regime": "positive",
+    "cue_noise": 0.1,
+    "background_noise": 0.0,
+    "cells": [
+      {"cell_id": "rho3_lag1", "rho": 3.0, "lag_separation": 1},
+      {"cell_id": "rho4_lag2", "rho": 4.0, "lag_separation": 2},
+      {"cell_id": "rho5_lag3", "rho": 5.0, "lag_separation": 3}
+    ]
+  },
+  "seed_design": {
+    "data_seeds": [301, 302, 303, 304],
+    "model_seeds": [3010, 3011, 3012, 3013, 3014, 3015, 3016, 3017],
+    "crossed": true,
+    "candidate_seeds_require_untouched_attestation": true,
+    "engineering_and_historical_seeds_excluded": true,
+    "reuse_across_cells": true
+  },
+  "nonlinear_beta_study": {
+    "model_kinds": ["tanh", "gru"],
+    "width": 32,
+    "cells": ["rho3_lag1", "rho4_lag2", "rho5_lag3"],
+    "optimization": {
+      "objective": "cross_entropy",
+      "optimizer": "sgd",
+      "full_batch": true,
+      "steps": 1000,
+      "learning_rate": 0.01,
+      "log_every": 5,
+      "weight_decay": 0.0,
+      "gradient_clip": null,
+      "paired_mode": "lockstep",
+      "exact_response_drift": true
+    },
+    "beta_values": [0.25, 0.5, 1.0, 2.0],
+    "beta_semantics": {
+      "prospective_grid": true,
+      "first_hit_not_terminal_reach": true,
+      "linear_interpolation": true,
+      "target_at_initialization_is_degenerate": true,
+      "weak_only_nonhit_is_unlearnable": true,
+      "outcome_suppression_independent_of_beta": true,
+      "causal_certificate_requires_outcome_suppression_and_non_degenerate_weak_first_hit": true,
+      "no_beta_or_cell_selection_after_outcomes": true
+    },
+    "primary_outputs": [
+      "long_form_first_hit_profile",
+      "weak_only_learnability_by_beta",
+      "causal_starvation_certificate_by_beta",
+      "all_beta_robust_causal_certificate"
+    ],
+    "secondary_outputs": [
+      "exact_drift_crossing",
+      "response_crossing",
+      "crossing_times",
+      "weak_auc_gap",
+      "projection_residual"
+    ],
+    "record_count": 192
+  },
+  "cdc_tradeoff_study": {
+    "model_kinds": ["tanh"],
+    "width": 64,
+    "cells": ["rho4_lag2", "rho5_lag3"],
+    "methods": [
+      {"method_id": "erm", "publication_label": "ERM", "uses_weak_only_shadow": false},
+      {"method_id": "counterfactual_drift", "publication_label": "CDC", "uses_weak_only_shadow": true},
+      {"method_id": "bloop", "publication_label": "Bloop-style shadow-target rescue", "uses_weak_only_shadow": true},
+      {"method_id": "pcgrad", "publication_label": "PCGrad-style shadow-target rescue", "uses_weak_only_shadow": true}
+    ],
+    "baseline_fidelity": {
+      "bloop_is_canonical": false,
+      "pcgrad_is_canonical": false,
+      "reason": "Both are response-gradient shadow-target variants sharing CDC's target; neither has canonical algorithm/reference parity.",
+      "canonical_name_promotion_forbidden": true
+    },
+    "optimization": {
+      "objective": "cross_entropy",
+      "optimizer": "sgd",
+      "full_batch": true,
+      "steps": 1000,
+      "learning_rate": 0.01,
+      "log_every": 5,
+      "weight_decay": 0.0,
+      "gradient_clip": null,
+      "max_alpha": null,
+      "feasibility_epsilon": 1e-10,
+      "ema_decay": 0.9
+    },
+    "weak_rescue": {
+      "primary_score": "negative_absolute_weak_auc_gap",
+      "higher_is_better": true,
+      "also_report": [
+        "beta_first_hit_delay",
+        "final_both_weak_response",
+        "target_attainment_fraction",
+        "feasibility_fraction",
+        "cap_binding_fraction"
+      ]
+    },
+    "strong_preservation": {
+      "reference": "paired ERM at identical task/data/model seed",
+      "primary_trajectory_deviation": "absolute_strong_response_auc_difference_from_erm",
+      "primary_final_deviation": "absolute_final_strong_response_difference_from_erm",
+      "instantaneous_mechanistic_metric": "max_absolute_strong_drift_change",
+      "smaller_is_better": true,
+      "instantaneous_and_final_claims_kept_separate": true
+    },
+    "cost": {
+      "runtime": "paired_wall_time_ratio_to_erm",
+      "memory": "isolated_process_peak_rss_and_cuda_peak_allocated_when_applicable",
+      "static_parameter_bytes_secondary_only": true,
+      "cost_disclosure_required": true
+    },
+    "tradeoff_rule": {
+      "weak_rescue_difference_orientation": "cdc_minus_comparator_higher_is_better",
+      "weak_rescue_equivalence_margin": 0.05,
+      "strong_advantage_orientation": "comparator_absolute_deviation_minus_cdc_absolute_deviation",
+      "strong_superiority_requires_ci95_lower_strictly_positive": true,
+      "joint_cdc_beats_comparator_requires": [
+        "weak_rescue_equivalence_ci_inside_margin",
+        "strong_trajectory_deviation_superiority",
+        "strong_final_deviation_superiority",
+        "complete_feasibility_cap_and_cost_reporting"
+      ],
+      "pareto_frontier_reported_even_if_joint_rule_fails": true,
+      "no_dominance_claim_from_instantaneous_theorem_alone": true
+    },
+    "comparators": ["bloop", "pcgrad"],
+    "method_record_count": 256
+  },
+  "inference": {
+    "paired_within_task_data_model_cell": true,
+    "seed_reuse_method": "two_way_pigeonhole_bootstrap",
+    "bootstrap_replicates": 5000,
+    "bootstrap_seed": 7301,
+    "cell_reporting": "separate fixed-cell estimates plus equal-weight macro-average",
+    "cell_seed_rows_not_independent": true,
+    "equivalence": "entire reuse-aware ci inside preregistered margin",
+    "joint_rule": "intersection_union",
+    "multiplicity": "Holm correction within each primary study family; no architecture ranking"
+  },
+  "required_artifacts_before_evaluation": [
+    "machine_validated_preregistration",
+    "externally_pinned_manifest_sha256",
+    "exact_source_sha256",
+    "exact_environment_sha256",
+    "complete_record_manifest",
+    "memory_telemetry_contract",
+    "untouched_seed_attestation"
+  ],
+  "prohibited_promotions": [
+    "Terminal thresholding may not replace prospective first-hitting times.",
+    "Bloop-style and PCGrad-style arms may not be called faithful Bloop or PCGrad.",
+    "Overlapping ordinary confidence intervals may not be called equivalent.",
+    "Instantaneous CDC preservation may not be promoted to final strong-response dominance.",
+    "A Pareto or CDC-beats claim requires the complete frozen joint rule.",
+    "No outcome may be generated while execution_authorized is false."
+  ],
+  "authorization_gates": {
+    "reviewed_clean_git_source": false,
+    "committed_preregistration_git_sha": null,
+    "environment_lock_sha256": null,
+    "preflight_manifest_sha256": null,
+    "memory_telemetry_implemented": false,
+    "untouched_seed_attestation": false,
+    "submission_claim_set_allows_new_outcomes": false
+  },
+  "blocked_reasons": [
+    "The working tree is not a reviewed clean source state.",
+    "The preregistration has not been committed and no commit was authorized.",
+    "No externally pinned fresh preflight manifest exists.",
+    "Candidate seeds have not received an untouched-outcome attestation against ignored local results.",
+    "Per-method isolated-process peak-memory telemetry is not implemented.",
+    "research_scope/submission_claim_set.yaml forbids new confirmatory outcomes.",
+    "Canonical Bloop/PCGrad parity is absent, so only style-labelled comparisons are allowed."
+  ]
+}

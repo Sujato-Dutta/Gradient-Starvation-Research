@@ -1,0 +1,17 @@
+model_kind,rho,lag_separation,regime,seed,B_W_H_terminal,weak_hitting_time,beta,terminal_reach_at_beta,first_hit_by_horizon
+tanh,4,2,positive,20,4.47402667999,2.99273294364,0.5,True,True
+tanh,4,2,positive,21,4.67605876923,1.86528796368,0.5,True,True
+tanh,4,2,positive,22,4.48104906082,1.81738499799,0.5,True,True
+tanh,4,2,positive,23,4.47291564941,3.00414507648,0.5,True,True
+tanh,4,2,positive,24,4.43923521042,2.31327500486,0.5,True,True
+tanh,4,2,positive,25,4.55869865417,2.34301996388,0.5,True,True
+tanh,4,2,positive,26,4.45807170868,2.73401378893,0.5,True,True
+tanh,4,2,positive,27,4.41313266754,2.69378543398,0.5,True,True
+gru,4,2,positive,20,0.0828229486942,inf,0.5,False,False
+gru,4,2,positive,21,0.112729594111,inf,0.5,False,False
+gru,4,2,positive,22,0.100963480771,inf,0.5,False,False
+gru,4,2,positive,23,0.109653107822,inf,0.5,False,False
+gru,4,2,positive,24,0.187142759562,inf,0.5,False,False
+gru,4,2,positive,25,0.156814783812,inf,0.5,False,False
+gru,4,2,positive,26,0.110434867442,inf,0.5,False,False
+gru,4,2,positive,27,0.176959574223,inf,0.5,False,False

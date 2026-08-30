@@ -47,9 +47,15 @@ class DiscreteCrossoverCertificate:
     negative_tail_area: float
     tail_area_margin: float
     response_equality_reached: bool
-    strict_outcome_starvation: bool
+    strict_outcome_suppression: bool
     weak_only_learnable: bool
     causal_starvation_certified: bool
+
+    @property
+    def strict_outcome_starvation(self) -> bool:
+        """Deprecated read-only alias for historical in-memory consumers."""
+
+        return self.strict_outcome_suppression
 
 
 @dataclass
@@ -179,6 +185,72 @@ class InitialResponseJet:
     weak_only_j_0: torch.Tensor
 
 
+@dataclass(frozen=True)
+class DenseLinearInitialGapCertificate:
+    """Exact initialization-only rate-gap formula for the noiseless positive task.
+
+    This is conditioned on the realized dense-linear parameters. It is not a
+    distribution-only ``(rho, lag)`` phase boundary and makes no nonlocal
+    trajectory claim. ``classification_tolerance`` is an absolute tolerance in
+    weak-response-rate units. Outside that band, shared initialization
+    ``Delta(0)=0`` makes the sign of ``d_0`` certify the same strict outcome sign
+    for some unspecified sufficiently small positive-time interval. No
+    quantitative horizon is returned or implied.
+    """
+
+    rho: float
+    lag_separation: int
+    strong_response: float
+    weak_response: float
+    cross_geometry: float
+    weak_geometry: float
+    both_gate: float
+    weak_only_gate: float
+    both_weak_drift: float
+    weak_only_weak_drift: float
+    initial_gap_rate: float
+    transfer_geometry_threshold: float
+    geometry_margin: float
+    classification_tolerance: float
+    initial_regime: str
+    local_outcome_regime: str
+    local_outcome_transfer_certified: bool
+    local_outcome_suppression_certified: bool
+
+    @property
+    def d_0(self) -> float:
+        """Return the exact initial gap derivative in the theorem's notation."""
+
+        return self.initial_gap_rate
+
+
+@dataclass(frozen=True)
+class ParameterTubeCertificate:
+    """Conditional implications from independently proved product-ball bounds.
+
+    Every bound represented by an optional argument to
+    :func:`parameter_tube_certificate` is a premise, not something this result
+    estimates from a realized trajectory. ``target_met_at_initialization`` is
+    ``None`` when no complete weak-target premise was supplied; when true, target
+    attainment is degenerate and is deliberately not certified as learnability.
+    """
+
+    certified_horizon: float
+    initial_gap_rate: float
+    rate_crossing_certified: bool
+    rate_crossing_time_lower_bound: float | None
+    rate_crossing_time_upper_bound: float | None
+    outcome_suppression_certified: bool
+    outcome_suppression_witness_after: float | None
+    target_met_at_initialization: bool | None
+    weak_only_learnability_certified: bool
+    weak_only_target_time_upper_bound: float | None
+    causal_starvation_certified: bool
+    safe_transfer_horizon_certified: bool
+    rate_gap_lower_bound_at_horizon: float | None
+    response_gap_lower_bound_at_horizon: float | None
+
+
 def _condition_weak_response_jet(
     model: RecurrentBinaryClassifier,
     batch: SyntheticBatch,
@@ -260,6 +332,260 @@ def paired_initial_response_jet(
         weak_only_drift_0=weak_drift,
         both_j_0=both_j,
         weak_only_j_0=weak_j,
+    )
+
+
+def dense_linear_initial_gap_certificate(
+    model: DenseLinearRNN,
+    spec: SyntheticTaskSpec,
+    *,
+    tolerance: float = 0.0,
+) -> DenseLinearInitialGapCertificate:
+    """Return the exact initial paired weak-rate gap from parameters alone.
+
+    The formula applies to the positive, noiseless two-cue law
+    ``z_B=(rho, 1)``, ``z_W=(0, 1)`` under unregularized full-batch logistic
+    gradient flow. For the realized dense-linear initialization, let
+    ``K=G_ws`` and ``A=G_ww``. Then
+
+    ``d_0 = sigmoid(-(rho M_s+M_w)) (rho K+A) - sigmoid(-M_w) A``.
+
+    Equivalently, initial transfer occurs exactly when
+
+    ``K > (A/rho) (s_W/s_B - 1)``.
+
+    Shared parameters give ``Delta(0)=0``. Since ``Delta'(0)=d_0``, a strictly
+    negative ``d_0`` implies strict local outcome suppression, and a strictly
+    positive ``d_0`` implies strict local outcome transfer, throughout some
+    sufficiently small positive-time interval. This derivative argument supplies
+    no quantitative horizon. The caller's absolute ``tolerance`` is recorded in
+    weak-response-rate units; values in ``[-tolerance, tolerance]`` are reported
+    as boundary/undetermined and produce no local outcome certificate.
+
+    Positive lag enters through the realized powers of ``W`` in ``M_w``, ``K``,
+    and ``A``. Their signs remain seed-dependent, so this exact check must not be
+    presented as a deterministic population phase boundary.
+    """
+    if not isinstance(model, DenseLinearRNN):
+        raise TypeError("dense_linear_initial_gap_certificate requires DenseLinearRNN.")
+    if spec.regime != "positive":
+        raise ValueError("The exact rank-one formula requires regime='positive'.")
+    if spec.cue_noise != 0 or spec.background_noise != 0:
+        raise ValueError("The exact rank-one formula requires zero cue/background noise.")
+    if not np.isfinite(tolerance) or tolerance < 0:
+        raise ValueError("tolerance must be finite and non-negative.")
+
+    with torch.no_grad():
+        mode = model.mode_responses(spec)
+        geometry = exact_dense_linear_geometry(model, spec)
+        strong_response = mode[0]
+        weak_response = mode[1]
+        cross_geometry = geometry[1, 0]
+        weak_geometry = geometry[1, 1]
+        rho = float(spec.rho)
+        both_gate = torch.sigmoid(-(rho * strong_response + weak_response))
+        weak_only_gate = torch.sigmoid(-weak_response)
+        both_weak_drift = both_gate * (rho * cross_geometry + weak_geometry)
+        weak_only_weak_drift = weak_only_gate * weak_geometry
+        initial_gap_rate = both_weak_drift - weak_only_weak_drift
+        threshold = (weak_geometry / rho) * (weak_only_gate / both_gate - 1.0)
+        geometry_margin = cross_geometry - threshold
+
+    d_0 = float(initial_gap_rate)
+    if d_0 > tolerance:
+        initial_regime = "initial_transfer"
+        local_outcome_regime = "strict_local_transfer"
+        local_transfer = True
+        local_suppression = False
+    elif d_0 < -tolerance:
+        initial_regime = "initial_rate_suppression"
+        local_outcome_regime = "strict_local_suppression"
+        local_transfer = False
+        local_suppression = True
+    else:
+        initial_regime = "initial_boundary_or_undetermined"
+        local_outcome_regime = "boundary_or_undetermined"
+        local_transfer = False
+        local_suppression = False
+    return DenseLinearInitialGapCertificate(
+        rho=float(spec.rho),
+        lag_separation=int(spec.lag_separation),
+        strong_response=float(strong_response),
+        weak_response=float(weak_response),
+        cross_geometry=float(cross_geometry),
+        weak_geometry=float(weak_geometry),
+        both_gate=float(both_gate),
+        weak_only_gate=float(weak_only_gate),
+        both_weak_drift=float(both_weak_drift),
+        weak_only_weak_drift=float(weak_only_weak_drift),
+        initial_gap_rate=d_0,
+        transfer_geometry_threshold=float(threshold),
+        geometry_margin=float(geometry_margin),
+        classification_tolerance=float(tolerance),
+        initial_regime=initial_regime,
+        local_outcome_regime=local_outcome_regime,
+        local_outcome_transfer_certified=local_transfer,
+        local_outcome_suppression_certified=local_suppression,
+    )
+
+
+def parameter_tube_certificate(
+    initial_gap_rate: float,
+    parameter_ball_radius: float,
+    joint_speed_upper_bound: float,
+    *,
+    rate_decrease_lower_bound: float | None = None,
+    rate_decrease_upper_bound: float | None = None,
+    weak_only_drift_lower_bound: float | None = None,
+    weak_initial_response: float | None = None,
+    weak_target: float | None = None,
+    absolute_rate_derivative_bound: float | None = None,
+) -> ParameterTubeCertificate:
+    """Evaluate conditional crossing, starvation, or safe-horizon implications.
+
+    Use a product ball ``U_R`` around the paired initialization in the same norm
+    used for the supplied joint speed bound. If ``||V|| <= S_R`` on the ball, the
+    trajectory is certified to remain there for ``h_R=R/S_R``. The crossing path
+    requires independently proved bounds
+    ``-Lambda <= d'(tau) <= -lambda < 0`` on the whole ball. It then certifies a
+    unique rate crossing when ``h_R>d_0/lambda`` and strict outcome suppression
+    when ``h_R>2 d_0/lambda``. A causal-starvation certificate additionally needs
+    ``dot M_w^W >= nu>0``, a target strictly above the initial weak response, and
+    target attainment before ``h_R``. A target already met at initialization is
+    recorded as degenerate attainment, not weak-only learnability.
+
+    The independent safe path uses ``|d'|<=J``. If ``d_0-J h_R>0``, transfer
+    persists throughout the certified horizon and outcome suppression is excluded
+    there. Missing optional premises fail closed: the corresponding booleans remain
+    false. This function validates supplied scalars but does not construct any
+    ball, derivative, speed, or weak-learnability bound.
+    """
+    required = {
+        "initial_gap_rate": initial_gap_rate,
+        "parameter_ball_radius": parameter_ball_radius,
+        "joint_speed_upper_bound": joint_speed_upper_bound,
+    }
+    if any(not np.isfinite(value) for value in required.values()):
+        raise ValueError(f"required tube inputs must be finite: {required}")
+    if parameter_ball_radius <= 0:
+        raise ValueError("parameter_ball_radius must be positive.")
+    if joint_speed_upper_bound <= 0:
+        raise ValueError("joint_speed_upper_bound must be positive.")
+    horizon = parameter_ball_radius / joint_speed_upper_bound
+    if not np.isfinite(horizon):
+        raise ValueError("The certified parameter-ball horizon must be finite.")
+
+    decrease_pair = (rate_decrease_lower_bound, rate_decrease_upper_bound)
+    if (decrease_pair[0] is None) != (decrease_pair[1] is None):
+        raise ValueError("Both rate-decrease bounds must be supplied together.")
+    if rate_decrease_lower_bound is not None:
+        if (
+            not np.isfinite(rate_decrease_lower_bound)
+            or rate_decrease_lower_bound <= 0
+            or not np.isfinite(rate_decrease_upper_bound)
+            or rate_decrease_upper_bound < rate_decrease_lower_bound
+        ):
+            raise ValueError(
+                "rate-decrease bounds must satisfy 0 < lambda <= Lambda < infinity."
+            )
+
+    weak_values = (
+        weak_only_drift_lower_bound,
+        weak_initial_response,
+        weak_target,
+    )
+    if any(value is not None for value in weak_values) and not all(
+        value is not None for value in weak_values
+    ):
+        raise ValueError(
+            "weak_only_drift_lower_bound, weak_initial_response, and weak_target "
+            "must be supplied together."
+        )
+    if weak_only_drift_lower_bound is not None:
+        if (
+            not np.isfinite(weak_only_drift_lower_bound)
+            or weak_only_drift_lower_bound <= 0
+            or not np.isfinite(weak_initial_response)
+            or not np.isfinite(weak_target)
+        ):
+            raise ValueError("weak-response premises must be finite with positive drift.")
+
+    if absolute_rate_derivative_bound is not None:
+        if (
+            not np.isfinite(absolute_rate_derivative_bound)
+            or absolute_rate_derivative_bound < 0
+        ):
+            raise ValueError(
+                "absolute_rate_derivative_bound must be finite and non-negative."
+            )
+        if (
+            rate_decrease_lower_bound is not None
+            and absolute_rate_derivative_bound < rate_decrease_lower_bound
+        ):
+            raise ValueError(
+                "The absolute derivative bound is inconsistent with the supplied "
+                "strict decrease lower bound."
+            )
+
+    crossing = False
+    crossing_lower = None
+    crossing_upper = None
+    suppression = False
+    suppression_after = None
+    if initial_gap_rate > 0 and rate_decrease_lower_bound is not None:
+        crossing_lower_candidate = initial_gap_rate / rate_decrease_upper_bound
+        crossing_upper_candidate = initial_gap_rate / rate_decrease_lower_bound
+        if horizon > crossing_upper_candidate:
+            crossing = True
+            crossing_lower = float(crossing_lower_candidate)
+            crossing_upper = float(crossing_upper_candidate)
+        suppression_candidate = 2.0 * initial_gap_rate / rate_decrease_lower_bound
+        if horizon > suppression_candidate:
+            suppression = True
+            suppression_after = float(suppression_candidate)
+
+    weak_learnable = False
+    weak_time = None
+    target_met_at_initialization = None
+    if weak_only_drift_lower_bound is not None:
+        target_met_at_initialization = bool(weak_target <= weak_initial_response)
+        weak_time = (
+            max(0.0, weak_target - weak_initial_response)
+            / weak_only_drift_lower_bound
+        )
+        weak_learnable = bool(
+            not target_met_at_initialization and weak_time < horizon
+        )
+        weak_time = float(weak_time)
+
+    safe_transfer = False
+    rate_lower = None
+    response_lower = None
+    if absolute_rate_derivative_bound is not None:
+        rate_lower = initial_gap_rate - absolute_rate_derivative_bound * horizon
+        response_lower = (
+            initial_gap_rate * horizon
+            - 0.5 * absolute_rate_derivative_bound * horizon**2
+        )
+        safe_transfer = bool(rate_lower > 0)
+        rate_lower = float(rate_lower)
+        response_lower = float(response_lower)
+
+    return ParameterTubeCertificate(
+        certified_horizon=float(horizon),
+        initial_gap_rate=float(initial_gap_rate),
+        rate_crossing_certified=crossing,
+        rate_crossing_time_lower_bound=crossing_lower,
+        rate_crossing_time_upper_bound=crossing_upper,
+        outcome_suppression_certified=suppression,
+        outcome_suppression_witness_after=suppression_after,
+        target_met_at_initialization=target_met_at_initialization,
+        weak_only_learnability_certified=weak_learnable,
+        weak_only_target_time_upper_bound=weak_time,
+        causal_starvation_certified=bool(suppression and weak_learnable),
+        safe_transfer_horizon_certified=safe_transfer,
+        rate_gap_lower_bound_at_horizon=rate_lower,
+        response_gap_lower_bound_at_horizon=response_lower,
     )
 
 
@@ -851,7 +1177,7 @@ def discrete_crossover_certificate(
             negative_tail_area=float("nan"),
             tail_area_margin=float("nan"),
             response_equality_reached=False,
-            strict_outcome_starvation=False,
+            strict_outcome_suppression=False,
             weak_only_learnable=bool(weak_only_learnable),
             causal_starvation_certified=False,
         )
@@ -872,7 +1198,7 @@ def discrete_crossover_certificate(
             negative_tail_area=float("nan"),
             tail_area_margin=float("nan"),
             response_equality_reached=False,
-            strict_outcome_starvation=False,
+            strict_outcome_suppression=False,
             weak_only_learnable=bool(weak_only_learnable),
             causal_starvation_certified=False,
         )
@@ -900,7 +1226,7 @@ def discrete_crossover_certificate(
         negative_tail_area=negative_tail,
         tail_area_margin=margin,
         response_equality_reached=equality_reached,
-        strict_outcome_starvation=strict_starvation,
+        strict_outcome_suppression=strict_starvation,
         weak_only_learnable=bool(weak_only_learnable),
         causal_starvation_certified=bool(strict_starvation and weak_only_learnable),
     )
@@ -1287,8 +1613,8 @@ CORRECTION_CONSTRAINTS = (
     "strong_response",       # CDC: project orthogonal to grad(m_s)
     "loss_gradient",         # ablation iii: project orthogonal to grad(L_train)
     "unconstrained",         # ablation ii: same rescue direction, no projection
-    "bloop",                 # loss-gradient projection with an EMA-smoothed rescue
-    "pcgrad",                # symmetric conflict removal between the two directions
+    "bloop",                 # Bloop-style EMA rescue with loss-gradient projection
+    "pcgrad",                # PCGrad-style one-sided rescue conflict projection
 )
 
 
@@ -1318,19 +1644,22 @@ def drift_correction(
         whether constraining the feature response specifically matters.
     ``unconstrained``
         Rescue along ``grad(m_w)`` with no projection at all.
-    ``bloop``
-        Loss-gradient projection applied to an exponentially smoothed rescue
-        direction, following the EMA idea of Bloop.  Requires ``rescue_state``,
-        which the caller carries across steps.
-    ``pcgrad``
-        Symmetric conflict removal: if the ERM velocity and the rescue direction
-        conflict, each has the other's conflicting component removed.
+    ``bloop`` (Bloop-style shadow-target rescue)
+        Loss-gradient projection applied to an exponentially smoothed response
+        rescue direction. It borrows an EMA/projection motif but is not a faithful
+        implementation of canonical Bloop: the auxiliary signal is ``grad(m_w)``,
+        the target comes from a privileged weak-only shadow, and ``alpha`` is chosen
+        to hit that target. Requires ``rescue_state`` across steps.
+    ``pcgrad`` (PCGrad-style shadow-target rescue)
+        A one-sided conflict gate: when ``grad(m_w)`` conflicts with the ERM
+        velocity, only the rescue direction is projected. This is not canonical
+        PCGrad's randomized multi-task-loss gradient projection and aggregation.
 
-    Only ``strong_response`` carries the proved Result 1 guarantee.  The others are
-    expected to perturb the strong drift, and the returned
-    ``strong_drift_after - strong_drift_before`` records by how much.  Every norm
-    and projection here is Euclidean/Frobenius in the fixed implemented tensor
-    coordinates, so these corrections are not invariant under non-isometric
+    Only ``strong_response`` carries the proved Result 1 guarantee.  The style
+    variants and ablations are expected to perturb the strong drift, and the
+    returned ``strong_drift_after - strong_drift_before`` records by how much.
+    Every norm and projection here is Euclidean/Frobenius in the fixed implemented
+    tensor coordinates, so these corrections are not invariant under non-isometric
     reparameterizations.
     """
     if constraint not in CORRECTION_CONSTRAINTS:

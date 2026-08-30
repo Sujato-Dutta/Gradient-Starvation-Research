@@ -16,7 +16,7 @@
   },
   "overall_submission_ready": false,
   "overall_decision": "no_go",
-  "decision_reason": "Scientific scope is frozen and official rules are now sourced, but mandatory format/disclosure, clean-source replay, empirical breadth, certificate/reframing, benchmark, audit, and independent-review gates remain non-passing.",
+  "decision_reason": "Scientific scope and official requirements are frozen; the official anonymous ICLR source, page-count check, and disclosure statements are integrated. Submission remains blocked by author/account obligations, clean-source replay, empirical breadth, certificate/reframing, benchmark, audit, and independent-review gates.",
   "gates": [
     {
       "id": "claims_frozen",
@@ -24,7 +24,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "Included, blocked, failed, restricted, and non-promotable claims are machine-readable before new outcomes.",
-      "evidence": "research_scope/submission_claim_set.yaml"
+      "evidence": "research_scope/submission_claim_set.yaml freezes T1--T20 with T17/T18 still blocked, includes T19/T20 at their proved scopes, retains only E19/E20 as empirical studies, and records both new designs as unauthorized and outcome-free."
     },
     {
       "id": "official_2027_requirements_sourced",
@@ -37,42 +37,42 @@
     {
       "id": "official_style_package_integrated",
       "category": "venue",
-      "status": "fail",
+      "status": "pass",
       "required_for_submission": true,
       "criterion": "The manuscript uses the official ICLR 2027 style package.",
-      "evidence": "paper/main.tex still uses article plus geometry; the official ZIP is not stored or checksummed."
+      "evidence": "paper/iclr2027/iclr2027_conference.sty is byte-identical to the official local template copy (SHA-256 797deef41724e93761426ac0cbcca46279a91cc650dd1f0ce76a4f08d2098ea6); paper/iclr2027/submission.tex activates it through the canonical paper/main.tex body."
     },
     {
       "id": "submission_main_text_at_most_9_pages",
       "category": "venue",
-      "status": "unknown",
+      "status": "pass",
       "required_for_submission": true,
       "criterion": "Main text is at most 9 pages in the official submission style.",
-      "evidence": "The current 19-page generic rendering is not an official-style page-count measurement."
+      "evidence": "The rebuilt 26-page paper/iclr2027/submission.pdf records page:main-end on page 6; references, disclosures, and the complete appendix follow."
     },
     {
       "id": "double_blind_anonymity_audit",
       "category": "venue",
-      "status": "unknown",
+      "status": "fail",
       "required_for_submission": true,
       "criterion": "Main paper, appendix, supplementary material, metadata, links, code, and artifacts reveal no author identity.",
-      "evidence": "The title block is anonymous, but a repository-wide and PDF-metadata audit has not been completed."
+      "evidence": "The rebuilt 26-page paper/iclr2027/submission.pdf passes title-block, full-text, PDF-metadata, and rendered-first-page identity checks; the visible banner/title/Anonymous authors block and line numbering are correct. The PDF contains none of the scanned identifying/local-path/revision/unrelated-title strings. The repository is not yet safe to upload wholesale as supplementary material: legacy a.md/a copy.md and two archived ENL-NTK provenance JSON files contain absolute /Users/... paths identifying the local account. Historical artifact records were not silently rewritten; a curated anonymous supplementary archive remains required."
     },
     {
       "id": "mandatory_ai_use_statement",
       "category": "venue",
-      "status": "fail",
+      "status": "unknown",
       "required_for_submission": true,
       "criterion": "The manuscript contains the ICLR-required AI-use disclosure and the submission form is prepared consistently.",
-      "evidence": "paper/main.tex currently has no AI-use disclosure section."
+      "evidence": "The ICLR-only main-text branch in paper/main.tex contains an explicit AI use statement covering code/manuscript/review assistance, outcome non-generation, author verification, and responsibility. Consistency of the external submission-form disclosure cannot be verified in this workspace."
     },
     {
       "id": "reproducibility_statement",
       "category": "venue",
-      "status": "fail",
+      "status": "pass",
       "required_for_submission": false,
       "criterion": "The recommended reproducibility statement points to assumptions, proofs, data generation, code, and artifact checks.",
-      "evidence": "No dedicated reproducibility statement is present."
+      "evidence": "The ICLR-only branch in paper/main.tex includes a dedicated reproducibility statement pointing to theorem assumptions/proofs, protocols, artifacts, executable guards, validators, tests, and historical replay limits."
     },
     {
       "id": "author_openreview_profiles_and_order",
@@ -128,7 +128,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "A dependency-free read-only verifier checks compact archive paths, sizes, hashes, seals, provenance classes, and optional Git tracking.",
-      "evidence": "python verify_release_artifacts.py verified 2 studies, 21 files, and 135950 bytes; tests/test_release_artifacts.py passed 9 tamper/path/duplicate/acceptance/provenance checks. Git-tracking mode separately failed closed on the current untracked tree, as intended."
+      "evidence": "python verify_release_artifacts.py verified 2 studies, 21 files, and 138720 bytes; tests/test_release_artifacts.py passed 9 tamper/path/duplicate/acceptance/provenance checks. The verifier covers the compact E19/E20 release archives; the separate post-hoc beta audit was checked directly against its manifest signatures but is not yet a first-class verifier study. python verify_release_artifacts.py --require-git-tracked succeeds for the verifier's E19/E20 file set; this is not a repository-wide clean-tree check, and the beta audit plus ICLR wrapper remain untracked and outside that verifier."
     },
     {
       "id": "evaluator_fail_closed_regression_tests",
@@ -144,7 +144,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "The full test suite passes after readiness/release changes.",
-      "evidence": "PYTHONPATH=src MPLBACKEND=Agg .venv-test/bin/python -m pytest -q: 240 passed, 4 warnings."
+      "evidence": "PYTHONPATH=src MPLBACKEND=Agg .venv-test/bin/python -m pytest -q: 261 passed, 4 warnings."
     },
     {
       "id": "fresh_breadth_preregistration",
@@ -152,7 +152,7 @@
       "status": "blocked",
       "required_for_submission": true,
       "criterion": "A resource-budgeted multi-cell validation and crossed-seed analysis are frozen before outcomes.",
-      "evidence": "Blocked until a clean source/environment state can be referenced."
+      "evidence": "The expanded nonlinear/CDC design is machine-frozen for 192 nonlinear records and 256 CDC method-records, but remains blocked: no reviewed clean commit, fresh preflight digest, untouched-seed attestation, isolated-process peak-memory telemetry, or claim-set execution authorization exists."
     },
     {
       "id": "fresh_breadth_validation",
@@ -160,7 +160,7 @@
       "status": "blocked",
       "required_for_submission": true,
       "criterion": "Fresh untouched cells and seeds support or falsify the restricted crossing-event claim under preregistered gates.",
-      "evidence": "No new outcome generation is allowed before the source and preregistration gates pass."
+      "evidence": "No expanded nonlinear, prospective beta-grid, CDC-tradeoff, or semi-real training outcome was generated. Both validators report execution_authorized: false, and the claim set forbids new confirmatory outcomes before its gates pass."
     },
     {
       "id": "kernel_certificate_or_empirical_reframing",
@@ -168,7 +168,7 @@
       "status": "blocked",
       "required_for_submission": true,
       "criterion": "Either a nonvacuous initialization-time movement certificate is established or all frozen-kernel language is explicitly framed as an empirical event heuristic.",
-      "evidence": "T16 currently depends on caller-supplied movement bounds; no tanh/GRU certificate exists."
+      "evidence": "T19 proves an exact realized-initialization dense-linear threshold and conditional product-ball implications, but no current component constructs nonvacuous uniform S_R, lambda, Lambda, nu, or J for trained positive-disorder RNNs. T16 likewise still depends on caller-supplied kernel-movement bounds; no tanh/GRU certificate exists."
     },
     {
       "id": "sequential_benchmark",
@@ -176,7 +176,7 @@
       "status": "blocked",
       "required_for_submission": true,
       "criterion": "A semi-real or real sequential benchmark has an exact strong-cue intervention and an identified weak response.",
-      "evidence": "Waterbirds currently exposes only an unrun intercept-based surrogate and cannot satisfy this gate."
+      "evidence": "A defensible generated-cue MNIST/FashionMNIST BOTH-vs-WEAK design is frozen, but it is an unexecuted non-recurrent semi-real image study and lacks the exact Torch/torchvision lock, raw-data/index digests, selection manifest, committed preregistration, and claim authorization. It does not yet satisfy this sequential-benchmark gate; Waterbirds remains an unrun intercept surrogate."
     },
     {
       "id": "baseline_parity_audit",
@@ -184,7 +184,7 @@
       "status": "blocked",
       "required_for_submission": true,
       "criterion": "Baselines, supervision, compute, hyperparameters, and CDC theorem scope are independently audited.",
-      "evidence": "PCGrad/Bloop primary-algorithm fidelity and parity remain unaudited."
+      "evidence": "The frozen tradeoff arms are ERM, CDC, Bloop-style shadow-target rescue, and PCGrad-style shadow-target rescue. The latter two are explicitly non-canonical style variants; primary-algorithm fidelity, source parity, and randomized PCGrad aggregation remain unaudited."
     },
     {
       "id": "clean_clone_artifact_reproduction",
