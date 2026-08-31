@@ -1,12 +1,12 @@
 {
-  "schema_version": "submission-claim-set-v1",
+  "schema_version": "submission-claim-set-v2",
   "format_note": "This file uses the JSON subset of YAML 1.2 so it can be validated with the Python standard library.",
-  "freeze_revision": 3,
+  "freeze_revision": 4,
   "source_of_truth": {
     "claim_ledger": "research_scope/claim_ledger.md",
     "provenance_manifest": "paper/artifacts/provenance_manifest.json",
-    "repository_head_at_evidence_freeze": "2d0ee8362f2140c2134ac1bd9324bd667a06a51b",
-    "branch": "codex/corrected-dense-baseline"
+    "repository_head_at_evidence_freeze": "9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0",
+    "branch": "codex/gradient-starvation-research"
   },
   "freeze_policy": {
     "claims_frozen_before_new_confirmatory_outcomes": true,
@@ -83,14 +83,14 @@
     }
   },
   "headline_claim": {
-    "label": "finite-width causal theorem package",
+    "label": "reviewed findings-first causal-gradient-starvation synthesis",
     "included_theory_claim_ids": [
       "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8",
       "T9", "T10", "T11", "T12", "T13", "T14", "T15", "T16",
       "T19", "T20"
     ],
     "blocked_or_excluded_theory_claim_ids": ["T17", "T18"],
-    "interpretation": "The exact finite-width identities, initialization-conditioned dense-linear threshold, singular zero-disorder corollary, and conditional comparison/tube bounds are the theory contribution. They do not establish a general positive-disorder RNN DMFT, computable nonvacuous parameter-ball constants, a universal rho-lag boundary, nonlinear kernel stability, calibrated crossing times, or a universal causal-starvation boundary."
+    "interpretation": "Weak learning failure alone is not gradient starvation. Exact finite-width response dynamics and the matched BOTH/WEAK intervention separate cross-entropy weighting and response-specific geometry, rate suppression, outcome suppression, weak-only gate failure, and causal starvation. T19 and the initialization-jet results provide only local or assumption-scoped signs; they do not supply a global positive-lag parameter-level predictor. That predictor remains unresolved, as do general positive-disorder closure and nonlinear kernel-stability claims."
   },
   "theory_claims": [
     {
@@ -297,6 +297,160 @@
           "source_snapshot_archived": false,
           "source_reconstructible": false
         }
+      },
+      {
+        "id": "E26",
+        "status": "failed_negative_indeterminate",
+        "role": "completed semi-real generated-cue negative/indeterminate study",
+        "records": 64,
+        "overall_hypothesis_accepted": false,
+        "datasets": {
+          "MNIST": {
+            "records": 32,
+            "weak_only_learnable_count": 0,
+            "causal_certificate_count": 0,
+            "mean_weak_auc_gap": {
+              "point_estimate": -0.0012362842136667493,
+              "ci95": [-0.0034405428466004646, 0.0010159591371180453]
+            }
+          },
+          "FashionMNIST": {
+            "records": 32,
+            "weak_only_learnable_count": 0,
+            "causal_certificate_count": 0,
+            "mean_weak_auc_gap": {
+              "point_estimate": -0.00010921728159018996,
+              "ci95": [-0.004129384520886106, 0.003182670049955049]
+            }
+          }
+        },
+        "zero_certificate_interpretation": "Zero causal certificates must not be interpreted as evidence of no starvation because the weak-only learnability gate was 0/32 in each dataset.",
+        "evidence": {
+          "archive_study_id": "semi-real-generated-cue-v1",
+          "claim_ids": ["E26"],
+          "archive_type": "completed-run-compact-archive-v1",
+          "compact_archive_root": "paper/artifacts/semi-real-generated-cue-v1-20260830",
+          "archive_manifest_sha256": "307aafb10168413113adb7cc97386133679c4d64689ce50671b907b74a8b188f",
+          "artifact_manifest_sha256": "3ef7a7f2ce08857bace1451318a226a50df16807c526bdaca262e463646a0c72",
+          "source_provenance_class": "clean_git_source",
+          "git_commit": "9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0",
+          "git_dirty": false,
+          "source_sha256": "02ba4ce4d6aff3ff726d9e798606aed29cff1276a6837e10ff43fb37824ca042",
+          "source_file_count": 22,
+          "source_snapshot_archived": false,
+          "source_reconstructible": true,
+          "declared_file_count": 207,
+          "omitted_file_count": 192,
+          "central_indexed_file_count": 18,
+          "central_indexed_bytes": 559939
+        }
+      },
+      {
+        "id": "E27",
+        "status": "failed_negative",
+        "role": "completed expanded Study-A beta-robust negative study",
+        "records": 192,
+        "overall_beta_robust_claim": false,
+        "architecture_ranking_performed": false,
+        "architectures": {
+          "tanh": {
+            "beta_robust_architecture_claim": false,
+            "point_estimate": 0.2916666666666667,
+            "ci95": [0.16666666666666666, 0.4166666666666667],
+            "holm_adjusted_p_value": 1.0
+          },
+          "gru": {
+            "beta_robust_architecture_claim": false,
+            "point_estimate": 0.0,
+            "ci95": [0.0, 0.0],
+            "holm_adjusted_p_value": 1.0
+          }
+        },
+        "scope_limit": "The frozen Study-A beta-robust endpoint was negative for tanh and GRU; no architecture ranking was performed or supported.",
+        "evidence": {
+          "archive_study_id": "expanded-nonlinear-beta-cdc-tradeoff-v1",
+          "claim_ids": ["E27", "E28"],
+          "archive_type": "completed-run-compact-archive-v1",
+          "compact_archive_root": "paper/artifacts/expanded-studies-v1-20260830",
+          "archive_manifest_sha256": "97ea2ad410b238190f845a4fb6a6baaf378fc4eddc946b5e4996fc5b85a58606",
+          "artifact_manifest_sha256": "54e4c4acd7d0e1b177f6c8da05bcb1ba848397d44056c447843a1df778564a96",
+          "source_provenance_class": "clean_git_source",
+          "git_commit": "9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0",
+          "git_dirty": false,
+          "source_sha256": "7f43b602b71199367938c1df51aa201a7d601e57ebb47835bdb5c9282b42f84e",
+          "source_file_count": 23,
+          "source_snapshot_archived": false,
+          "source_reconstructible": true,
+          "declared_file_count": 1817,
+          "omitted_file_count": 1792,
+          "central_indexed_file_count": 28,
+          "central_indexed_bytes": 2800551
+        }
+      },
+      {
+        "id": "E28",
+        "status": "passed_restricted_mixed",
+        "role": "completed expanded Study-B comparator-restricted mixed study",
+        "method_records": 256,
+        "comparators": [
+          {
+            "id": "bloop",
+            "label": "Bloop-style shadow-target rescue",
+            "canonical": false,
+            "cdc_beats_comparator_joint_tradeoff": true,
+            "cdc_minus_comparator_weak_rescue": {
+              "point_estimate": 0.002198259399210656,
+              "ci95": [0.0009779187294930126, 0.003277366267916477]
+            },
+            "comparator_minus_cdc_trajectory_deviation": {
+              "point_estimate": 3.4651361294978416,
+              "ci95": [3.3443827215131754, 3.5849715262780952]
+            },
+            "comparator_minus_cdc_final_deviation": {
+              "point_estimate": 0.6422362388111651,
+              "ci95": [0.6288088704226539, 0.6563168084365315]
+            }
+          },
+          {
+            "id": "pcgrad",
+            "label": "PCGrad-style shadow-target rescue",
+            "canonical": false,
+            "cdc_beats_comparator_joint_tradeoff": false,
+            "cdc_minus_comparator_weak_rescue": {
+              "point_estimate": -0.00015351238407674823,
+              "ci95": [-0.00047909348592838785, 0.00013248012419808214]
+            },
+            "comparator_minus_cdc_trajectory_deviation": {
+              "point_estimate": -0.48709889128076556,
+              "ci95": [-0.6897378944428417, -0.27379327373499074]
+            },
+            "comparator_minus_cdc_final_deviation": {
+              "point_estimate": -0.2565436437726021,
+              "ci95": [-0.3016841153614223, -0.2087651835754514]
+            }
+          }
+        ],
+        "broad_cdc_superiority_supported": false,
+        "scope_limit": "The frozen joint tradeoff is true only versus the Bloop-style shadow-target rescue and false versus the PCGrad-style shadow-target rescue; both comparators are non-canonical, and no broad CDC superiority is supported.",
+        "evidence": {
+          "archive_study_id": "expanded-nonlinear-beta-cdc-tradeoff-v1",
+          "claim_ids": ["E27", "E28"],
+          "archive_type": "completed-run-compact-archive-v1",
+          "compact_archive_root": "paper/artifacts/expanded-studies-v1-20260830",
+          "archive_manifest_sha256": "97ea2ad410b238190f845a4fb6a6baaf378fc4eddc946b5e4996fc5b85a58606",
+          "artifact_manifest_sha256": "54e4c4acd7d0e1b177f6c8da05bcb1ba848397d44056c447843a1df778564a96",
+          "source_provenance_class": "clean_git_source",
+          "git_commit": "9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0",
+          "git_dirty": false,
+          "source_sha256": "7f43b602b71199367938c1df51aa201a7d601e57ebb47835bdb5c9282b42f84e",
+          "source_file_count": 23,
+          "source_snapshot_archived": false,
+          "source_reconstructible": true,
+          "declared_file_count": 1817,
+          "omitted_file_count": 1792,
+          "central_indexed_file_count": 28,
+          "central_indexed_bytes": 2800551
+        }
       }
     ],
     "secondary_non_promotable_outputs": [
@@ -332,30 +486,36 @@
       }
     ]
   },
-  "prospective_designs": {
-    "empirical_claim_ids_assigned": false,
-    "outcomes_generated": false,
-    "execution_authorized": false,
-    "designs": [
+  "completed_externally_sealed_execution": {
+    "empirical_claim_ids_assigned": true,
+    "outcomes_generated": true,
+    "execution_authorized": true,
+    "repository_head_was_clean_at_execution": true,
+    "execution_source_commit": "9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0",
+    "programs": [
       {
         "id": "semi_real_generated_cue",
-        "status": "blocked_unexecuted",
-        "outcome_records": 0,
+        "status": "completed_failed_negative_indeterminate",
+        "claim_ids": ["E26"],
+        "outcome_records": 64,
+        "archive_study_id": "semi-real-generated-cue-v1",
         "design": "MNIST 3-vs-8 and FashionMNIST 0-vs-6 real core images with an exactly removable generated cue channel under paired BOTH/WEAK intervention.",
-        "frozen_record_count": 64,
-        "evidence": ["configs/semi_real_preregistration.yaml", "research_scope/semi_real_preregistration.md", "scripts/check_semi_real_preregistration.py"],
-        "blockers": ["exact Torch/torchvision environment lock", "raw-data and split-index digests", "selection manifest", "reviewed committed preregistration", "claim-set authorization"]
+        "externally_sealed_preoutcome": true,
+        "human_authorization_seal_archived": true
       },
       {
         "id": "expanded_nonlinear_cdc",
-        "status": "blocked_unexecuted",
-        "outcome_records": 0,
-        "design": "Prospective beta-robust nonlinear evaluation over 192 records and a 256-method-record CDC tradeoff study using ERM, CDC, Bloop-style shadow-target rescue, and PCGrad-style shadow-target rescue.",
-        "frozen_nonlinear_record_count": 192,
-        "frozen_cdc_method_record_count": 256,
+        "status": "completed_mixed",
+        "claim_ids": ["E27", "E28"],
+        "outcome_records": 448,
+        "study_a_records": 192,
+        "study_b_method_records": 256,
+        "archive_study_id": "expanded-nonlinear-beta-cdc-tradeoff-v1",
         "canonical_named_baseline_count": 0,
-        "evidence": ["configs/expanded_nonlinear_cdc_preregistration.yaml", "research_scope/expanded_nonlinear_cdc_preregistration.md", "scripts/check_expanded_studies_preregistration.py"],
-        "blockers": ["fresh preflight digest", "untouched-seed attestation", "isolated-process peak-memory telemetry", "reviewed committed preregistration", "canonical baseline parity audit", "claim-set authorization"]
+        "design": "Completed beta-robust nonlinear evaluation and CDC tradeoff study using ERM, CDC, Bloop-style shadow-target rescue, and PCGrad-style shadow-target rescue.",
+        "externally_sealed_preoutcome": true,
+        "human_authorization_seal_archived": true,
+        "baseline_parity_audit_complete": false
       }
     ]
   },

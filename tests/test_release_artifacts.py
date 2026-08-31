@@ -10,19 +10,26 @@ from pathlib import Path
 import pytest
 
 from verify_release_artifacts import (
+    GIT_EXECUTABLE,
     VerificationError,
     git_executable_source_fingerprint,
     validate_source_provenance,
     verify_archive_manifest,
+    verify_completed_run_archive,
     verify_release_artifacts,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ARCHIVE_ROOTS = (
+HISTORICAL_ARCHIVE_ROOTS = (
     "paper/artifacts/enl_ntk_pilot-20260825",
     "paper/artifacts/enl_ntk_crossing_factorial-20260825",
 )
+COMPLETED_ARCHIVES = {
+    "semi-real-generated-cue-v1": "paper/artifacts/semi-real-generated-cue-v1-20260830",
+    "expanded-nonlinear-beta-cdc-tradeoff-v1": "paper/artifacts/expanded-studies-v1-20260830",
+}
+ARCHIVE_ROOTS = (*HISTORICAL_ARCHIVE_ROOTS, *COMPLETED_ARCHIVES.values())
 
 
 def _copy_release_tree(tmp_path: Path) -> Path:
@@ -60,14 +67,63 @@ def _rewrite_archive_member_signature(
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
+def _rewrite_completed_artifact_signature(
+    release_root: Path,
+    archive_root: str,
+    relative_path: str,
+) -> None:
+    archive_dir = release_root / archive_root
+    artifact_manifest_path = archive_dir / "artifact_manifest.json"
+    artifact_manifest = json.loads(artifact_manifest_path.read_text(encoding="utf-8"))
+    member = archive_dir / relative_path
+    matches = [entry for entry in artifact_manifest["files"] if entry["path"] == relative_path]
+    assert len(matches) == 1
+    matches[0]["sha256"] = hashlib.sha256(member.read_bytes()).hexdigest()
+    matches[0]["size"] = member.stat().st_size
+    artifact_manifest_path.write_text(
+        json.dumps(artifact_manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    artifact_sha256 = hashlib.sha256(artifact_manifest_path.read_bytes()).hexdigest()
+    (archive_dir / "artifact_manifest.sha256").write_text(
+        f"{artifact_sha256}  artifact_manifest.json\n", encoding="utf-8"
+    )
+    for member_path in (relative_path, "artifact_manifest.json", "artifact_manifest.sha256"):
+        _rewrite_archive_member_signature(release_root, archive_root, member_path)
+    archive_manifest_path = archive_dir / "archive_manifest.json"
+    archive_manifest = json.loads(archive_manifest_path.read_text(encoding="utf-8"))
+    archive_manifest["full_run_commitment"]["artifact_manifest_sha256"] = artifact_sha256
+    archive_manifest["full_run_commitment"]["artifact_manifest_bytes"] = artifact_manifest_path.stat().st_size
+    archive_manifest_path.write_text(
+        json.dumps(archive_manifest, indent=2) + "\n", encoding="utf-8"
+    )
+
+
 def test_real_compact_archives_verify_without_project_dependencies():
     report = verify_release_artifacts(ROOT)
 
-    assert report.study_count == 2
-    assert report.file_count == 21
+    assert report.study_count == 5
+    assert report.archive_count == 4
+    assert report.file_count == 67
     assert report.byte_count > 0
     assert report.historical_unreconstructible_study_count == 2
     assert report.git_tracking_checked is False
+
+
+def test_release_verifier_rejects_stale_central_interpretation(tmp_path):
+    release_root = _copy_release_tree(tmp_path)
+    provenance_path = release_root / "paper/artifacts/provenance_manifest.json"
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    provenance["interpretation"] = (
+        "Only the historical theorem-aligned source is reconstructible."
+    )
+    provenance_path.write_text(
+        json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
+    )
+
+    with pytest.raises(
+        VerificationError, match="Central provenance interpretation is stale"
+    ):
+        verify_release_artifacts(release_root, source_repo_root=ROOT)
 
 
 def test_release_verifier_rejects_tampered_archived_bytes(tmp_path):
@@ -80,6 +136,168 @@ def test_release_verifier_rejects_tampered_archived_bytes(tmp_path):
 
     with pytest.raises(VerificationError, match="hash/size mismatch"):
         verify_release_artifacts(release_root)
+
+
+def test_release_verifier_rejects_tampered_completed_archive_member(tmp_path):
+    release_root = _copy_release_tree(tmp_path)
+    member = release_root / COMPLETED_ARCHIVES["expanded-nonlinear-beta-cdc-tradeoff-v1"] / "study_b_claims.json"
+    member.write_bytes(member.read_bytes() + b"\n")
+
+    with pytest.raises(VerificationError, match="hash/size mismatch"):
+        verify_release_artifacts(release_root, source_repo_root=ROOT)
+
+
+@pytest.mark.parametrize(
+    ("study_index", "claim_ids"),
+    [
+        (0, ["E29"]),
+        (1, ["E27", "E27"]),
+    ],
+)
+def test_release_verifier_rejects_completed_claim_membership_and_duplicates(
+    tmp_path, study_index, claim_ids
+):
+    release_root = _copy_release_tree(tmp_path)
+    provenance_path = release_root / "paper/artifacts/provenance_manifest.json"
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    provenance["completed_run_archives"][study_index]["claim_ids"] = claim_ids
+    provenance_path.write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
+
+    with pytest.raises(VerificationError, match="claim membership"):
+        verify_release_artifacts(release_root, source_repo_root=ROOT)
+
+
+def test_completed_archive_rejects_omitted_count_tampering(tmp_path):
+    release_root = _copy_release_tree(tmp_path)
+    study_id = "semi-real-generated-cue-v1"
+    archive_root = COMPLETED_ARCHIVES[study_id]
+    manifest_path = release_root / archive_root / "archive_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["full_run_commitment"]["omitted_file_count"] = 191
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    with pytest.raises(VerificationError, match="commitment is not exact"):
+        verify_completed_run_archive(
+            release_root,
+            archive_root,
+            expected_study_id=study_id,
+            source_repo_root=ROOT,
+        )
+
+
+def test_completed_archive_rejects_coherently_rehashed_semi_result(tmp_path):
+    release_root = _copy_release_tree(tmp_path)
+    study_id = "semi-real-generated-cue-v1"
+    archive_root = COMPLETED_ARCHIVES[study_id]
+    acceptance_path = release_root / archive_root / "acceptance.json"
+    acceptance = json.loads(acceptance_path.read_text(encoding="utf-8"))
+    acceptance["overall_passed"] = True
+    acceptance_path.write_text(json.dumps(acceptance, indent=2) + "\n", encoding="utf-8")
+    _rewrite_completed_artifact_signature(release_root, archive_root, "acceptance.json")
+
+    with pytest.raises(VerificationError, match="overall result changed"):
+        verify_completed_run_archive(
+            release_root,
+            archive_root,
+            expected_study_id=study_id,
+            source_repo_root=ROOT,
+        )
+
+
+def test_completed_archive_rejects_coherently_rehashed_expanded_result(tmp_path):
+    release_root = _copy_release_tree(tmp_path)
+    study_id = "expanded-nonlinear-beta-cdc-tradeoff-v1"
+    archive_root = COMPLETED_ARCHIVES[study_id]
+    inference_path = release_root / archive_root / "study_a_inference.json"
+    inference = json.loads(inference_path.read_text(encoding="utf-8"))
+    inference["architectures"]["tanh"]["equal_weight_three_cell_macro"]["point_estimate"] = 1.0
+    inference_path.write_text(json.dumps(inference, indent=2) + "\n", encoding="utf-8")
+    _rewrite_completed_artifact_signature(
+        release_root, archive_root, "study_a_inference.json"
+    )
+
+    with pytest.raises(VerificationError, match="frozen estimate changed"):
+        verify_completed_run_archive(
+            release_root,
+            archive_root,
+            expected_study_id=study_id,
+            source_repo_root=ROOT,
+        )
+
+
+def test_completed_archive_rejects_unbound_trajectory_or_final_proof(tmp_path):
+    release_root = _copy_release_tree(tmp_path)
+    study_id = "expanded-nonlinear-beta-cdc-tradeoff-v1"
+    archive_root = COMPLETED_ARCHIVES[study_id]
+    inference_path = release_root / archive_root / "study_b_inference.json"
+    inference = json.loads(inference_path.read_text(encoding="utf-8"))
+    inference["test_families"]["trajectory_superiority"][0]["observed"] = -999.0
+    inference_path.write_text(json.dumps(inference, indent=2) + "\n", encoding="utf-8")
+    _rewrite_completed_artifact_signature(
+        release_root, archive_root, "study_b_inference.json"
+    )
+
+    with pytest.raises(VerificationError, match="not bound to its frozen estimand"):
+        verify_completed_run_archive(
+            release_root,
+            archive_root,
+            expected_study_id=study_id,
+            source_repo_root=ROOT,
+        )
+
+
+def test_completed_archive_rejects_incomplete_cost_rows(tmp_path):
+    release_root = _copy_release_tree(tmp_path)
+    study_id = "expanded-nonlinear-beta-cdc-tradeoff-v1"
+    archive_root = COMPLETED_ARCHIVES[study_id]
+    cost_path = release_root / archive_root / "study_b_cost.csv"
+    lines = cost_path.read_text(encoding="utf-8").splitlines()
+    first_row = lines[1].split(",")
+    lines[1] = ",".join([first_row[0], *("" for _ in first_row[1:])])
+    cost_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _rewrite_completed_artifact_signature(
+        release_root, archive_root, "study_b_cost.csv"
+    )
+
+    with pytest.raises(VerificationError, match="row 0 is incomplete"):
+        verify_completed_run_archive(
+            release_root,
+            archive_root,
+            expected_study_id=study_id,
+            source_repo_root=ROOT,
+        )
+
+
+def test_completed_archive_rejects_unknown_authorization_schema(tmp_path):
+    release_root = _copy_release_tree(tmp_path)
+    study_id = "expanded-nonlinear-beta-cdc-tradeoff-v1"
+    archive_root = COMPLETED_ARCHIVES[study_id]
+    archive_dir = release_root / archive_root
+    authorization_path = archive_dir / "authorization.seal.json"
+    authorization = json.loads(authorization_path.read_text(encoding="utf-8"))
+    authorization["schema_version"] = "unknown-authorization-v999"
+    authorization_path.write_text(
+        json.dumps(authorization, indent=2) + "\n", encoding="utf-8"
+    )
+    authorization_sha = hashlib.sha256(authorization_path.read_bytes()).hexdigest()
+    provenance_path = archive_dir / "provenance.json"
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    provenance["authorization_seal_sha256"] = authorization_sha
+    provenance_path.write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
+    _rewrite_completed_artifact_signature(
+        release_root, archive_root, "authorization.seal.json"
+    )
+    _rewrite_completed_artifact_signature(
+        release_root, archive_root, "provenance.json"
+    )
+
+    with pytest.raises(VerificationError, match="authorization-seal schema"):
+        verify_completed_run_archive(
+            release_root,
+            archive_root,
+            expected_study_id=study_id,
+            source_repo_root=ROOT,
+        )
 
 
 def test_archive_verifier_rejects_path_traversal(tmp_path):
@@ -157,7 +375,7 @@ def test_source_provenance_classes_fail_closed():
         validate_source_provenance(false_replay_claim)
 
     commit = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+        [GIT_EXECUTABLE, "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
     source_sha256, source_file_count = git_executable_source_fingerprint(ROOT, commit)
     clean = {

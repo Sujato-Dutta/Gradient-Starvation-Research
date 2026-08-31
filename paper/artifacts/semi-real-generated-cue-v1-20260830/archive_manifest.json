@@ -1,0 +1,127 @@
+{
+  "archive_root": "paper/artifacts/semi-real-generated-cue-v1-20260830",
+  "archive_type": "completed_run_compact",
+  "archived_file_bytes": 554127,
+  "archived_file_count": 17,
+  "archived_files": [
+    {
+      "archive_relative_path": "acceptance.json",
+      "bytes": 1228,
+      "sha256": "aa247c76c69952bd8c23559aea22460c8f59a83188a36b319d48d6ae1bde7762",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/acceptance.json"
+    },
+    {
+      "archive_relative_path": "artifact_manifest.json",
+      "bytes": 29933,
+      "sha256": "3ef7a7f2ce08857bace1451318a226a50df16807c526bdaca262e463646a0c72",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/artifact_manifest.json"
+    },
+    {
+      "archive_relative_path": "artifact_manifest.sha256",
+      "bytes": 89,
+      "sha256": "9088838ff690b741e39e408ac35e75e2501d74d72f43c43aa72ceb2dadd54f22",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/artifact_manifest.sha256"
+    },
+    {
+      "archive_relative_path": "authorization.seal.json",
+      "bytes": 3941,
+      "sha256": "1d964615a57906fa9949832a17b1242cb2172659defe60aebdc9b33760f3e118",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/authorization.seal.json"
+    },
+    {
+      "archive_relative_path": "contract.resolved.json",
+      "bytes": 13959,
+      "sha256": "1b0b5cda5c435d7a954af1d87b7ca49ba4eedc4bdefc3131055ba771455bb804",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/contract.resolved.json"
+    },
+    {
+      "archive_relative_path": "environment-lock.txt",
+      "bytes": 687,
+      "sha256": "651ba112e67b38f80eb60d26ef92a348b3e3228fbb0a7aae8a0f24930b823c1c",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/environment-lock.txt"
+    },
+    {
+      "archive_relative_path": "environment.json",
+      "bytes": 898,
+      "sha256": "64359481a989e8383b35459044bbfa17a783f7bafe5e5407405f3ee0572885e1",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/environment.json"
+    },
+    {
+      "archive_relative_path": "inference.json",
+      "bytes": 1053,
+      "sha256": "467d0b8bdf41a514726d859ccf7254bd26579848aec65967eb2ff7aaca3f345e",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/inference.json"
+    },
+    {
+      "archive_relative_path": "preflight.manifest.json",
+      "bytes": 3687,
+      "sha256": "c4cdf1be49e10332a1ad361c82ceaa5a1a557c81fb3d102f78dc3ab7798de563",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/preflight.manifest.json"
+    },
+    {
+      "archive_relative_path": "preflight.manifest.sha256",
+      "bytes": 90,
+      "sha256": "6ac1bdd5800c7e04cce7afb3c239e8edb74e3e3dbcaa2232e7e8993074e4f33c",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/preflight.manifest.sha256"
+    },
+    {
+      "archive_relative_path": "provenance.json",
+      "bytes": 2936,
+      "sha256": "4edc1fbef15c7f33f630d71fffd1fa52b412b28e0ee065dfc5207581699bd6c0",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/provenance.json"
+    },
+    {
+      "archive_relative_path": "raw_data_manifest.json",
+      "bytes": 3541,
+      "sha256": "17bfdde1ae09efc084c3d753cf4b797487eab5424adff91231a9b39dd100896c",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/raw_data_manifest.json"
+    },
+    {
+      "archive_relative_path": "record_summary.csv",
+      "bytes": 14034,
+      "sha256": "a478431477f195d6011d0cbbc272b932fafdac561f2aa3f791757fa08cae6115",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/record_summary.csv"
+    },
+    {
+      "archive_relative_path": "record_summary.json",
+      "bytes": 187768,
+      "sha256": "2df788f21017e86fe9308c7fd304e59a11bc439fdaddf9dedbaf6ef9695a4f0e",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/record_summary.json"
+    },
+    {
+      "archive_relative_path": "resource_usage.json",
+      "bytes": 6698,
+      "sha256": "47be30d683b5e89a677cc2ba24ed805bc5982edb1cd765059edc7bf98f6e34f0",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/resource_usage.json"
+    },
+    {
+      "archive_relative_path": "selection_manifest.json",
+      "bytes": 280391,
+      "sha256": "8c5eec229fbee144cb4089fe1b99c9750d64ffd04d555dfc9f86f125076dc7b9",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/selection_manifest.json"
+    },
+    {
+      "archive_relative_path": "source_manifest.json",
+      "bytes": 3194,
+      "sha256": "479f2b17a877e02906f9dcac20b1151a27c44b3c598de10df84663c15b13daea",
+      "source_path": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61/source_manifest.json"
+    }
+  ],
+  "claim_ids": [
+    "E26"
+  ],
+  "clean_source_commit": "9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0",
+  "full_run_commitment": {
+    "artifact_manifest_bytes": 29933,
+    "artifact_manifest_sha256": "3ef7a7f2ce08857bace1451318a226a50df16807c526bdaca262e463646a0c72",
+    "declared_file_count": 207,
+    "omitted_bytes_archived": false,
+    "omitted_bytes_recoverable_from_hashes": false,
+    "omitted_file_count": 192,
+    "omitted_path_prefix": "records/"
+  },
+  "limitation": "This compact archive preserves every top-level completed-run file and the full-run artifact manifest, but omits 192 records/** files. Their paths, hashes, and sizes remain committed by artifact_manifest.json; omitted bytes cannot be recovered from hashes, so this archive is auditable but not a self-contained replay package.",
+  "schema_version": "completed-run-compact-archive-v1",
+  "source_run": "data/semi_real_generated_cue_v1/scientific-run-9ebbc61",
+  "study_id": "semi-real-generated-cue-v1"
+}

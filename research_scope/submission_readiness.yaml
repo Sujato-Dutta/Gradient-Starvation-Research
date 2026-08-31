@@ -16,7 +16,7 @@
   },
   "overall_submission_ready": false,
   "overall_decision": "no_go",
-  "decision_reason": "Scientific scope and official requirements are frozen; the official anonymous ICLR source, page-count check, and disclosure statements are integrated. Submission remains blocked by author/account obligations, clean-source replay, empirical breadth, certificate/reframing, benchmark, audit, and independent-review gates.",
+  "decision_reason": "E26 is negative/indeterminate because weak-only learnability is 0/32 in each dataset; E27 is negative and supports no architecture ranking; E28 is comparator-restricted mixed, with the frozen joint tradeoff true only versus the Bloop-style shadow-target rescue and false versus the PCGrad-style shadow-target rescue, and both comparators are non-canonical. Initialization-jet information is local or assumption-scoped, and the stronger global positive-lag parameter-level predictor remains unresolved. Submission remains no-go because the remaining blockers are anonymity; AI-use/submission-form consistency; author/account/policy obligations; a final integrated clean release; historical replayability; a sequential benchmark; a parity audit; clean-clone reproduction; and independent scientific/statistical review.",
   "gates": [
     {
       "id": "claims_frozen",
@@ -24,7 +24,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "Included, blocked, failed, restricted, and non-promotable claims are machine-readable before new outcomes.",
-      "evidence": "research_scope/submission_claim_set.yaml freezes T1--T20 with T17/T18 still blocked, includes T19/T20 at their proved scopes, retains only E19/E20 as empirical studies, and records both new designs as unauthorized and outcome-free."
+      "evidence": "research_scope/submission_claim_set.yaml revision 4 freezes T1--T20, retains E19 failed and E20 restricted as the primary claim, and adds exactly E26 negative/indeterminate, E27 negative, and E28 mixed restricted from schema-3 provenance."
     },
     {
       "id": "official_2027_requirements_sourced",
@@ -48,7 +48,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "Main text is at most 9 pages in the official submission style.",
-      "evidence": "The rebuilt 26-page paper/iclr2027/submission.pdf records page:main-end on page 6; references, disclosures, and the complete appendix follow."
+      "evidence": "The rebuilt 29-page paper/iclr2027/submission.pdf records page:main-end on page 7; references, disclosures, and the complete appendix follow."
     },
     {
       "id": "double_blind_anonymity_audit",
@@ -56,7 +56,7 @@
       "status": "fail",
       "required_for_submission": true,
       "criterion": "Main paper, appendix, supplementary material, metadata, links, code, and artifacts reveal no author identity.",
-      "evidence": "The rebuilt 26-page paper/iclr2027/submission.pdf passes title-block, full-text, PDF-metadata, and rendered-first-page identity checks; the visible banner/title/Anonymous authors block and line numbering are correct. The PDF contains none of the scanned identifying/local-path/revision/unrelated-title strings. The repository is not yet safe to upload wholesale as supplementary material: legacy a.md/a copy.md and two archived ENL-NTK provenance JSON files contain absolute /Users/... paths identifying the local account. Historical artifact records were not silently rewritten; a curated anonymous supplementary archive remains required."
+      "evidence": "The rebuilt 29-page paper/iclr2027/submission.pdf passes title-block, source-text, and PDF-metadata identity checks; the visible under-review presentation and line numbering are correct, and the manuscript source contains none of the scanned identifying or local-path strings. The repository is not safe to upload wholesale as supplementary material: legacy a.md/a copy.md, two archived ENL-NTK provenance JSON files, and the sealed expanded-study resource_usage.json contain absolute /Users/... paths identifying the local account. Historical and completed-run artifact records were not silently rewritten; a curated anonymous supplementary archive remains required."
     },
     {
       "id": "mandatory_ai_use_statement",
@@ -104,7 +104,7 @@
       "status": "blocked",
       "required_for_submission": true,
       "criterion": "The reviewed executable source, configs, claim manifests, tests, and artifact verifier are all tracked in one clean commit and optional release tag.",
-      "evidence": "The working tree is heavily dirty and commit/tag creation requires explicit user authorization."
+      "evidence": "Completed E26--E28 executed from clean source commit 9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0. This integration changes claim/readiness metadata and tests, so clean_git_source_release remains blocked until the final reviewed integrated release commit is created; no commit or tag is asserted here."
     },
     {
       "id": "exact_environment_lock",
@@ -120,7 +120,7 @@
       "status": "fail",
       "required_for_submission": true,
       "criterion": "Claim-bearing confirmatory outcomes can be replayed from exact source and environment bytes.",
-      "evidence": "E19/E20 exact dirty source snapshots and large sealed inputs are unavailable; compact outcomes are auditable but not replayable."
+      "evidence": "E19/E20 exact dirty source snapshots and large sealed inputs remain unavailable, so those historical studies are auditable but not replayable. E26--E28 instead record clean reconstructible execution source, but their compact archives omit record bytes and are not self-contained replay packages."
     },
     {
       "id": "compact_archive_integrity_verifier",
@@ -128,7 +128,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "A dependency-free read-only verifier checks compact archive paths, sizes, hashes, seals, provenance classes, and optional Git tracking.",
-      "evidence": "python verify_release_artifacts.py verified 2 studies, 21 files, and 138720 bytes; tests/test_release_artifacts.py passed 9 tamper/path/duplicate/acceptance/provenance checks. The verifier covers the compact E19/E20 release archives; the separate post-hoc beta audit was checked directly against its manifest signatures but is not yet a first-class verifier study. python verify_release_artifacts.py --require-git-tracked succeeds for the verifier's E19/E20 file set; this is not a repository-wide clean-tree check, and the beta audit plus ICLR wrapper remain untracked and outside that verifier."
+      "evidence": "python verify_release_artifacts.py verifies the schema-3 central manifest plus four physical archives (E19, E20, E26, and the shared E27/E28 archive): 67 files and 3510433 bytes. Shared claim_ids are counted once at archive level; compact omitted-record limitations remain explicit."
     },
     {
       "id": "evaluator_fail_closed_regression_tests",
@@ -144,39 +144,39 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "The full test suite passes after readiness/release changes.",
-      "evidence": "PYTHONPATH=src MPLBACKEND=Agg .venv-test/bin/python -m pytest -q: 261 passed, 4 warnings."
+      "evidence": "PATH=/usr/bin:/bin:$PATH PYTHONPATH=src MPLBACKEND=Agg .venv-test/bin/python -m pytest -q passed 330 tests with 4 pre-existing seaborn plotting warnings after the E26--E28 outcome, archive, claim, readiness, manuscript, and fail-closed guard integration."
     },
     {
       "id": "fresh_breadth_preregistration",
       "category": "empirical",
-      "status": "blocked",
+      "status": "pass",
       "required_for_submission": true,
       "criterion": "A resource-budgeted multi-cell validation and crossed-seed analysis are frozen before outcomes.",
-      "evidence": "The expanded nonlinear/CDC design is machine-frozen for 192 nonlinear records and 256 CDC method-records, but remains blocked: no reviewed clean commit, fresh preflight digest, untouched-seed attestation, isolated-process peak-memory telemetry, or claim-set execution authorization exists."
+      "evidence": "Both completed programs preserve clean pre-outcome source commit 9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0, machine-checked preflight manifests and resolved contracts, untouched selection/initialization commitments, resource records, and archived human authorization seals."
     },
     {
       "id": "fresh_breadth_validation",
       "category": "empirical",
-      "status": "blocked",
+      "status": "pass",
       "required_for_submission": true,
-      "criterion": "Fresh untouched cells and seeds support or falsify the restricted crossing-event claim under preregistered gates.",
-      "evidence": "No expanded nonlinear, prospective beta-grid, CDC-tradeoff, or semi-real training outcome was generated. Both validators report execution_authorized: false, and the claim set forbids new confirmatory outcomes before its gates pass."
+      "criterion": "Fresh untouched cells and seeds execute the frozen Study-A beta-robust endpoint, Study-B comparator-specific joint tradeoff, and semi-real generated-cue outcomes under preregistered gates, whether the claims support, falsify, or restrict promotion.",
+      "evidence": "Execution is complete: E26 was negative/indeterminate on 64 semi-real records because weak-only learnability was 0/32 in each dataset; E27 was negative on 192 records without architecture ranking; E28 was comparator-restricted mixed on 256 method-records, with the frozen joint tradeoff true only versus the non-canonical Bloop-style shadow-target rescue and false versus the non-canonical PCGrad-style shadow-target rescue. Both E28 comparators are non-canonical, and no broad CDC superiority is supported."
     },
     {
       "id": "kernel_certificate_or_empirical_reframing",
       "category": "theory_scope",
-      "status": "blocked",
+      "status": "pass",
       "required_for_submission": true,
       "criterion": "Either a nonvacuous initialization-time movement certificate is established or all frozen-kernel language is explicitly framed as an empirical event heuristic.",
-      "evidence": "T19 proves an exact realized-initialization dense-linear threshold and conditional product-ball implications, but no current component constructs nonvacuous uniform S_R, lambda, Lambda, nu, or J for trained positive-disorder RNNs. T16 likewise still depends on caller-supplied kernel-movement bounds; no tanh/GRU certificate exists."
+      "evidence": "Empirical reframing alternative satisfied: paper/main.tex, README.md, and the frozen claim surfaces frame trained-network use of the initialization-frozen surrogate only as an empirical event heuristic. Exactness is limited to the time-varying finite-width flow and the surrogate's own recursion. No tanh/GRU kernel-movement certificate or global positive-lag parameter-level predictor is claimed; T16 remains conditional and T18 remains open/blocked."
     },
     {
       "id": "sequential_benchmark",
       "category": "empirical",
-      "status": "blocked",
+      "status": "fail",
       "required_for_submission": true,
       "criterion": "A semi-real or real sequential benchmark has an exact strong-cue intervention and an identified weak response.",
-      "evidence": "A defensible generated-cue MNIST/FashionMNIST BOTH-vs-WEAK design is frozen, but it is an unexecuted non-recurrent semi-real image study and lacks the exact Torch/torchvision lock, raw-data/index digests, selection manifest, committed preregistration, and claim authorization. It does not yet satisfy this sequential-benchmark gate; Waterbirds remains an unrun intercept surrogate."
+      "evidence": "E26 completed the exact generated-cue BOTH/WEAK intervention on MNIST and FashionMNIST, but it is a non-recurrent semi-real image study and failed to identify a learnable weak response: 0/32 weak-only learnable records and 0 causal certificates in each dataset. Zero certificates therefore cannot be read as no starvation."
     },
     {
       "id": "baseline_parity_audit",
@@ -184,7 +184,7 @@
       "status": "blocked",
       "required_for_submission": true,
       "criterion": "Baselines, supervision, compute, hyperparameters, and CDC theorem scope are independently audited.",
-      "evidence": "The frozen tradeoff arms are ERM, CDC, Bloop-style shadow-target rescue, and PCGrad-style shadow-target rescue. The latter two are explicitly non-canonical style variants; primary-algorithm fidelity, source parity, and randomized PCGrad aggregation remain unaudited."
+      "evidence": "E28 completed with comparator-specific results, but Bloop-style shadow-target rescue and PCGrad-style shadow-target rescue are both explicitly canonical:false. Primary-algorithm fidelity, source parity, randomized PCGrad aggregation, and independent review remain unaudited; the Bloop-style success does not establish broad CDC superiority."
     },
     {
       "id": "clean_clone_artifact_reproduction",
@@ -192,7 +192,7 @@
       "status": "blocked",
       "required_for_submission": true,
       "criterion": "An independent clean clone installs, verifies, tests, builds the PDF, and reproduces designated current-source outcomes.",
-      "evidence": "Requires an authorized tracked release state and replacement current-source study."
+      "evidence": "The clean execution source and compact E26--E28 archives are recorded, but no independent clean clone has installed, verified, tested, built the PDF, and reproduced designated outcomes from a final integrated release commit."
     },
     {
       "id": "independent_scientific_and_statistical_review",
@@ -207,19 +207,20 @@
     "new_confirmatory_outcomes": {
       "decision": "no_go",
       "blocking_gate_ids": [
-        "clean_git_source_release",
-        "fresh_breadth_preregistration"
+        "clean_git_source_release"
       ]
     },
     "claim_promotion": {
       "decision": "no_go",
-      "allowed_current_empirical_scope": "E20 restricted drift/response crossing classification only",
+      "allowed_current_empirical_scope": "E20 restricted drift/response crossing classification; E26 negative/indeterminate semi-real result with 0/32 weak-only learnability per dataset; E27 negative beta-robust result without architecture ranking; E28 comparator-restricted mixed result, with the frozen joint tradeoff true only versus the non-canonical Bloop-style shadow-target rescue and false versus the non-canonical PCGrad-style shadow-target rescue",
       "prohibited_until_new_evidence": [
         "phase prediction",
-        "causal-starvation prediction",
+        "causal-starvation prediction or interpreting E26 zero certificates as no starvation",
         "learnability prediction",
         "calibrated crossing-time prediction",
         "kernel stability",
+        "architecture ranking",
+        "broad CDC superiority or canonical-baseline superiority",
         "universal prevalence or architecture generalization"
       ]
     },

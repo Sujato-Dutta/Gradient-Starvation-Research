@@ -1,0 +1,687 @@
+{
+  "schema_version": "expanded-studies-execution-v1",
+  "study_id": "expanded-nonlinear-beta-cdc-tradeoff-v1",
+  "contract_revision": 3,
+  "status": "external_authorization_required",
+  "execution_authorized": false,
+  "publication_scope": "expanded-nonlinear-beta-and-cdc-tradeoff",
+  "evidence_label": "prospectively frozen expanded nonlinear beta and CDC-style tradeoff studies",
+  "local_workspace": {
+    "root": "data/expanded_studies_execution_v1",
+    "required_path_roles": [
+      "preflight",
+      "authorization_seal",
+      "engineering_smoke",
+      "scientific_run"
+    ],
+    "strict_descendants_only": true,
+    "symlink_components_forbidden": true,
+    "artifact_tree_symlinks_forbidden": true,
+    "git_ignored_required": true,
+    "tracked_workspace_paths_forbidden": true,
+    "git_cleanliness_rationale": "ignored local artifacts do not affect git cleanliness"
+  },
+  "historical_contract": {
+    "path": "configs/expanded_nonlinear_cdc_preregistration.yaml",
+    "schema_version": "expanded-nonlinear-cdc-preregistration-v1",
+    "sha256": "481508ee5381caf6a279d7c992e8e77e5f04679f013309f35c1b5b1a023ce439",
+    "must_remain_execution_blocked": true,
+    "must_remain_execution_authorized_false": true
+  },
+  "execution_environment": {
+    "device": "cpu",
+    "dtype": "float32",
+    "python_version": "3.12.4",
+    "deterministic_algorithms": true,
+    "deterministic_warn_only": false,
+    "intraop_threads": 1,
+    "interop_threads": 1,
+    "serial_records": true,
+    "isolated_worker_per_method_record": true,
+    "environment_lock_path": "requirements-lock-semi-real-py312.txt",
+    "environment_lock_sha256": "651ba112e67b38f80eb60d26ef92a348b3e3228fbb0a7aae8a0f24930b823c1c",
+    "required_exact_packages": {
+      "numpy": "2.5.2",
+      "torch": "2.13.0"
+    },
+    "cuda_applicable": false,
+    "cuda_status": "not_applicable_cpu_contract"
+  },
+  "shared_task": {
+    "sequence_length": 20,
+    "n_samples": 256,
+    "regime": "positive",
+    "cue_noise": 0.1,
+    "background_noise": 0.0,
+    "cells": [
+      {"cell_id": "rho3_lag1", "rho": 3.0, "lag_separation": 1},
+      {"cell_id": "rho4_lag2", "rho": 4.0, "lag_separation": 2},
+      {"cell_id": "rho5_lag3", "rho": 5.0, "lag_separation": 3}
+    ]
+  },
+  "seed_design": {
+    "data_seeds": [301, 302, 303, 304],
+    "model_seeds": [3010, 3011, 3012, 3013, 3014, 3015, 3016, 3017],
+    "crossed": true,
+    "candidate_seeds_require_untouched_attestation": true,
+    "engineering_and_historical_seeds_excluded": true,
+    "reuse_across_cells": true
+  },
+  "scientific_record_design": {
+    "coordinate_order": ["study", "model_kind", "cell_id", "method_id", "data_seed", "model_seed"],
+    "complete_factorials_required": true,
+    "study_a": {
+      "record_id_format": "esa-{model_kind}-{cell_id}-d{data_seed}-m{model_seed}",
+      "coordinate_axes": ["model_kind", "cell_id", "data_seed", "model_seed"],
+      "beta_is_within_record_endpoint_not_record_axis": true,
+      "all_beta_values_required_per_record": [0.25, 0.5, 1.0, 2.0],
+      "expected_record_count": 192
+    },
+    "study_b": {
+      "record_id_format": "esb-{method_id}-{cell_id}-d{data_seed}-m{model_seed}",
+      "coordinate_axes": ["model_kind", "cell_id", "method_id", "data_seed", "model_seed"],
+      "expected_method_record_count": 256
+    },
+    "expected_total_scientific_records": 448,
+    "missing_duplicate_or_extra_records_invalidate_run": true
+  },
+  "nonlinear_beta_study": {
+    "model_kinds": ["tanh", "gru"],
+    "width": 32,
+    "cells": ["rho3_lag1", "rho4_lag2", "rho5_lag3"],
+    "optimization": {
+      "objective": "cross_entropy",
+      "optimizer": "sgd",
+      "full_batch": true,
+      "steps": 1000,
+      "learning_rate": 0.01,
+      "log_every": 5,
+      "weight_decay": 0.0,
+      "gradient_clip": null,
+      "paired_mode": "lockstep",
+      "exact_response_drift": true
+    },
+    "logging": {
+      "logged_step_start": 0,
+      "logged_step_end": 1000,
+      "logged_step_stride": 5,
+      "logged_point_count_per_arm": 201,
+      "terminal_step_required": true,
+      "arms": ["both", "weak_only"]
+    },
+    "beta_values": [0.25, 0.5, 1.0, 2.0],
+    "beta_semantics": {
+      "prospective_grid": true,
+      "first_hit_not_terminal_reach": true,
+      "linear_interpolation": true,
+      "target_at_initialization_is_degenerate": true,
+      "weak_only_nonhit_is_unlearnable": true,
+      "outcome_suppression_independent_of_beta": true,
+      "causal_certificate_requires_outcome_suppression_and_non_degenerate_weak_first_hit": true,
+      "no_beta_or_cell_selection_after_outcomes": true
+    },
+    "first_hit_rule": {
+      "all_four_betas_required": true,
+      "delay_tolerance": 0.25,
+      "first_upward_hit": true,
+      "linear_interpolation_between_logged_points": true,
+      "terminal_threshold_replacement_forbidden": true,
+      "initial_hit_is_degenerate": true,
+      "nonhit_is_unlearnable": true
+    },
+    "outcome_certificate": {
+      "input": "discrete_logged_response_gap_trajectory",
+      "response_gap": "both_weak_response_minus_weak_only_weak_response",
+      "criterion": "strict_outcome_suppression",
+      "implementation_binding": "gradient_starvation.theory.discrete_crossover_certificate",
+      "increment_definition": "increment[k]=response_gap[k+1]-response_gap[k]",
+      "crossover_index": "first_k_with_increment[k]<-tolerance",
+      "strict_transfer_pattern": "crossover_index>0_and_all_prior_increments>tolerance_and_all_increments_from_crossover_onward<-tolerance",
+      "post_peak_strict_suppression": "at_least_one_response_gap_after_crossover<response_gap[0]-tolerance",
+      "strict_outcome_suppression_definition": "strict_transfer_pattern_and_post_peak_strict_suppression",
+      "interpolation_forbidden": true,
+      "tolerance": 1e-10,
+      "computed_once_per_record": true,
+      "independent_of_beta": true,
+      "reuse_same_boolean_for_all_beta_certificates": true
+    },
+    "all_beta_certificate": {
+      "requires": [
+        "strict_outcome_suppression",
+        "nondegenerate_weak_only_first_hit_at_beta_0.25",
+        "nondegenerate_weak_only_first_hit_at_beta_0.5",
+        "nondegenerate_weak_only_first_hit_at_beta_1.0",
+        "nondegenerate_weak_only_first_hit_at_beta_2.0"
+      ],
+      "missing_beta_invalidates_certificate": true
+    },
+    "primary_outputs": [
+      "long_form_first_hit_profile",
+      "weak_only_learnability_by_beta",
+      "causal_starvation_certificate_by_beta",
+      "all_beta_robust_causal_certificate"
+    ],
+    "secondary_outputs": [
+      "exact_drift_crossing",
+      "response_crossing",
+      "crossing_times",
+      "weak_auc_gap",
+      "projection_residual"
+    ],
+    "aggregate_claim": {
+      "cell_estimate": "all_beta_certificate_prevalence_over_32_crossed_seed_pairs",
+      "architecture_estimand": "equal_weight_macro_average_of_three_fixed_cell_prevalences",
+      "cell_weights": {
+        "rho3_lag1": 0.3333333333333333,
+        "rho4_lag2": 0.3333333333333333,
+        "rho5_lag3": 0.3333333333333333
+      },
+      "raw_bootstrap_ci95_lower_strictly_greater_than": 0.5,
+      "one_sided_null": "equal_cell_macro_all_beta_certificate_prevalence<=0.5",
+      "one_sided_alternative": "equal_cell_macro_all_beta_certificate_prevalence>0.5",
+      "holm_family": ["tanh", "gru"],
+      "holm_alpha": 0.05,
+      "architecture_claim_requires": [
+        "raw_bootstrap_ci95_lower_strictly_greater_than_0.5",
+        "centered_bootstrap_one_sided_test_rejects_after_holm"
+      ],
+      "overall_claim_requires_both_architectures": true,
+      "architecture_ranking_forbidden": true
+    },
+    "record_count": 192
+  },
+  "cdc_tradeoff_study": {
+    "model_kinds": ["tanh"],
+    "width": 64,
+    "cells": ["rho4_lag2", "rho5_lag3"],
+    "methods": [
+      {"method_id": "erm", "publication_label": "ERM", "uses_weak_only_shadow": false},
+      {"method_id": "counterfactual_drift", "publication_label": "CDC", "uses_weak_only_shadow": true},
+      {"method_id": "bloop", "publication_label": "Bloop-style shadow-target rescue", "uses_weak_only_shadow": true},
+      {"method_id": "pcgrad", "publication_label": "PCGrad-style shadow-target rescue", "uses_weak_only_shadow": true}
+    ],
+    "baseline_fidelity": {
+      "bloop_is_canonical": false,
+      "pcgrad_is_canonical": false,
+      "reason": "Both are response-gradient shadow-target variants sharing CDC's target; neither has canonical algorithm/reference parity.",
+      "canonical_name_promotion_forbidden": true
+    },
+    "optimization": {
+      "objective": "cross_entropy",
+      "optimizer": "sgd",
+      "full_batch": true,
+      "steps": 1000,
+      "learning_rate": 0.01,
+      "log_every": 5,
+      "weight_decay": 0.0,
+      "gradient_clip": null,
+      "paired_mode": "lockstep",
+      "max_alpha": null,
+      "feasibility_epsilon": 1e-10,
+      "ema_decay": 0.9
+    },
+    "logging": {
+      "logged_step_start": 0,
+      "logged_step_end": 1000,
+      "logged_step_stride": 5,
+      "logged_both_row_count": 201,
+      "terminal_step_required": true
+    },
+    "weak_rescue": {
+      "primary_score": "negative_absolute_weak_auc_gap",
+      "formula": "-abs(weak_auc_gap)",
+      "higher_is_better": true,
+      "beta_first_hit_delay_report_beta": 0.5,
+      "also_report": [
+        "beta_first_hit_delay",
+        "final_both_weak_response",
+        "target_attainment_fraction",
+        "feasibility_fraction",
+        "cap_binding_fraction"
+      ]
+    },
+    "strong_preservation": {
+      "reference": "paired ERM at identical task/data/model seed",
+      "primary_trajectory_deviation": "absolute_strong_response_auc_difference_from_erm",
+      "primary_final_deviation": "absolute_final_strong_response_difference_from_erm",
+      "instantaneous_mechanistic_metric": "max_absolute_strong_drift_change",
+      "smaller_is_better": true,
+      "instantaneous_and_final_claims_kept_separate": true
+    },
+    "diagnostics": {
+      "fraction_metrics": [
+        "target_attainment_fraction",
+        "feasibility_fraction",
+        "cap_binding_fraction"
+      ],
+      "condition": "both",
+      "denominator": "all_201_logged_both_rows",
+      "logged_step_start": 0,
+      "logged_step_end": 1000,
+      "logged_step_stride": 5,
+      "logged_row_count": 201,
+      "terminal_step_included": true,
+      "missing_rows_invalidate_record": true,
+      "erm_status": "N/A",
+      "erm_serialized_value": "N/A",
+      "erm_reason": "ERM has no weak-only shadow-target diagnostics"
+    },
+    "cost": {
+      "runtime": "paired_wall_time_ratio_to_erm",
+      "memory": "isolated_process_peak_rss_and_cuda_peak_allocated_when_applicable",
+      "static_parameter_bytes_secondary_only": true,
+      "cost_disclosure_required": true,
+      "worker_isolation": "one_fresh_isolated_worker_process_per_whole_method_record",
+      "wall_time_scope": "parent_prelaunch_through_sample_after_worker_exit_and_bundle_validation_before_final_resources_and_complete_marker_writes",
+      "wall_time_clock": "time.perf_counter",
+      "peak_rss_source": "resource.getrusage(resource.RUSAGE_SELF).ru_maxrss",
+      "peak_rss_output_unit": "bytes",
+      "macos_ru_maxrss_input_unit": "bytes",
+      "macos_to_bytes_multiplier": 1,
+      "linux_ru_maxrss_input_unit": "KiB",
+      "linux_to_bytes_multiplier": 1024,
+      "cuda_peak_protocol_when_applicable": "reset_peak_memory_stats_before_record_then_synchronize_before_and_after_record_then_max_memory_allocated",
+      "cuda_status_for_this_cpu_contract": "N/A",
+      "paired_erm_reference": "identical_cell_data_seed_model_seed",
+      "all_methods_require_complete_runtime_and_memory_fields": true
+    },
+    "primary_claim_scope": {
+      "estimand": "equal_weight_two_cell_macro",
+      "cell_weights": {
+        "rho4_lag2": 0.5,
+        "rho5_lag3": 0.5
+      },
+      "fixed_cell_estimates_and_intervals_required": true,
+      "fixed_cell_intervals_are_descriptive": true,
+      "fixed_cell_intervals_cannot_establish_comparator_win": true
+    },
+    "test_families": {
+      "weak_equivalence": {
+        "estimand": "cdc_minus_comparator_weak_rescue",
+        "procedure": "TOST",
+        "margin": 0.05,
+        "family_size": 4,
+        "multiplicity": "Holm",
+        "alpha": 0.05,
+        "tests": [
+          {"comparator": "bloop", "boundary": "lower", "null": "difference<=-0.05", "alternative": "difference>-0.05"},
+          {"comparator": "bloop", "boundary": "upper", "null": "difference>=0.05", "alternative": "difference<0.05"},
+          {"comparator": "pcgrad", "boundary": "lower", "null": "difference<=-0.05", "alternative": "difference>-0.05"},
+          {"comparator": "pcgrad", "boundary": "upper", "null": "difference>=0.05", "alternative": "difference<0.05"}
+        ],
+        "raw_ci_requirement": "entire_raw_percentile_linear_95_percent_ci_inside_closed_interval_-0.05_to_0.05"
+      },
+      "trajectory_superiority": {
+        "estimand": "comparator_absolute_strong_response_auc_deviation_minus_cdc_absolute_strong_response_auc_deviation",
+        "family_size": 2,
+        "multiplicity": "Holm",
+        "alpha": 0.05,
+        "tests": [
+          {"comparator": "bloop", "null": "advantage<=0", "alternative": "advantage>0"},
+          {"comparator": "pcgrad", "null": "advantage<=0", "alternative": "advantage>0"}
+        ],
+        "raw_ci_requirement": "raw_percentile_linear_95_percent_ci_lower_bound_strictly_greater_than_0"
+      },
+      "final_superiority": {
+        "estimand": "comparator_absolute_final_strong_response_deviation_minus_cdc_absolute_final_strong_response_deviation",
+        "family_size": 2,
+        "multiplicity": "Holm",
+        "alpha": 0.05,
+        "tests": [
+          {"comparator": "bloop", "null": "advantage<=0", "alternative": "advantage>0"},
+          {"comparator": "pcgrad", "null": "advantage<=0", "alternative": "advantage>0"}
+        ],
+        "raw_ci_requirement": "raw_percentile_linear_95_percent_ci_lower_bound_strictly_greater_than_0"
+      }
+    },
+    "tradeoff_rule": {
+      "weak_rescue_difference_orientation": "cdc_minus_comparator_higher_is_better",
+      "weak_rescue_equivalence_margin": 0.05,
+      "strong_advantage_orientation": "comparator_absolute_deviation_minus_cdc_absolute_deviation",
+      "strong_superiority_requires_ci95_lower_strictly_positive": true,
+      "joint_cdc_beats_comparator_requires": [
+        "weak_rescue_equivalence_raw_ci_inside_margin",
+        "both_comparator_weak_TOST_boundary_tests_pass_Holm",
+        "strong_trajectory_deviation_raw_ci_lower_strictly_positive",
+        "comparator_trajectory_test_passes_Holm",
+        "strong_final_deviation_raw_ci_lower_strictly_positive",
+        "comparator_final_test_passes_Holm",
+        "complete_feasibility_cap_target_diagnostics",
+        "complete_runtime_and_memory_cost_reporting"
+      ],
+      "all_raw_ci_and_holm_conditions_required": true,
+      "both_strong_endpoints_required": true,
+      "pareto_frontier_reported_even_if_joint_rule_fails": true,
+      "no_dominance_claim_from_instantaneous_theorem_alone": true
+    },
+    "pareto_frontiers": {
+      "scope": "equal_weight_two_cell_macro",
+      "methods": ["erm", "counterfactual_drift", "bloop", "pcgrad"],
+      "weak_axis": "maximize_negative_absolute_weak_auc_gap",
+      "trajectory_frontier": {
+        "strong_axis": "minimize_absolute_strong_response_auc_difference_from_paired_erm",
+        "dimensions": 2
+      },
+      "final_frontier": {
+        "strong_axis": "minimize_absolute_final_strong_response_difference_from_paired_erm",
+        "dimensions": 2
+      },
+      "separate_frontiers_required": true,
+      "report_regardless_of_joint_claim": true,
+      "empirical_frontier_is_not_a_superiority_test": true
+    },
+    "comparators": ["bloop", "pcgrad"],
+    "method_record_count": 256
+  },
+  "inference": {
+    "paired_within_task_data_model_cell": true,
+    "seed_reuse_method": "two_way_pigeonhole_bootstrap",
+    "bootstrap_replicates": 5000,
+    "bootstrap_generator": "numpy.random.default_rng",
+    "bootstrap_seed": 7301,
+    "draw_algorithm": "two_sequential_numpy_Generator.integers_calls_data_axis_then_model_axis",
+    "draw_call_order": ["data_indices", "model_indices"],
+    "data_index_draw": {
+      "call": "rng.integers(low=0,high=4,size=(5000,4),dtype=numpy.int64,endpoint=False)",
+      "shape": [5000, 4],
+      "value_range": [0, 3],
+      "sha256_c_contiguous_little_endian_int64_bytes": "643a1476acefa5b6be29979ebc992b7d8331581ebd154996c3cd755695f55152"
+    },
+    "model_index_draw": {
+      "call": "rng.integers(low=0,high=8,size=(5000,8),dtype=numpy.int64,endpoint=False)",
+      "shape": [5000, 8],
+      "value_range": [0, 7],
+      "sha256_c_contiguous_little_endian_int64_bytes": "18840767f3b7f2e66b38c09d07874e84c102c96fc8ff653882e2ab4228495e35"
+    },
+    "draw_hash_serialization": "numpy_int64_cast_to_explicit_little_endian_then_C_order_raw_bytes",
+    "draw_reuse": "reuse_the_same_data_and_model_index_draws_across_all_cells_architectures_methods_and_endpoints",
+    "draws_generated_once": true,
+    "data_index_draw_count_per_replicate": 4,
+    "model_index_draw_count_per_replicate": 8,
+    "cell_reporting": "separate fixed-cell estimates plus equal-weight macro-average",
+    "cell_seed_rows_not_independent": true,
+    "confidence_interval": {
+      "method": "raw_bootstrap_percentile",
+      "lower_quantile": 0.025,
+      "upper_quantile": 0.975,
+      "quantile_method": "linear",
+      "confidence_level": 0.95
+    },
+    "one_sided_p_values": {
+      "method": "centered_bootstrap_null_tail",
+      "center_each_bootstrap_distribution_at_observed_estimate": true,
+      "evaluate_tail_at_preregistered_null_boundary": true,
+      "plus_one_correction": true,
+      "denominator": 5001,
+      "formula": "(1+count(centered_null_replicates_at_least_as_extreme_as_observed_boundary_distance))/(5000+1)"
+    },
+    "equivalence": "entire reuse-aware ci inside preregistered margin",
+    "joint_rule": "intersection_union",
+    "multiplicity": "Holm correction within each frozen primary family; no architecture ranking",
+    "holm": {
+      "alpha": 0.05,
+      "step_down": true,
+      "ties": "stable_preregistered_test_order",
+      "families_kept_separate": true
+    }
+  },
+  "preflight": {
+    "schema_version": "expanded-studies-preflight-v1",
+    "hash_algorithm": "sha256",
+    "execution_contract_binding": {
+      "source_path": "configs/expanded_studies_execution.yaml",
+      "preflight_copy_path": "execution-contract.json",
+      "copy_semantics": "byte_for_byte_identical_raw_file_bytes",
+      "digest_semantics": "sha256_of_raw_file_bytes",
+      "seal_binding_name": "execution_contract_sha256"
+    },
+    "source_files": [
+      "run_experiment.py",
+      "scripts/run_expanded_studies.py",
+      "scripts/check_expanded_studies_execution.py"
+    ],
+    "source_globs": ["src/**/*.py"],
+    "source_scope": "run_experiment.py, both expanded-study scripts, and every Python file under src",
+    "record_manifest_schema_version": "expanded-studies-record-manifest-v1",
+    "record_manifest_requires_ordered_study_a_and_study_b_ids": true,
+    "bootstrap_draw_manifest_schema_version": "expanded-studies-bootstrap-draw-manifest-v1",
+    "bootstrap_draw_manifest_requires_exact_array_hashes": true,
+    "initialization_manifest": {
+      "schema_version": "expanded-studies-initialization-manifest-v1",
+      "file_name": "initialization_manifest.json",
+      "manifest_digest_semantics": "sha256_of_exact_raw_file_bytes",
+      "seal_binding_name": "initialization_manifest_sha256",
+      "final_run_copy_semantics": "byte_for_byte_identical_to_authorized_preflight_initialization_manifest",
+      "top_level_keys": [
+        "schema_version",
+        "study_a_initializations",
+        "study_b_base_initializations",
+        "study_b_method_references"
+      ],
+      "exact_top_level_keys_required": true,
+      "study_a_entries_key": "study_a_initializations",
+      "study_a_entry_keys": [
+        "initialization_id",
+        "model_kind",
+        "cell_id",
+        "data_seed",
+        "model_seed",
+        "paired_task_sha256",
+        "shared_initial_state_sha256",
+        "paired_state_bitwise_equal",
+        "parameter_gradients_absent"
+      ],
+      "study_a_entry_id_format": "esa-{model_kind}-{cell_id}-d{data_seed}-m{model_seed}",
+      "study_a_entry_order": ["model_kind", "cell_id", "data_seed", "model_seed"],
+      "study_b_base_entries_key": "study_b_base_initializations",
+      "study_b_base_entry_keys": [
+        "base_initialization_id",
+        "model_kind",
+        "cell_id",
+        "data_seed",
+        "model_seed",
+        "paired_task_sha256",
+        "shared_initial_state_sha256",
+        "parameter_gradients_absent"
+      ],
+      "study_b_base_entry_id_format": "esb-base-{cell_id}-d{data_seed}-m{model_seed}",
+      "study_b_base_entry_order": ["model_kind", "cell_id", "data_seed", "model_seed"],
+      "study_b_method_references_key": "study_b_method_references",
+      "study_b_method_reference_keys": [
+        "method_record_id",
+        "model_kind",
+        "cell_id",
+        "method_id",
+        "data_seed",
+        "model_seed",
+        "base_initialization_id",
+        "paired_task_sha256",
+        "shared_initial_state_sha256",
+        "state_bitwise_equal_to_base",
+        "parameter_gradients_absent"
+      ],
+      "study_b_method_reference_id_format": "esb-{method_id}-{cell_id}-d{data_seed}-m{model_seed}",
+      "study_b_method_reference_order": [
+        "model_kind",
+        "cell_id",
+        "method_id",
+        "data_seed",
+        "model_seed"
+      ],
+      "expected_study_a_initialization_count": 192,
+      "expected_study_b_base_initialization_count": 64,
+      "expected_total_unique_base_initialization_count": 256,
+      "expected_study_b_method_reference_count": 256,
+      "expected_study_b_method_references_per_base": 4,
+      "expected_total_serialized_entry_count": 512,
+      "base_initialization_ids_unique_and_study_disjoint": true,
+      "entry_arrays_must_equal_complete_ordered_factorials": true,
+      "missing_duplicate_or_extra_entries_invalidate_manifest": true,
+      "study_b_methods_share_one_base_state": true,
+      "study_b_reference_rule": {
+        "method_ids_in_order": ["erm", "counterfactual_drift", "bloop", "pcgrad"],
+        "exactly_one_reference_per_method_record": true,
+        "exactly_four_method_references_per_base": true,
+        "reference_coordinates_must_equal_base_coordinates": true,
+        "reference_task_digest_must_equal_base_task_digest": true,
+        "reference_state_digest_must_equal_base_state_digest": true,
+        "all_four_methods_must_reference_one_base_initialization_id": true
+      },
+      "digest_fields": ["paired_task_sha256", "shared_initial_state_sha256"],
+      "sha256_value_format": "exactly_64_lowercase_hexadecimal_characters",
+      "task_tensor_names": ["both.x", "weak_only.x", "y", "signed_labels", "z_s", "z_w"],
+      "task_tensor_order": "exact_task_tensor_names_list_order",
+      "state_tensor_scope": "all_state_dict_tensor_values_including_parameters_and_persistent_buffers",
+      "state_tensor_order": "lexicographic_state_dict_name",
+      "tensor_digest_entry_keys": ["name", "dtype", "shape", "data_hex"],
+      "tensor_digest_entry_semantics": {
+        "name": "exact_tensor_name_utf8_string",
+        "dtype": "numpy_dtype_str_after_explicit_little_endian_normalization",
+        "shape": "json_array_of_nonnegative_base10_integer_dimensions",
+        "data_hex": "lowercase_hex_of_little_endian_c_contiguous_raw_tensor_bytes"
+      },
+      "tensor_digest_serialization": "sorted_key_compact_utf8_json_array_allow_nan_false_with_single_trailing_lf",
+      "tensor_digest_semantics": "sha256_of_canonical_json_bytes_of_ordered_tensor_entries",
+      "paired_task_digest_semantics": "one_entry_per_task_tensor_in_exact_task_tensor_names_list_order",
+      "shared_initial_state_digest_semantics": "one_entry_per_state_dict_tensor_in_lexicographic_name_order",
+      "state_equality_semantics": "identical_ordered_names_dtypes_shapes_and_little_endian_c_order_raw_bytes",
+      "paired_state_bitwise_equality_required": true,
+      "study_b_method_state_bitwise_equality_to_base_required": true,
+      "parameter_gradients_must_be_absent": true,
+      "parameter_gradients_absent_semantics": "every_named_parameter_grad_is_none_before_and_after_digest_and_reference_creation"
+    },
+    "expected_study_a_record_count": 192,
+    "expected_study_b_method_record_count": 256,
+    "required_files": [
+      "execution-contract.json",
+      "historical-contract.json",
+      "environment-lock.txt",
+      "source_manifest.json",
+      "record_manifest.json",
+      "bootstrap_draw_manifest.json",
+      "initialization_manifest.json",
+      "preflight.manifest.json",
+      "preflight.manifest.sha256"
+    ],
+    "model_construction_for_initialization_hashing_permitted": true,
+    "model_construction_scope": "permitted_only_to_hash_shared_initial_state_for_initialization_manifest",
+    "model_parameter_or_buffer_mutation_during_initialization_hashing_forbidden": true,
+    "scientific_data_forward_pass_forbidden": true,
+    "optimizer_construction_forbidden": true,
+    "training_forbidden": true,
+    "model_outcome_inspection_forbidden": true,
+    "scientific_output_creation_forbidden": true
+  },
+  "authorization": {
+    "seal_schema_version": "expanded-studies-authorization-seal-v1",
+    "external_seal_required": true,
+    "code_must_not_create_seal": true,
+    "expected_git_clean": true,
+    "expected_git_commit_length": 40,
+    "execution_contract_sha256_semantics": "sha256_of_exact_raw_bytes_of_preflight_execution-contract.json_which_must_be_byte_for_byte_identical_to_configs/expanded_studies_execution.yaml",
+    "untouched_seed_attestation_text": "I attest that no scientific data seed or model seed in this contract has been used to inspect expanded-study optimizer outcomes before this authorization.",
+    "explicit_authorization_text": "I explicitly authorize generation of the 192 nonlinear records and 256 method records bound by this seal.",
+    "required_bindings": [
+      "execution_contract_sha256",
+      "preflight_manifest_sha256",
+      "historical_contract_sha256",
+      "source_manifest_sha256",
+      "source_aggregate_sha256",
+      "environment_lock_sha256",
+      "record_manifest_sha256",
+      "bootstrap_draw_manifest_sha256",
+      "initialization_manifest_sha256",
+      "study_a_expected_record_ids",
+      "study_b_expected_record_ids"
+    ],
+    "fail_before_model_and_optimizer_construction": true,
+    "fail_before_model_and_optimizer_construction_scope": "all_post_preflight_model_construction_and_all_optimizer_construction_with_preflight_initialization_hashing_as_the_only_model_construction_exception",
+    "fail_before_scientific_output_directory_creation": true,
+    "seal_authorizes_only_exact_bound_records": true,
+    "seal_does_not_mutate_contract_execution_authorized": true
+  },
+  "artifacts": {
+    "record_write": "atomic_input_bound_trajectory_csv_summary_json_resources_json_then_complete_marker",
+    "resume": "verify_complete_marker_hashes_and_exact_record_coordinates_or_fail_on_drift",
+    "study_a_required_record_files": [
+      "trajectory.csv",
+      "summary.json",
+      "resources.json",
+      "complete.json"
+    ],
+    "study_b_required_method_record_files": [
+      "trajectory.csv",
+      "summary.json",
+      "resources.json",
+      "complete.json"
+    ],
+    "required_final_files": [
+      "contract.resolved.json",
+      "historical-contract.json",
+      "environment-lock.txt",
+      "preflight.manifest.json",
+      "preflight.manifest.sha256",
+      "authorization.seal.json",
+      "source_manifest.json",
+      "record_manifest.json",
+      "bootstrap_draw_manifest.json",
+      "initialization_manifest.json",
+      "environment.json",
+      "provenance.json",
+      "study_a_first_hit_profile.csv",
+      "study_a_record_summary.json",
+      "study_a_inference.json",
+      "study_a_claims.json",
+      "study_b_record_summary.csv",
+      "study_b_record_summary.json",
+      "study_b_diagnostics.csv",
+      "study_b_cost.csv",
+      "study_b_inference.json",
+      "study_b_claims.json",
+      "study_b_pareto_trajectory.json",
+      "study_b_pareto_final.json",
+      "resource_usage.json",
+      "artifact_manifest.json",
+      "artifact_manifest.sha256"
+    ],
+    "artifact_manifest_scope": "all_regular_run_files_except_manifest_and_its_sidecar",
+    "analyzer_recomputes_record_metrics_inference_claims_and_pareto_frontiers": true,
+    "missing_nonfinite_duplicate_or_extra_artifacts_fail_closed": true
+  },
+  "engineering_smoke": {
+    "scope_label": "engineering_smoke_non_scientific_toy_data",
+    "data_seed": 900201,
+    "model_seed": 900202,
+    "task": "deterministically_generated_toy_sequence_data",
+    "sequence_length": 4,
+    "n_samples": 8,
+    "model_kinds": ["tanh"],
+    "width": 4,
+    "methods": ["erm", "counterfactual_drift"],
+    "beta_values": [0.5],
+    "steps": 2,
+    "log_every": 1,
+    "scientific_id_generation_forbidden": true,
+    "scientific_seed_overlap_forbidden": true,
+    "scientific_acceptance_forbidden": true,
+    "evidence_eligibility": false
+  },
+  "prohibited_tuning": [
+    "No beta, cell, architecture, method, comparator, seed, endpoint, margin, or claim family may be selected after outcomes.",
+    "No hyperparameter, shadow target, feasibility rule, cap rule, or comparator implementation may be favorably tuned on scientific outcomes.",
+    "No failed, missing, or unfavorable scientific record may be replaced, dropped, or relabeled.",
+    "Engineering smoke settings and outcomes may not alter scientific settings or decisions."
+  ],
+  "prohibited_promotions": [
+    "Terminal thresholding may not replace prospective first-hitting times.",
+    "Bloop-style and PCGrad-style arms may not be called faithful, canonical, or reference Bloop or PCGrad.",
+    "Overlapping ordinary confidence intervals may not be called equivalent.",
+    "Fixed-cell descriptive intervals may not establish the equal-cell macro comparator claim.",
+    "Instantaneous CDC preservation may not be promoted to trajectory or final strong-response dominance.",
+    "An empirical Pareto-frontier position is not a multiplicity-adjusted superiority claim.",
+    "A beta-robust architecture claim requires both its raw lower confidence bound and Holm-adjusted one-sided test; the overall claim requires tanh and GRU.",
+    "A CDC-beats-comparator claim requires every frozen raw confidence-interval condition, every relevant Holm-adjusted test, both strong endpoints, and complete diagnostics and cost reporting.",
+    "Engineering smoke outcomes are not scientific records or evidence.",
+    "No scientific outcome may be generated without a valid external authorization seal bound to the exact preflight and record IDs."
+  ]
+}

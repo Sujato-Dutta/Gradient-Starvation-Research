@@ -1,23 +1,30 @@
-# Causal Gradient Starvation in Recurrent Networks
+# Weak Learning Failure Alone Is Not Gradient Starvation
 
-This repository studies whether a dominant temporal feature causally slows the learning of a weaker predictive feature in recurrent models. The key comparison is paired: every both-feature run is matched to a weak-only run with the same weak signal, lag, noise, initialization, architecture, optimizer, and seed.
+A weak feature can remain poorly learned for several different reasons; that observation alone is not a causal-gradient-starvation diagnosis. This repository combines exact finite-width response dynamics with a matched BOTH/WEAK intervention: every both-feature run is paired with a same-initialization weak-only run that differs only by ablation of the strong input channel. Together they separate cross-entropy weighting and response-specific parameter geometry, rate suppression, outcome suppression, weak-only gate failure under the specified target and horizon, and causal starvation. A failed weak-only gate is indeterminate and establishes neither starvation nor its absence.
 
 The codebase implements five experiment blocks:
 
 - **E1 - causal phase diagram:** sweeps feature-strength ratio and temporal separation, measures weak-feature hitting-time delay, and includes a negative-control data regime. Classification is gated on weak-only learnability, so a point where the counterfactual never learns is reported as indeterminate rather than starved.
 - **E2 - width convergence against an empirical reference:** checks the exact finite-width projected-flow identity, compares network trajectories with a held-out numerical closure reference, and measures error versus width. The reference is a mean over trained finite networks, not a solved theory.
 - **E2-R - solver checks:** exercises the two mean-field special cases that are exact without the undelivered closure derivation, and records the remaining checks as blocked. Its acceptance record reports `passed: false` by construction.
-- **E-NL - theorem-aligned crossover and frozen-kernel falsification:** uses common symmetric unit-probe responses for tanh/GRU, computes the universal direct-autograd response drift at every logged point, reports the projected `Gg` residual separately, and evaluates the exact finite-step tail-area certificate distinguishing rate suppression from outcome suppression; causal starvation additionally requires weak-only first-hit learnability. A separate `enl-preflight`/`enl-evaluate` path freezes the full signed-logit empirical NTK and response cross-kernel before training, then tests its crossing-event predictions against held-out nonlinear trajectories.
+- **E-NL - theorem-aligned crossover and frozen-kernel falsification:** uses common symmetric unit-probe responses for tanh/GRU, computes the universal direct-autograd response drift at every logged point, reports the projected `Gg` residual separately, and evaluates the exact finite-step tail-area certificate distinguishing rate suppression from outcome suppression; causal starvation additionally requires weak-only first-hit learnability. A separate `enl-preflight`/`enl-evaluate` path freezes the full signed-logit empirical NTK and response cross-kernel before training, then evaluates that surrogate as an empirical crossing-event heuristic on held-out nonlinear trajectories, not as certified tanh/GRU kernel stability or exact nonlinear dynamics.
 - **E3 - mitigation and transfer:** compares ERM, Spectral Decoupling, an interaction penalty, and a five-way ablation of constrained weak-rescue methods including Counterfactual Drift Correction plus Bloop-style and PCGrad-style baselines. The Waterbirds adapter contains a CDC-style minibatch head-coordinate surrogate outside the full-batch matched-shadow theorem, but it **has never been run**; see `research_scope/waterbirds_setup.md`.
 
 ### Read this before quoting any number
 
 `research_scope/claim_ledger.md` tags every paper-bound statement as proved, target,
 empirical, blocked or retracted, and names the artifact behind it. Several figures in
-older notes are superseded. The established headline is now a finite-width causal
-theorem package; the more ambitious joint mean-field extension remains a blocked
-conjecture. The ledger exists so that checking which is which is faster than
-rediscovering it. Five things worth knowing before reading anything else:
+older notes are superseded. The reviewed findings-first conclusion is that weak
+learning failure alone is not causal gradient starvation. Exact finite-width
+response dynamics expose cross-entropy weighting and response-specific parameter
+geometry; the matched BOTH/WEAK intervention then separates rate suppression,
+outcome suppression, weak-only nonlearnability, and causal starvation. The
+initialization thresholds and jets are local or assumption-scoped, and the global
+positive-lag parameter-level predictor remains unresolved. The finite-width theorem
+package supports this diagnosis; the joint mean-field extension remains blocked,
+and no broad CDC superiority is claimed. The ledger exists so that checking which
+is which is faster than rediscovering it. Five things worth knowing before reading
+anything else:
 
 - The repository **proves** the exact finite-width CE cross-kernel flow, the
   general cumulative drift balance and its single-crossing tail-area corollary, a

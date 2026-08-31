@@ -55,8 +55,8 @@
   \label{#3}
 \end{figure}}
 
-\title{From Rate Suppression to Causal Gradient Starvation:\\
-A Finite-Width Theory of Recurrent Learning}
+\title{Weak Learning Failure Alone Is Not Gradient Starvation:\\
+Exact Finite-Width Dynamics for a Paired Causal Test}
 \ifdefined\ICLRSubmission
   \author{}
 \else
@@ -68,124 +68,197 @@ A Finite-Width Theory of Recurrent Learning}
 \maketitle
 
 \begin{abstract}
-A strong predictive cue can accelerate optimization while preventing a weaker but
-independently predictive cue from being learned.  We study this gradient-starvation
-question in recurrent binary classifiers through a paired intervention: a both-
-feature trajectory is compared with a same-initialization trajectory in which only
-the strong input channel is ablated.  The contribution is a finite-width package,
-not a claimed general dynamical mean-field theory (DMFT).  We derive exact signed-
-logit and response dynamics through the full sample empirical NTK and response--
-logit cross-kernel.  Freezing these objects defines a nonlinear logistic tangent
-surrogate; continuous Gr\"onwall and experiment-matched discrete secant-kernel
-bounds compare it with nonlinear training only under supplied kernel-movement
-control.  For arbitrary sign changes, cumulative negative relative drift exceeds
-cumulative positive drift exactly when strict outcome suppression occurs.  Under a
-single transfer-to-rate-suppression crossing this becomes the tail-area criterion, but
-causal starvation additionally requires an independent, preregistered weak-only
-first-hit learnability gate.  A noiseless rank-one log drift ratio gives sufficient
-conditions for one rate crossing.  In the dense-linear model, the realized
-initialization also gives an exact pre-trajectory rate-gap threshold and, from the
-shared zero response gap, an existential strict local outcome sign outside a caller
-indifference band; no quantitative local horizon is claimed.  Uniform product-ball
+A weak feature can remain poorly learned for several different reasons: its
+weak-only trajectory may not reach a specified target within the observation
+horizon, a strong cue may change cross-entropy weighting, response-specific
+parameter geometry may suppress its update, or earlier optimization help may not
+yet have been repaid by later suppression.  Weak learning failure alone is not
+gradient starvation.  We therefore compare a both-feature trajectory with a
+same-initialization weak-only trajectory in which only the strong input channel is
+ablated.  This paired intervention distinguishes relative transfer, rate
+suppression, outcome suppression, weak-only nonlearnability under the specified
+target and horizon, and causal starvation.  A failed weak-only first-hit gate
+licenses neither a starvation certificate nor evidence that starvation is absent;
+the causal status is indeterminate under that gate.
+
+For full-batch logistic gradient flow, the exact finite-width weak-response
+dynamics are $\dot M_w=c_w^\top q(r)/n$, where $q_i(r)=\sigma(-r_i)$ is the
+cross-entropy weighting of signed logit $r_i$ and $c_w=J\nabla M_w$ is the
+response-specific response--logit geometry.  The companion signed-logit flow is
+$\dot r=\Theta q(r)/n$.  These chain-rule identities require no dynamical
+mean-field theory (DMFT) or response-coordinate closure.  Freezing
+$(\Theta,c_w)$ defines a nonlinear logistic tangent surrogate; continuous
+Gr\"onwall and experiment-matched discrete secant-kernel bounds compare it with
+nonlinear training only under supplied kernel-movement control.  Pathwise, for
+arbitrary sign changes, $\Delta=P-N$: outcome suppression occurs exactly when
+accumulated negative relative drift overtakes accumulated positive relative drift.
+Causal starvation additionally requires independently demonstrated weak-only
+learnability.  A noiseless rank-one log drift ratio gives sufficient conditions for
+one rate crossing.  In the dense-linear model, the realized initialization gives
+an exact pre-trajectory $d(0)$ threshold and an existential strict local outcome
+sign outside a caller indifference band; where proved, local jet information such
+as $d'(0)$ supplies further assumption-scoped local signs.  Uniform product-ball
 bounds, when independently proved, imply crossing, outcome, nondegenerate
 learnability, or finite-horizon safety, but no such nonvacuous general positive-lag
-constants are currently constructed.  We also prove stability of quantitatively
-isolated transverse first hits under uniform-error, radius, and mesh hypotheses,
-an exact six-scalar zero-lag wide limit for any finite realized recurrent matrix
-whose noiseless symmetric reference is suppressed from initialization while its
-weak-only trajectory remains learnable, and---when feasible---the fixed-chart,
-uncapped, target-attaining minimum-norm property and local one-step bound of
-Counterfactual Drift Correction (CDC).
+constants are currently constructed.  Thus stronger global parameter-level
+prediction from $\rho$, lag, and recurrent geometry remains unresolved.  We also
+prove stability of quantitatively isolated transverse first hits under uniform-
+error, radius, and mesh hypotheses and an exact six-scalar zero-lag wide limit for
+any finite realized recurrent matrix whose noiseless symmetric reference is
+suppressed from initialization while its weak-only trajectory remains learnable.
+As local mechanism-level control, in the fixed implemented chart, feasible
+uncapped target-attaining Counterfactual Drift Correction (CDC) is the unique
+minimum-Euclidean-norm correction satisfying zero instantaneous strong-drift
+change and the weak-drift lower bound; its finite-step guarantee is local and
+one-step.
 
-Controlled dense-linear experiments show positive weak-learning AUC gaps in all 32
-$\rho$--seed cells per lag at lags 0, 2, and 4 (four strengths by eight seed IDs).
-In the final eight-seed-per-architecture nonlinear study, tanh has 3/8 causal
-certificates; GRU has 5/8 response crossings but 0/8 causal certificates because
-the weak-only model never reaches $\beta=0.5$.  A post-hoc terminal sensitivity
-audit, derived without retraining, places tanh $B_W(H)$ in $[4.413,4.676]$ and GRU
-in $[0.0828,0.187]$; it is not a replacement for the first-hit gate or an
-architecture ranking.  A sealed five-endpoint frozen-kernel pilot fails its
-preregistered rule.  Only after that failure, a fresh restricted $4\times8$
-data/model-seed factorial classifies response-crossing events in 64/64 records and
-drift-crossing events in 60/64, with two-way-bootstrap 95\% lower endpoints 1.0 and
-0.8125.  These are one-cell event-classification results, not phase, causal,
-learnability, calibrated-time, magnitude, prevalence, or kernel-stability
-validation.  All executed empirical evidence is synthetic and seed-limited.  A
-semi-real generated-cue intervention and expanded nonlinear/CDC tradeoff study are
-frozen but unauthorized and outcome-free; neither contributes an empirical claim.
-A general positive-lag optimization-time DMFT remains open.
+In controlled dense-linear E1, all 32 $\rho$--seed cells per lag at lags 0, 2,
+and 4 (four strengths by eight seed IDs) have positive paired weak-AUC deficits and
+learnable weak-only controls; at each fixed lag, the mean deficit increases over
+the measured $\rho$ grid.  All 32 lag-8 cells fail the weak-only gate and are
+causally indeterminate under $\beta=0.25,H=5$.  At the fixed
+$(\rho,\mathrm{lag})=(4,2)$ nonlinear cell, tanh has complete transfer-to-starvation
+certificates in 3/8 observed seeds; GRU has drift and response crossings in 5/8 but
+0/8 causal certificates because every weak-only path fails $\beta=0.5$.  A
+post-hoc terminal sensitivity audit, derived without retraining, places tanh
+$B_W(H)$ in $[4.413,4.676]$ and GRU in $[0.0828,0.187]$; it is not a replacement
+for the first-hit gate or an architecture ranking.  A sealed five-endpoint frozen-
+kernel E19 pilot fails its preregistered rule.  Only after that failure, E20's fresh
+restricted $4\times8$ data/model-seed factorial classifies response-crossing events
+in 64/64 records and drift-crossing events in 60/64, with two-way-bootstrap 95\%
+lower endpoints 1.0 and 0.8125.  These are one-cell event-classification results,
+not phase, causal, learnability, calibrated-time, magnitude, prevalence, or kernel-
+stability validation.  E20 remains the submission-primary empirical study with
+only its frozen drift/response-crossing endpoints primary; later clean-source
+extensions do not reprioritize it.  E26 has 64 semi-real generated-cue records:
+MNIST 3-vs-8 and FashionMNIST 0-vs-6 each have 0/32 weak-only-learnable and 0/32
+causal records, with mean weak-AUC gaps
+$-1.2362842136667493\times10^{-3}$ (95\% CI
+$[-3.4405428466004646,1.0159591371180453]\times10^{-3}$) and
+$-1.0921728159018996\times10^{-4}$ (95\% CI
+$[-4.129384520886106,3.182670049955049]\times10^{-3}$), respectively; this is
+negative/indeterminate.  The failed causal gate blocks a false-positive starvation
+interpretation but licenses no absence claim.  In E27's 192 records, tanh's
+all-$\beta$ estimate is $0.2916666666666667$ (95\% CI
+$[0.16666666666666666,0.4166666666666667]$) and GRU's is $0$ (95\% CI
+$[0,0]$), with Holm-adjusted $p=1$ for each; the frozen endpoint is negative and
+supports no architecture ranking.  E28's 256 method-records pass the frozen joint
+weak-rescue/strong-preservation tradeoff only against the non-canonical Bloop-style
+shadow-target rescue; CDC does not beat the non-canonical PCGrad-style shadow-
+target rescue under the frozen joint criterion.  No SOTA, canonical parity, or
+broad CDC superiority follows.  The resulting chain is exact dynamics $\to$
+matched causal intervention $\to$ pathwise attribution $\to$ local mechanism-level
+control.  A general positive-lag optimization-time DMFT remains open.
 \end{abstract}
 
 \section{Introduction}
-Cross-entropy training can favor a subset of predictive features strongly enough
-that other useful features are learned slowly or not at all.  This phenomenon was
-formalized as gradient starvation by \citet{pezeshki2021gradient}.  Recurrent
-networks add a temporal geometry: cue strength, lag, shared recurrent parameters,
-and evolving feature response geometry all affect which signal receives gradient.
-The resulting mechanism is easy to overstate.  A weak-feature drift can decline
-without changing sign; its relative drift can change sign without the weak response
-falling behind; and a response gap is not evidence of causal starvation if the
-weak-only counterfactual is itself unable to learn.
+A weak predictive feature can remain small for several distinct reasons.  The
+weak-only task may not reach a chosen target within the observation horizon; a
+strong cue may reduce cross-entropy weight on already-correct samples; the
+response-specific parameter geometry may route little gradient toward the weak
+response; or a later period of rate suppression may be too short to erase earlier
+help.  Cross-entropy can indeed favor one predictive feature strongly enough to
+starve another \citep{pezeshki2021gradient}, but weak learning failure alone is not
+gradient starvation.  Recurrent networks make the diagnosis especially delicate
+because cue strength, lag, shared recurrent parameters, and evolving response
+geometry all affect the update.
 
-We address these distinctions with a paired intervention.  The both-feature and
-weak-only models share initialization, labels, samples, weak coordinates, and
-noise; only the strong input channel is set to zero in the weak-only condition.  We
-track common feature-response functionals in both trajectories.  This setup
-separates four statements:
+We make the diagnosis with a matched intervention.  The both-feature and weak-only
+models share initialization, labels, samples, weak coordinates, and noise; only the
+strong input channel is set to zero in the weak-only condition.  We track common
+feature-response functionals in both trajectories.  This setup separates five
+statements:
 \begin{enumerate}[leftmargin=*,nosep]
   \item \emph{relative transfer}: the strong cue initially increases the weak
   response rate, so $d(\tau)>0$;
   \item \emph{rate suppression}: the both-feature weak response later grows more
   slowly than its counterfactual, so $d(\tau)<0$;
   \item \emph{outcome suppression}: the both-feature weak response falls below
-  its matched counterfactual, so $\Delta(\tau)<0$; and
+  its matched counterfactual, so $\Delta(\tau)<0$;
+  \item \emph{weak-only nonlearnability under the specified gate}: the weak-only
+  path does not first hit the preregistered target by the horizon; and
   \item \emph{causal starvation}: outcome suppression occurs while the weak-only
-  counterfactual demonstrably learns under the preregistered first-hit gate.
+  counterfactual demonstrably learns under that first-hit gate.
 \end{enumerate}
-A transfer-to-starvation trajectory additionally has an initial positive excursion
-before outcome suppression.  The distinction is empirical as well as logical: the
-final GRU study has response crossings but fails the causal learnability gate in
-every seed.
+A failed weak-only gate therefore licenses neither a causal-starvation certificate
+nor evidence that starvation is absent; causal status is indeterminate under the
+specified target and horizon.  A transfer-to-starvation trajectory is a particular
+causally certified path with an initial positive excursion before outcome
+suppression, not a default description of weak learning failure.  This distinction
+is empirical as well as logical: at the fixed nonlinear cell, tanh has complete
+transfer-to-starvation certificates in 3/8 observed seeds, whereas GRU has drift
+and response crossings in 5/8 but fails the causal learnability gate in every seed.
+These counts do not rank architectures or estimate prevalence.
+
+The diagnostic has an exact finite-width dynamical basis.  For signed sample logits
+$r$, full-batch logistic gradient flow gives
+$\dot M_w=c_w^\top q(r)/n$, with $q_i(r)=\sigma(-r_i)$ the cross-entropy weighting
+and $c_w=J\nabla M_w$ the response-specific response--logit geometry.  No DMFT is
+needed for this chain-rule identity.  For the paired gap, the pathwise balance
+$\Delta=P-N$ allows arbitrary drift sign changes: outcome suppression occurs only
+when accumulated suppression overtakes accumulated help, and causal starvation
+still requires the independent weak-only gate.  Prediction is partial.  The
+realized-initialization value $d(0)$ and, where proved, local jet information such
+as $d'(0)$ give rigorous local or assumption-scoped sufficient signs.  Stronger
+global parameter-level prediction from $\rho$, lag, and RNN geometry remains
+unresolved because nonvacuous positive-lag product-ball and kernel-movement
+constants are unavailable.  CDC then uses the same matched weak-only information
+as a local mechanism-level control, not as a claimed general remedy.
 
 \paragraph{Contributions.}
 \begin{enumerate}[leftmargin=*]
-  \item We prove exact finite-width logistic response flow and full signed-logit
-  empirical-NTK/response dynamics.  A closed projected equation $\dot M=Gg$
-  requires exact parameter-independent logit realization; the initialization-
-  frozen nonlinear logistic surrogate is exact internally, while comparison with
-  a trained nonlinear model is conditional on supplied kernel-movement bounds.
-  \item We prove a cumulative drift-balance proposition for arbitrary sign
-  changes, with the exact single-crossing tail-area criterion as a corollary.  We
-  add a conditional noiseless rank-one rate-crossing criterion and an exact
-  realized-initialization dense-linear rate-gap threshold with its existential
-  strict local outcome-sign implication.  Independently proved product-ball bounds
-  then imply unique crossing, outcome suppression, nondegenerate weak-only
-  learnability, or finite-horizon safe transfer; no current component constructs
-  these bounds for general positive-lag RNNs.  We also prove stability of
-  quantitatively isolated transverse first hits under uniform-error, radius, and
-  mesh hypotheses, and an exact zero-lag recurrence-invisible six-scalar wide limit
-  for arbitrary finite realized recurrent gain, with immediate deterministic
-  suppression and weak-only learnability under the noiseless cue law.
-  \item We operationalize the rate--outcome--causal hierarchy through paired
-  first-hit, AUC, direct-drift, and finite-step certificates.  A post-hoc terminal
-  $\beta$ profile reports threshold sensitivity from existing outcomes without
-  replacing the preregistered first-hit gate.
-  \item We report the full empirical sequence rather than only positive endpoints:
-  corrected dense E1, seed-dependent nonlinear E-NL, a failed five-endpoint E19
-  pilot, and the fresh E20 success restricted to drift/response event labels.  The
-  archives separate auditable outcomes from historically unreconstructible source.
-  \item In the fixed implemented Euclidean/Frobenius chart, we prove CDC's exact
-  instantaneous strong-drift preservation, feasible uncapped target-attaining
-  minimum-norm property, and local $O(\eta^2)$ one-step bound.  The ablation shows
-  this local distinction without establishing broad practical superiority or best
-  final retention.
+  \item We operationalize a paired causal test that separates relative transfer,
+  rate suppression, outcome suppression, weak-only gate failure, and causal
+  starvation through direct drift, first-hit, AUC, and finite-step certificates.
+  A post-hoc terminal $\beta$ profile reports threshold sensitivity from existing
+  outcomes without replacing the preregistered first-hit gate.
+  \item We report the full findings sequence rather than only positive endpoints.
+  Controlled E1 has positive paired weak-AUC deficits and learnable weak-only
+  controls in all measured cells at lags 0, 2, and 4, while lag 8 fails the gate
+  and is causally indeterminate.  E-NL separates 3/8 tanh transfer-to-starvation
+  certificates from 5/8 ungated GRU drift/response crossings.  E19 remains a
+  failed five-endpoint pilot; E20 remains the submission-primary empirical claim
+  and supports only fresh restricted drift/response event labels.  E26 is
+  negative/indeterminate after all records fail their specified gate; E27 is
+  negative without an architecture ranking; and E28 yields a comparator-restricted
+  mixed CDC tradeoff.  Archives distinguish historically unreconstructible source
+  from clean, reconstructible source and from self-contained replay packages.
+  \item We derive exact finite-width logistic response flow and full signed-logit
+  empirical-NTK/response dynamics.  The weak response obeys
+  $\dot M_w=c_w^\top q(r)/n$, explicitly separating cross-entropy weighting from
+  response-specific geometry.  A closed projected equation $\dot M=Gg$ requires
+  exact parameter-independent logit realization; the initialization-frozen
+  nonlinear logistic surrogate is exact internally, while comparison with a
+  trained nonlinear model is conditional on supplied kernel-movement bounds.
+  \item We prove the pathwise cumulative drift balance for arbitrary sign changes,
+  with the exact single-crossing tail-area criterion as a corollary.  We add a
+  conditional noiseless rank-one rate-crossing criterion and an exact realized-
+  initialization dense-linear $d(0)$ threshold with its existential strict local
+  outcome-sign implication.  Independently proved product-ball bounds then imply
+  unique crossing, outcome suppression, nondegenerate weak-only learnability, or
+  finite-horizon safe transfer; no current component constructs these bounds for
+  general positive-lag RNNs.  We also prove stability of quantitatively isolated
+  transverse first hits under uniform-error, radius, and mesh hypotheses, and an
+  exact zero-lag recurrence-invisible six-scalar wide limit for arbitrary finite
+  realized recurrent gain, with immediate deterministic suppression and weak-only
+  learnability under the noiseless cue law.
+  \item As local mechanism-level control, in the fixed implemented
+  Euclidean/Frobenius chart, feasible uncapped target-attaining CDC is the unique
+  minimum-Euclidean-norm correction satisfying zero instantaneous strong-drift
+  change and the weak-drift lower bound.  Its finite-step guarantee is local and
+  one-step.  The ablations establish neither SOTA performance, canonical parity,
+  broad practical superiority, nor best final retention.
 \end{enumerate}
 
 \paragraph{Claim boundary.}
 We do not claim that recurrent networks universally undergo transfer-to-starvation,
 that a general joint CE-RNN optimization-time DMFT has been solved, or that an
-analytic $\rho_c$ or universal $(\rho,\mathrm{lag})$ phase boundary is known.  The
-exact initialization threshold is realization-dependent at positive lag, and its
+analytic $\rho_c$ or universal $(\rho,\mathrm{lag})$ phase boundary is known.  A
+failed weak-only gate is causal indeterminacy under the specified target and
+horizon: it establishes neither causal starvation nor its absence, and it does not
+show that a dataset is intrinsically unlearnable.  The exact initialization
+threshold and proved local jets provide local or assumption-scoped signs, not a
+general predictor; at positive lag, the threshold is realization-dependent and its
 trajectory implications require uniform product-ball constants that are not
 currently constructed.  The frozen empirical-NTK surrogate is exact for its
 initialization-linearized tangent model, not for trained tanh/GRU networks: no
@@ -193,19 +266,28 @@ required instantaneous or secant-kernel stability bound is proved here.  E19 is 
 failed broad pilot.  E20 validates only binary drift/response-crossing
 classification at one width/task cell; it does not validate phase, causal
 starvation, weak-only learnability, calibrated trajectories, crossing times,
-magnitudes, or prevalence.  The eight-seed nonlinear proportions are descriptive,
-not population prevalence.  All executed experiments are controlled and synthetic.
-The frozen semi-real and expanded nonlinear/CDC protocols remain unauthorized and
-outcome-free, so they add no empirical claim.  The general DMFT solver remains
-deliberately unimplemented where proof obligations are unmet.
+magnitudes, or prevalence.  E20 remains submission-primary with only its frozen
+drift/response-crossing endpoints primary; E26--E28 do not outcome-dependently
+reprioritize it.  The eight-seed nonlinear proportions are descriptive, not
+population prevalence.  E26 uses real benchmark pixels with a generated removable
+cue and therefore supplies semi-real, not natural-spurious-correlation, evidence;
+its absent weak-only first hits make zero causal certificates indeterminate.  E27
+supports no beta-robust architecture claim or architecture ranking.  E28 supports
+a joint tradeoff only against one of two non-canonical comparators; CDC does not
+beat the non-canonical PCGrad-style shadow-target rescue under the frozen joint
+criterion.  No SOTA, broad CDC superiority, or canonical parity is claimed.  The
+general DMFT solver remains deliberately unimplemented where proof obligations are
+unmet.
 
 \section{Related work}
 \paragraph{Gradient starvation.}
 \citet{pezeshki2021gradient} identify feature starvation under cross-entropy and
-motivate Spectral Decoupling.  Our focus is different: recurrent temporal features,
-a paired strong-channel intervention, exact finite-width response dynamics, and the
-logical separation among rate suppression, outcome suppression, and causally gated
-starvation.
+motivate Spectral Decoupling.  Our focus is a recurrent paired causal diagnosis:
+the same-initialization weak-only intervention tests the learnability premise, exact
+finite-width dynamics separate cross-entropy weighting from response-specific
+geometry, and pathwise balance separates rate suppression from outcome suppression
+and causally gated starvation.  A failed weak-only gate is indeterminate rather
+than evidence for either starvation or its absence.
 
 \paragraph{Shortcut learning and spurious-correlation robustness.}
 Shortcut learning and simplicity bias explain why predictive but unintended cues
@@ -215,8 +297,9 @@ performance under spurious correlations
 \citep{sagawa2020groupdro,liu2021jtt,kirichenko2023dfr}.  These phenomena motivate
 our setting, but they do not supply the paired response-level causal criterion used
 here.  We are not proposing a competing robustness algorithm: our diagnostic
-requires a stronger matched-shadow information setting, and all current evidence is
-synthetic.
+requires a stronger matched-shadow information setting.  E26 adds a generated-cue
+intervention on real MNIST and FashionMNIST core pixels, but it is not an unmodified
+natural-spurious-correlation benchmark and supports no such claim.
 
 \paragraph{Learning dynamics in recurrent and wide networks.}
 Neural tangent kernels describe infinite-width gradient dynamics
@@ -233,8 +316,8 @@ mean-field account of structure and disorder in task-trained recurrent circuits 
 a long-time Langevin/Gibbs setting.  That equilibrium construction is distinct from
 the paired, noiseless optimization-time gradient flow studied here.  Accordingly,
 we claim neither the first learning theory for RNNs nor a completed general RNN
-DMFT; our novelty lies in the causal pairing and finite-width rate-to-outcome
-results.\footnote{The descriptions of the 2026 sources were paraphrased from the
+DMFT; our contribution is the matched causal separation supported by exact finite-
+width response and pathwise attribution results.\footnote{The descriptions of the 2026 sources were paraphrased from the
 linked public sources. Content was rephrased for compliance with licensing
 restrictions.}
 
@@ -245,25 +328,35 @@ an auxiliary projection using an exponential moving average
 gradient of a theory-defined strong-feature response and takes its target from a
 matched causal weak-only shadow.  This stronger information setting must be
 reported: CDC requires a constructible ablation, a second model, lockstep training,
-and full-batch gradients.
+and full-batch gradients.  In E28 the evaluated Bloop-style shadow-target rescue and
+PCGrad-style shadow-target rescue are non-canonical (\code{canonical:false}); the
+frozen joint weak-rescue/strong-preservation tradeoff holds only against the former,
+and CDC does not beat the latter under that criterion.  The study establishes
+neither SOTA, canonical parity, nor broad CDC superiority.
 
 \ifdefined\ICLRSubmission
-\section{Paired causal framework}
-For condition $C\in\{\Bcond,\Wcond\}$, the both-feature and weak-only models
-share initialization, labels, samples, weak coordinates, and noise; only the
-strong input channel is ablated under $\Wcond$.  Let $M_w^C(\tau)$ be the common
-weak-feature response, and define
+\section{Paired causal diagnosis}
+Weak learning failure alone is not gradient starvation.  For condition
+$C\in\{\Bcond,\Wcond\}$, the both-feature and weak-only models share
+initialization, labels, samples, weak coordinates, and noise; only the strong input
+channel is ablated under $\Wcond$.  The matched weak-only path tests whether the
+weak signal can meet the specified target without the strong cue; it is an
+identification premise rather than a second observation of the same failure.  Let
+$M_w^C(\tau)$ be the common weak-feature response, and define
 \begin{equation}
  \Delta(\tau)=M_w^{\Bcond}(\tau)-M_w^{\Wcond}(\tau),\qquad
  d(\tau)=\Delta'(\tau),\qquad \Delta(0)=0.
  \label{eq:iclr-gap}
 \end{equation}
-This pairing separates four claims that are often conflated: $d>0$ is
+This pairing separates claims that are often conflated: $d>0$ is
 \emph{relative transfer}; $d<0$ is \emph{rate suppression}; $\Delta<0$ is
-\emph{outcome suppression}; and \emph{causal starvation} additionally requires
-that the weak-only trajectory first hit a preregistered target $\beta$ by horizon
-$H$.  A response crossing without weak-only learnability is therefore descriptive,
-not a causal certificate.
+\emph{outcome suppression}; failure to first hit a preregistered target $\beta$ by
+horizon $H$ is \emph{weak-only nonlearnability under that gate}; and
+\emph{causal starvation} requires outcome suppression together with a successful,
+nondegenerate weak-only first hit.  A response crossing without weak-only
+learnability is descriptive, not a causal certificate.  Conversely, the failed
+gate is not evidence that starvation is absent; causal status is indeterminate
+under the specified target and horizon.
 
 For signed logits $r_i^C=y_if_C(x_i;\theta_C)$ and full-batch logistic gradient
 flow, the exact finite-width chain rule is
@@ -274,15 +367,17 @@ flow, the exact finite-width chain rule is
 \end{equation}
 We state this as a proposition rather than a theorem: the derivation is elementary;
 the contribution is its exact finite-width scope and the causal separation it
-enables.  With sample Jacobian $J$, empirical NTK $\Theta=JJ^\top$, and response
-cross-kernel $c_a=J\nabla M_a$, the corresponding exact dynamics are
-$\dot r=\Theta\sigma(-r)/n$ and
-$\dot M_a=c_a^\top\sigma(-r)/n$.  Freezing $(\Theta,c_a)$ at initialization
-defines a nonlinear logistic tangent surrogate.  Its comparison with nonlinear
-training is conditional on supplied kernel-movement bounds; event agreement is not
-a substitute for that premise.
+enables.  With sample Jacobian $J$, empirical NTK $\Theta=JJ^\top$, response
+cross-kernel $c_a=J\nabla M_a$, and cross-entropy weights
+$q_i(r)=\sigma(-r_i)$, the exact dynamics are
+$\dot r=\Theta q(r)/n$ and $\dot M_a=c_a^\top q(r)/n$.  Thus weak-response
+motion separates sample weighting $q(r)$ from response-specific geometry $c_w$;
+no DMFT or response-coordinate closure is needed for this identity.  Freezing
+$(\Theta,c_a)$ at initialization defines a nonlinear logistic tangent surrogate.
+Its comparison with nonlinear training is conditional on supplied kernel-movement
+bounds; event agreement is not a substitute for that premise.
 
-\section{From rate suppression to causal starvation}
+\section{Pathwise separation of help, suppression, and causal status}
 For any absolutely continuous $\Delta$, let
 $P(t)=\int_0^t[d(u)]_+\,du$ and $N(t)=\int_0^t[-d(u)]_+\,du$.  Our general
 bookkeeping proposition gives the exact identity
@@ -291,13 +386,15 @@ bookkeeping proposition gives the exact identity
  \Delta(t)<0\ \Longleftrightarrow\ N(t)>P(t).
  \label{eq:iclr-drift-balance}
 \end{equation}
-It allows arbitrary sign changes and immediate suppression.  Under one
-$+\!\to\!-$ drift crossing at $\tau_d$, it reduces to the tail-area criterion:
-negative post-crossing area must exceed the positive peak area.  Neither result
-establishes causal starvation without the independent learnability gate.  The
-appendix proves this statement, a conditional rank-one sufficient criterion for a
-unique rate crossing, and stability of quantitatively isolated transverse first
-hits under uniform-error, radius, and mesh hypotheses.
+It allows arbitrary sign changes and immediate suppression: outcome suppression
+occurs only when accumulated suppression $N$ overtakes accumulated help $P$.  Under
+one $+\!\to\!-$ drift crossing at $\tau_d$, the identity reduces to the tail-area
+criterion, in which negative post-crossing area must exceed the positive peak area.
+Neither rate suppression nor outcome suppression establishes causal starvation
+without the independent weak-only learnability gate; a failed gate leaves causal
+status indeterminate.  The appendix proves this statement, a conditional rank-one
+sufficient criterion for a unique rate crossing, and stability of quantitatively
+isolated transverse first hits under uniform-error, radius, and mesh hypotheses.
 
 The appendix also gives an initialization-conditioned pre-trajectory result.  In
 the noiseless positive rank-one dense-linear pair, set
@@ -310,76 +407,89 @@ $s_W=\sigma[-M_w(0)]$.  The exact initial rate gap is
  K>\frac{A}{\rho}\left(\frac{s_W}{s_B}-1\right).
  \label{eq:iclr-initial-gap}
 \end{equation}
-This uses the realized initialization, not a trained trajectory or a universal
-$(\rho,\mathrm{lag})$ boundary.  Shared initialization has $\Delta(0)=0$, so
-$d_0<0$ and $d_0>0$ respectively imply strict local outcome suppression and
-transfer for all sufficiently small positive times.  This derivative argument is
-existential and gives no quantitative horizon; the executable certificate reports
-values within its caller tolerance as boundary/undetermined.  If uniform
-product-ball bounds independently give $-\Lambda\le d'\le-\lambda<0$ up to
-$h_R=R/S_R$, then $d_0/\Lambda\le\tau_d\le d_0/\lambda$;
+This is partial, initialization-conditioned prediction: it uses the realized
+$d_0$, not a trained trajectory or a universal $(\rho,\mathrm{lag})$ boundary.
+Shared initialization has $\Delta(0)=0$, so $d_0<0$ and $d_0>0$ respectively
+imply strict local outcome suppression and transfer for all sufficiently small
+positive times.  This derivative argument is existential and gives no quantitative
+horizon; the executable certificate reports values within its caller tolerance as
+boundary/undetermined.  Under independently supplied uniform product-ball bounds
+$-\Lambda\le d'\le-\lambda<0$ up to $h_R=R/S_R$, one obtains
+$d_0/\Lambda\le\tau_d\le d_0/\lambda$, and
 $h_R>2d_0/\lambda$ implies outcome suppression.  A separate positive weak-only
 drift bound gives causal learnability only for a target strictly above the initial
 weak response; a target already met at initialization is degenerate and cannot
 gate causal starvation.  Alternatively, $|d'|\le J$ and $d_0-Jh_R>0$ exclude
-suppression on that finite horizon.  No current implementation constructs
-nonvacuous general positive-lag constants.
+suppression on that finite horizon.  These are local or assumption-scoped
+sufficient signs, not a general parameter-level predictor.  No current
+implementation constructs nonvacuous general positive-lag constants from $\rho$,
+lag, and recurrent geometry.
 
-Finally, the appendix proves a deterministic finite-horizon wide limit at zero lag,
-zero background input, and arbitrary finite realized recurrent gain: all pre-final
-states vanish, so $W$ is loss-invisible.  For the explicitly noiseless
+A proved local-jet example occurs in the deterministic finite-horizon wide limit
+at zero lag, zero background input, and arbitrary finite realized recurrent gain:
+all pre-final states vanish, so $W$ is loss-invisible.  For the explicitly noiseless
 ($\texttt{cue\_noise}=0$) positive rank-one law, its symmetric reference has
 $\bar d(0)=0$ and $\bar d'(0)=-\rho^2/2<0$, so suppression starts immediately
 rather than after transfer; the weak-only response reaches every finite positive
-target.  A general positive-lag optimization-time DMFT remains open.
+target.  This is a recurrence-invisible special case, not a predictor for general
+positive lag.  A general positive-lag optimization-time DMFT remains open.
 
-Counterfactual Drift Correction (CDC) uses the weak-only shadow as a local target.
-In the fixed implemented Euclidean/Frobenius parameter chart, let
-$a=\nabla m_s$, $p=\nabla m_w$, $v=-\nabla L$, and let $q$ be the projection of
-$p$ onto $a^\perp$.  For positive deficit
+As local mechanism-level control, Counterfactual Drift Correction (CDC) uses the
+weak-only shadow as a local target.  In the fixed implemented Euclidean/Frobenius
+parameter chart, let $a=\nabla m_s$, $p=\nabla m_w$, $v=-\nabla L$, and let $q$
+be the projection of $p$ onto $a^\perp$.  For positive deficit
 $\delta=[F_w^{\Wcond}-p\cdot v]_+$, uncapped CDC takes
-$v'=v+(\delta/\|q\|^2)q$ when feasible.  It preserves $a\cdot v$ exactly, is the
-unique feasible target-attaining minimum-norm correction, and changes the
-one-step strong response only by $O(\eta^2)$ under local smoothness.  These are
-fixed-chart, full-batch, local statements, not trajectory or practical-superiority
-claims.
+$v'=v+(\delta/\|q\|^2)q$ when feasible.  In that feasible uncapped
+and target-attaining case, it is the unique minimum-Euclidean-norm correction
+satisfying zero instantaneous strong-drift change and the weak-drift lower bound.
+Its finite-step strong-response guarantee is local and one-step, of order
+$O(\eta^2)$ under local smoothness.  These are fixed-chart, full-batch statements,
+not trajectory, SOTA, canonical-parity, or practical-superiority claims.
 
 \section{Experiments and audit protocol}
-All claim-bearing experiments are controlled and synthetic.  E1 uses a dense
-linear RNN with four strengths and seed IDs 4--11: each lag therefore has 32
-$\rho$--seed cells but only eight independent seed IDs.  E-NL evaluates one
-$(\rho,\mathrm{lag})=(4,2)$ cell with eight seeds each for tanh and GRU, paired
-lockstep training, direct-autograd response drift, horizon $H$, and preregistered
-first-hit target $\beta=0.5$.  E3 compares CDC with ERM and seven mitigation arms;
-the matched-shadow methods use stronger information and roughly twice the model
-work.
+The evidence combines controlled synthetic studies with one semi-real generated-cue
+intervention.  E1 uses a dense linear RNN with four strengths and seed IDs 4--11:
+each lag therefore has 32 $\rho$--seed cells but only eight independent seed IDs.
+E-NL evaluates one $(\rho,\mathrm{lag})=(4,2)$ cell with eight seeds each for tanh
+and GRU, paired lockstep training, direct-autograd response drift, horizon $H$, and
+preregistered first-hit target $\beta=0.5$.  Historical E3 compares CDC with ERM
+and seven mitigation arms; the matched-shadow methods use stronger information and
+roughly twice the model work.
 
-Two additional protocols are design artifacts, not results.  A 64-record semi-real
-MNIST and FashionMNIST protocol uses real core pixels plus an exactly removable
-generated cue.  A separate freeze specifies 192 nonlinear records over prospective
-$\beta\in\{0.25,0.5,1,2\}$ and 256 method-records for ERM, CDC, Bloop-style
-shadow-target rescue, and PCGrad-style shadow-target rescue.  Both validators report
-that execution is not authorized; no dataset was downloaded for the study, no
-optimizer was created for a scientific run, and no outcome or E-claim was produced.
-The two named comparators are non-canonical style variants pending parity audits.
+The externally sealed clean-source extensions were executed at commit
+\code{9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0}.  E26 crosses four data seeds with
+eight model seeds on each of MNIST 3-vs-8 and FashionMNIST 0-vs-6, retaining real
+core pixels and ablating only an exactly removable generated cue.  E27 contains 192
+nonlinear records over three fixed cells, tanh/GRU, and prospective
+$\beta\in\{0.25,0.5,1,2\}$.  E28 contains 256 method-records for ERM, CDC,
+Bloop-style shadow-target rescue, and PCGrad-style shadow-target rescue.  The two
+named comparators are non-canonical (\code{canonical:false}); no canonical parity
+claim is made.
 
 The frozen-tangent sequence is intentionally fail-closed.  E19 sealed predictions
 for five endpoints before training on 16 architecture--seed records.  After that
 broad rule failed, E20 froze only drift- and response-crossing labels as primary on
-a fresh $4\times8$ crossed data/model-seed factorial per architecture.  Its
-10,000-replicate two-way bootstrap resamples the two observed seed axes.  Surviving
-manifests, predictions, scores, hashes, and seals make the compact outcomes
-auditable, but E19/E20's exact historical dirty source snapshots were never
-archived; they are not replayable, and regeneration under current source is a new
+a fresh $4\times8$ crossed data/model-seed factorial per architecture.  E20 remains
+the submission-primary empirical study.  Its 10,000-replicate two-way bootstrap
+resamples the two observed seed axes.  Surviving manifests, predictions, scores,
+hashes, and seals make E19/E20 auditable, but their exact historical dirty source
+snapshots were never archived; they are not replayable, and regeneration is a new
 study.
 
 \section{Results}
-\paragraph{Controlled and nonlinear behavior.}
-At lags 0, 2, and 4, E1 has a positive weak AUC gap in all 32 $\rho$--seed cells
-per lag; mean gaps are 5.76, 8.93, and 6.11.  Lag-8 rows are not called starvation
-because the weak-only model is unlearnable.  In E-NL, tanh has complete causal
-certificates in 3/8 seeds.  GRU has drift and response crossings in 5/8 but 0/8
-causal certificates because no weak-only run first hits $\beta=0.5$.
+\paragraph{Paired deficits and causal diagnoses.}
+At lags 0, 2, and 4, E1 has a positive paired weak-AUC deficit in all 32
+$\rho$--seed cells per lag, and all corresponding weak-only controls pass the
+specified learnability gate; mean deficits are 5.76, 8.93, and 6.11.  At every
+fixed lag, the mean deficit increases over the measured $\rho$ grid.  All 32 lag-8
+cells fail the weak-only gate and are weak-only nonlearnable and causally
+indeterminate under $\beta=0.25,H=5$; they are neither causal-starvation
+certificates nor evidence of absence.  At E-NL's fixed
+$(\rho,\mathrm{lag})=(4,2)$ cell, tanh has complete transfer-to-starvation
+certificates in 3/8 observed seeds.  GRU has drift and response crossings in 5/8
+but 0/8 causal certificates because every weak-only path fails $\beta=0.5$.
+Thus rate/outcome suppression differs from causal starvation.  These observed
+counts support neither an architecture ranking nor a prevalence claim.
 
 \begin{table}[t]
 \centering
@@ -402,6 +512,44 @@ E20 & response event & 64/64, CI $[1,1]$ & 32/32 & 32/32 \\
 \end{tabular}
 \end{table}
 
+\paragraph{Gate-indeterminate breadth and comparator-restricted control.}
+E26 is negative/indeterminate: MNIST 3-vs-8 and FashionMNIST 0-vs-6 each have
+0/32 weak-only-learnable and 0/32 causal records.  The failed gate rejects a false-
+positive causal-starvation interpretation, but it also means that zero certificates
+cannot establish absence of starvation or intrinsic dataset unlearnability.  E27's
+all-$\beta$ architecture endpoint is false for both architectures and was not used
+for ranking.  Table~\ref{tab:iclr-breadth} reports the exact macro estimates.  For
+E28, weak rescue is $-\lvert\text{weak AUC gap}\rvert$ (higher is better), so
+``CDC$-$comparator'' positive favors CDC; trajectory and final deviation are
+absolute deviations from paired ERM (smaller is better), so
+``comparator$-$CDC'' positive favors CDC.  The frozen joint tradeoff is true only
+versus the non-canonical Bloop-style shadow-target rescue.  It is false versus the
+non-canonical PCGrad-style shadow-target rescue, so CDC does not beat that variant
+under the frozen joint criterion.  No SOTA, canonical parity, or broad CDC
+superiority follows.
+
+\begin{table}[t]
+\centering
+\caption{Clean-source E26--E28 completed outcomes.  Brackets are 95\% CIs; E27
+Holm-adjusted $p=1$ for each architecture.}
+\label{tab:iclr-breadth}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lll}
+\toprule
+Study & Endpoint / contrast & Estimate $[95\%\ \mathrm{CI}]$ \\
+\midrule
+E26 & MNIST weak AUC gap & $-0.0012362842136667493\ [-0.0034405428466004646,0.0010159591371180453]$ \\
+E26 & FashionMNIST weak AUC gap & $-0.00010921728159018996\ [-0.004129384520886106,0.003182670049955049]$ \\
+E27 & tanh / GRU all-$\beta$ & $0.2916666666666667\ [0.16666666666666666,0.4166666666666667]$ / $0\ [0,0]$ \\
+E28 & CDC$-$Bloop-style shadow-target rescue weak rescue & $0.002198259399210656\ [0.0009779187294930126,0.003277366267916477]$ \\
+E28 & Bloop-style shadow-target rescue$-$CDC trajectory / final deviation & $3.4651361294978416\ [3.3443827215131754,3.5849715262780952]$ / $0.6422362388111651\ [0.6288088704226539,0.6563168084365315]$ \\
+E28 & CDC$-$PCGrad-style shadow-target rescue weak rescue & $-0.00015351238407674823\ [-0.00047909348592838785,0.00013248012419808214]$ \\
+E28 & PCGrad-style shadow-target rescue$-$CDC trajectory / final deviation & $-0.48709889128076556\ [-0.6897378944428417,-0.27379327373499074]$ / $-0.2565436437726021\ [-0.3016841153614223,-0.2087651835754514]$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
 \paragraph{$\beta$ sensitivity without retraining.}
 A post-hoc audit computes each completed weak-only terminal response
 $B_{W,s}(H)$ and the fraction above candidate thresholds.  Tanh terminal
@@ -418,7 +566,7 @@ show all eight seeds, horizontal segments show medians, and the dashed line mark
 the preregistered $\beta=0.5$. The right panel sweeps candidate thresholds without
 rerunning training.}{fig:enl-learnability-profile}
 
-\paragraph{The negative result is quantitatively legible.}
+\paragraph{E19 falsification and E20 restricted event-label result.}
 E19 obtained phase/drift/response/causal/learnability correctness
 $12/16,14/16,14/16,14/16,12/16$, but failed because tanh learnability was
 $4/8<5/8$.  Its tanh response-gap, weak-response, and drift RMSE were
@@ -431,42 +579,63 @@ $0.490$.  Hence E20 is an uncalibrated one-cell event classifier, not
 phase, causal, learnability, time, magnitude, prevalence, or kernel-stability
 validation.
 
-\paragraph{CDC.}
-All five shadow-based mitigation arms reduce the dense weak AUC gap from 10.5155
-to approximately zero.  CDC alone preserves instantaneous strong drift to
-$4.77\times10^{-7}$, but it does not have the best final strong response; this is
-evidence for its local theorem, not broad practical superiority.
+\paragraph{Historical E3 local mechanism-control ablation.}
+In historical E3, all five shadow-based mitigation arms reduce the dense weak AUC
+gap from 10.5155 to approximately zero.  CDC alone preserves instantaneous strong
+drift to $4.77\times10^{-7}$, but it does not have the best final strong response.
+This supports the fixed-chart local mechanism-level guarantee in that historical
+synthetic setting, not SOTA performance or broad practical superiority; E28
+separately passes the frozen joint tradeoff only against the non-canonical Bloop-
+style shadow-target rescue and not against the non-canonical PCGrad-style shadow-
+target rescue.
 
 \section{Limitations and conclusion}
-The empirical ceiling is explicit: one controlled task family, eight nonlinear
-seeds per architecture, no executed real/semi-real experiment, and no estimate of
-event prevalence.  The generated-cue MNIST and FashionMNIST intervention is frozen but
-unexecuted because its environment, raw-data/index, selection, committed-source,
-and claim-authorization gates are unmet.  The expanded beta/nonlinear/CDC tradeoff
-protocol is likewise frozen but unexecuted, lacks canonical baseline parity and
-memory telemetry, and contributes no outcome.  The unrun Waterbirds adapter is a
-minibatch head-coordinate surrogate outside the full-batch matched-shadow theorem,
-and its intercept is not an identified bird-shape response; we make no Waterbirds
-claim.  E19/E20 are
-integrity-auditable but historically unreplayable, and the frozen surrogate lacks a
-proved tanh/GRU kernel-movement certificate.  Proposition~\ref{prop:cross-kernel}
-and the cumulative balance are deliberately elementary; their value is the exact
-finite-width scope and the separation of rate, outcome, and causal claims.  The
-paper's central conclusion is therefore narrow but testable: rate suppression
-becomes outcome suppression only after negative relative drift repays the positive
-advantage, and causal starvation additionally requires a learnable matched
-counterfactual.
+Weak learning failure alone is not gradient starvation.  The matched intervention
+first asks whether the weak-only path learns under the specified target and
+horizon; a failed gate makes causal status indeterminate rather than proving either
+starvation or its absence.  Conditional on that premise, rate suppression becomes
+outcome suppression only when accumulated negative relative drift overtakes
+accumulated positive drift.  The paper's strongest chain is therefore exact finite-
+width dynamics $\to$ matched causal intervention $\to$ pathwise attribution
+$\to$ local mechanism-level control.  Proposition~\ref{prop:cross-kernel} and the
+cumulative balance are deliberately elementary; their value is the exact finite-
+width scope and the separation of weak learning failure, rate, outcome, and causal
+claims.  Realized $d(0)$ and proved local jets give local or assumption-scoped
+signs, while general positive-lag prediction from $\rho$, lag, and recurrent
+geometry remains open.
+
+The empirical ceiling is explicit: controlled synthetic task families plus one
+semi-real generated-cue intervention, limited fixed cells and seed grids, and no
+estimate of universal event prevalence.  E19 remains failed, and E20 remains the
+submission-primary empirical study with only its restricted frozen drift/response-
+crossing classification endpoints primary.  E26 is not a natural shortcut
+benchmark, and 0/32 weak-only learnability per dataset makes its zero causal count
+indeterminate rather than evidence of no starvation or intrinsic dataset
+unlearnability.  E27's beta-robust endpoint is negative for both architectures and
+supports no ranking.  E28's comparators are non-canonical; only the Bloop-style
+shadow-target rescue satisfies the frozen joint tradeoff, while CDC does not beat
+the PCGrad-style shadow-target rescue under that criterion, so neither SOTA,
+canonical parity, nor broad CDC superiority follows.  The unrun Waterbirds adapter
+remains a minibatch head-coordinate surrogate outside the full-batch matched-
+shadow theorem, and its intercept is not an identified bird-shape response; we make
+no Waterbirds or natural-spurious-correlation claim.  E19/E20 are integrity-
+auditable but historically unreplayable, whereas E26--E28 used clean
+reconstructible source at commit
+\code{9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0}.  Their compact archives omit 192
+and 1,792 \path{records/**} files, respectively, and therefore are auditable but
+not standalone replay packages.
 \label{page:main-end}
 
 \subsection*{Reproducibility statement}
-The appendix states all theorem assumptions and proofs, gives complete synthetic
-data-generation, optimization, seed, and censoring protocols, maps claims to
-artifacts and executable guards, and reports failed as well as successful frozen
-studies.  Resolved configurations, environment records, tracked figures, compact
-sealed outcomes, a dependency-free artifact verifier, and the full test suite are
-provided as supplementary material.  The supplement explicitly distinguishes
-reconstructible current-source derivations, auditable historical outcomes, and
-historical runs that cannot be replayed from unavailable source bytes.
+The appendix states all theorem assumptions and proofs; gives synthetic and
+semi-real data, cue-generation, optimization, seed, censoring, and inference
+protocols; maps claims to artifacts and executable guards; and reports failed,
+negative, indeterminate, mixed, and successful studies.  Resolved configurations,
+environment locks, selection and initialization manifests, authorization seals,
+tracked figures, compact outcomes, a dependency-free artifact verifier, and the
+full test suite are provided.  The supplement distinguishes reconstructible
+clean-source E26--E28, auditable but historically unreplayable E19/E20, and compact
+archives that omit record bytes and thus are not standalone replay packages.
 
 \subsection*{AI use statement}
 Generative AI tools were used to assist with code drafting and refactoring,
@@ -482,7 +651,7 @@ the final content, including all AI-assisted text, claims, code, and artifacts.
 \appendix
 \fi
 
-\section{Causal setup and definitions}
+\section{Paired causal diagnosis and definitions}
 \subsection{Paired logistic gradient flow}
 For condition $C\in\{\Bcond,\Wcond\}$, let $\theta_C(\tau)\in\R^P$ follow
 full-batch gradient flow on signed logits $r_i^C(\theta)=y_i f_C(x_i;\theta)$:
@@ -492,8 +661,11 @@ full-batch gradient flow on signed logits $r_i^C(\theta)=y_i f_C(x_i;\theta)$:
   \label{eq:gradient-flow}
 \end{equation}
 The two conditions share initialization and all data except that the strong channel
-is zeroed under $\Wcond$.  Let $M_s^C,M_w^C$ be common differentiable strong and
-weak response functionals.  Shared initialization gives
+is zeroed under $\Wcond$.  This matched weak-only path tests whether the weak signal
+can meet the specified target without the strong cue; it is the causal
+identification premise that distinguishes suppression from an unsupported weak-
+learning label.  Let $M_s^C,M_w^C$ be common differentiable strong and weak
+response functionals.  Shared initialization gives
 \begin{equation}
   \Delta(0)=0,\qquad
   \Delta(\tau)=M_w^{\Bcond}(\tau)-M_w^{\Wcond}(\tau).
@@ -513,7 +685,7 @@ non-divergent projected metric.  We additionally study tanh RNNs and GRUs.  For
 nonlinear models the two responses are common odd symmetric unit-probe contrasts,
 $[f(x_a^+)-f(x_a^-)]/2$, not assumed additive coordinates of every data logit.
 
-\subsection{Causal labels and metrics}
+\subsection{Weak learning failure, causal labels, and metrics}
 Let
 \begin{equation}
  d(\tau)=\Delta'(\tau)=F_w^{\Bcond}(\tau)-F_w^{\Wcond}(\tau).
@@ -523,10 +695,14 @@ We call $d>0$ relative transfer and $d<0$ relative rate suppression.  We call
 $\Delta<0$ \emph{outcome suppression}, whether it follows a positive excursion or
 is present from the start of optimization.  A response crossing is the special case
 in which $\Delta$ returns to zero after a positive excursion and then becomes
-negative.  We reserve \emph{causal starvation} for outcome suppression when the
-weak-only trajectory also reaches a preregistered target $\beta$ within horizon
-$H$.  If the weak-only model does not reach $\beta$, an outcome crossing is
-descriptive but not a causal-starvation certificate.
+negative.  Weak-only nonlearnability under the specified gate means that the
+weak-only trajectory does not first hit the preregistered target $\beta$ within
+horizon $H$.  We reserve \emph{causal starvation} for outcome suppression when that
+weak-only trajectory does reach the target at a nondegenerate positive time.  Thus
+weak learning failure alone is not gradient starvation.  If the weak-only model
+does not reach $\beta$, an outcome crossing is descriptive but not a causal-
+starvation certificate; the failed gate also is not evidence that starvation is
+absent.  Causal status is indeterminate under the specified target and horizon.
 
 We report first-hitting-time delay when both hits are observed.  Formally,
 $\tau_W(\beta;H)=\inf\{\tau\in[0,H]:M_w^{\Wcond}(\tau)\ge\beta\}$, with
@@ -546,7 +722,15 @@ the preregistered first-hit event on a nonmonotone trajectory, so the profile is
 sensitivity diagnostic rather than a replacement gate.  GSI-5 remains a margin-
 weight diagnostic, not a definition of starvation.
 
-\section{Exact finite-width response dynamics}
+\section{Exact finite-width dynamics for the paired diagnosis}
+The mechanism-level decomposition is exact before any width limit: with
+$q_i(r)=\sigm(-r_i)$ and response-specific geometry $c_w=J\nabla M_w$, the weak
+response obeys $\dot M_w=c_w^\top q(r)/n$.  The vector $q(r)$ records
+cross-entropy weighting across signed sample logits, while $c_w$ records how the
+chosen weak response couples to those logits through parameter space.  No DMFT or
+two-response closure is needed for this identity; such closures arise only in
+stronger predictive approximations.
+
 \begin{proposition}[Universal response--logit cross-kernel flow]
 \label{prop:cross-kernel}
 At every finite width and every optimization time at which $M_a^C$ is
@@ -725,12 +909,20 @@ not a distribution-only positive-lag phase boundary: under the stated iid scalin
 $K$ and $M_s(0)$ contribute a seed-dependent leading sign.
 \end{theorem}
 
+Theorem~\ref{thm:initial-gap} is a partial predictor: realized $d(0)$ gives an
+exact local sign in its stated dense-linear scope, not a global trajectory or a
+parameter-only law in $\rho$ and lag.  Where a higher local jet is proved---as in
+the zero-lag result with $d(0)=0$ and $d'(0)<0$---it likewise supplies a rigorous
+local sign only in that stated scope.  Stronger positive-lag trajectory prediction
+requires independently established product-ball or kernel-movement control, for
+which this paper supplies no nonvacuous general constants.
+
 The proofs are in Appendix~\ref{app:finite-proofs}.  Equation~\eqref{eq:Gg} is
 exact for the zero-background-noise linear synthetic model.  For tanh/GRU probes,
-we use Proposition~\ref{prop:cross-kernel}'s direct autograd drift as primary and report
-$R$; projected and matched-state decompositions are diagnostics only.
+we use Proposition~\ref{prop:cross-kernel}'s direct autograd drift as primary and
+report $R$; projected and matched-state decompositions are diagnostics only.
 
-\section{From rate suppression to outcome suppression and causal starvation}
+\section{Separating rate suppression, outcome suppression, and causal starvation}
 \begin{proposition}[Cumulative drift balance]
 \label{prop:drift-balance}
 Let $\Delta$ be absolutely continuous on $[0,H]$, with $\Delta(0)=0$ and
@@ -763,9 +955,12 @@ nontrivial post-crossing interval, the later equality is unique whenever it exis
 \end{corollary}
 
 A $+\to-$ drift crossing therefore locates a local maximum of $\Delta$; it does
-not force $\Delta$ to return to zero.  The post-crossing negative area must repay
-the positive area already accumulated.  Causal \emph{starvation} further requires
-the independent weak-only learnability gate.
+not force $\Delta$ to return to zero.  Pathwise attribution requires the negative
+area to repay all positive area already accumulated: outcome suppression begins
+only when accumulated suppression overtakes accumulated help.  Causal
+\emph{starvation} further requires the independent weak-only learnability gate.  A
+failed gate blocks that certificate but does not establish that starvation is
+absent.
 
 \begin{corollary}[Response-crossing bounds]
 \label{cor:crossing-bounds}
@@ -1051,7 +1246,9 @@ common tube event are established; ordinary floating-point integration is not
 silently promoted to such a proof.
 \end{corollary}
 
-\section{Counterfactual Drift Correction}
+\section{Local mechanism-level control with Counterfactual Drift Correction}
+CDC uses the paired weak-only drift target to intervene on the diagnosed local
+mechanism; it is not presented as a general optimizer or robustness method.
 Flatten the implemented trainable tensors into one fixed parameter chart with the
 standard product Euclidean/Frobenius inner product.  Every gradient, dot product,
 norm, projection, Lipschitz ball, and straight segment in this section uses that
@@ -1080,7 +1277,10 @@ The corrected velocity is $v'=v+\alpha q$.  A positive deficit with $q=0$ is
 infeasible.  The theorems assume full-batch gradients, plain SGD, zero weight
 decay, and no clipping.  A nonbinding coefficient cap leaves the uncapped result
 unchanged; a binding cap preserves orthogonality but generally loses target
-attainment, so no target-attaining optimality claim then applies.
+attainment, so no target-attaining optimality claim then applies.  In the fixed
+implemented chart, feasible uncapped target-attaining CDC is the unique minimum-
+Euclidean-norm correction satisfying zero instantaneous strong-drift change and
+the weak-drift lower bound.  Its finite-step guarantee is local and one-step.
 
 \begin{theorem}[CDC local guarantees]
 \label{thm:cdc}
@@ -1149,23 +1349,28 @@ $\beta=0.25$, and horizon is $H=5$; the negative control is one eight-seed cell 
 $(\rho,\mathrm{lag})=(4,4)$.  E2 uses gain $0.5$ and a held-out empirical closure
 reference.  E-NL uses one cell ($\rho=4$, lag 2), eight seeds per architecture,
 gain $0.8$, cue noise $0.1$, zero background noise, $\beta=0.5$, and direct
-autograd drift.  The frozen-kernel studies use the same task cell.  E3 compares
-ERM, Spectral Decoupling, an interaction penalty, CDC, loss-gradient projection,
+autograd drift.  The frozen-kernel studies use the same task cell.  Historical E3
+compares ERM, Spectral Decoupling, an interaction penalty, CDC, loss-gradient projection,
 unconstrained rescue, Bloop-style shadow-target rescue, and PCGrad-style
 shadow-target rescue; the five rescue arms share the same weak-only shadow target.
 These style labels do not assert canonical source parity.
 
-Two prospective protocols are frozen but unexecuted.  The semi-real design plans
-64 paired records on MNIST 3-vs-8 and FashionMNIST 0-vs-6 with real core pixels and
-an exactly removable generated cue channel.  The expanded design plans 192
-nonlinear records over $\beta\in\{0.25,0.5,1,2\}$ and 256 CDC-tradeoff
-method-records.  Their validators both report
-that execution is not authorized; unresolved data, environment, commit, seed,
-telemetry, parity, and claim gates prevented scientific runs.  No optimizer-backed
-outcome or empirical claim was generated.  The excluded evaluator-engineering set
-and its non-scientific use are documented in Appendix~\ref{app:experiment-audit}.
+\paragraph{Prospectively frozen gate and mechanism-control extensions.}
+E26 executes 64 crossed records (four data seeds by eight model seeds per dataset)
+on MNIST 3-vs-8 and FashionMNIST 0-vs-6.  It retains real core pixels and ablates
+only an exactly removable generated cue channel, so its publication scope is
+semi-real rather than natural-spurious-correlation evidence.  E27 executes 192
+nonlinear records over tanh/GRU, three fixed $(\rho,\mathrm{lag})$ cells, and the
+prospectively frozen first-hit grid $\beta\in\{0.25,0.5,1,2\}$.  E28 executes 256
+method-records over ERM, CDC, Bloop-style shadow-target rescue, and PCGrad-style
+shadow-target rescue.  The latter two are response-gradient shadow-target variants
+with \code{canonical:false}; no canonical algorithm/reference parity is claimed.
+All three studies were externally sealed and executed from clean commit
+\code{9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0}.  The excluded evaluator-
+engineering set and its non-scientific use are documented in
+Appendix~\ref{app:experiment-audit}.
 
-\paragraph{Manifest-sealed prediction protocol.}
+\paragraph{Manifest-sealed surrogate audit protocol.}
 \code{enl-preflight} constructs no optimizer and observes no trained state.  It
 writes the initialization kernels and predictions, verifies state/gradient
 nonmutation, and hashes every declared file and per-record kernel together with the
@@ -1190,7 +1395,16 @@ $[1,1]$ and does not quantify unseen failure modes.  Hitting times beyond the
 horizon are right-censored and never converted into finite delays.  Conditional
 crossing-time means are reported only with their crossing-record denominator.  The
 exploratory E-NL $5\times5$ grid uses seeds 0--3 and is explicitly post-hoc; it is
-not used to select a confirmatory condition.
+not used to select a confirmatory condition.  E26 reports dataset-specific two-way
+crossed-seed intervals; absent weak-only first hits censor causal interpretation in
+both directions.
+E27 uses a shared 5,000-replicate two-way pigeonhole bootstrap, equal-weights the
+three fixed cells, and Holm-adjusts the two architecture tests; architecture
+ranking was forbidden.  E28 uses the same bootstrap draws and equal-weights its two
+fixed cells.  Its weak-rescue contrast is CDC minus comparator for
+$-\lvert\text{weak AUC gap}\rvert$ (positive favors CDC); its trajectory and final
+contrasts are comparator minus CDC absolute deviation from paired ERM (positive
+favors CDC).
 
 \paragraph{Reproducibility.}
 Ordinary runs write resolved configuration, environment, trajectory, summary, and
@@ -1202,23 +1416,32 @@ fingerprints survive, but the exact dirty Python source bytes were not archived 
 are unavailable and unreconstructible.  Current source intentionally fails their
 source guard; a new preflight/evaluation is a new study, not a replay.  Historical
 E1, E2, E2-R, exploratory E-NL, and E3 artifacts likewise disclose dirty states
-predating source fingerprinting.
+predating source fingerprinting.  By contrast, E26--E28 were executed from clean
+commit \code{9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0}; their source manifests
+make the source reconstructible.  The compact E26 archive omits 192
+\path{records/**} files and the shared E27/E28 archive omits 1,792, so hashes and
+central outputs remain auditable but neither compact archive is a standalone replay
+package.
 
 \section{Results}
 \label{sec:results}
-\subsection{Controlled dense-linear phase grid}
+\subsection{Paired weak-AUC deficits and weak-only learnability}
 At lags 0, 2, and 4, all 32 $\rho$--seed cells per lag (four strengths by
-eight seed IDs) have positive weak AUC gaps.  Averaged across $\rho$, the lag-wise gaps are 5.76, 8.93, and 6.11,
-respectively; the effect peaks at lag 2 rather than decreasing monotonically with
-lag.  At every fixed lag, the gap increases monotonically over the measured $\rho$
-grid.  The negative-control cell is transfer in 8/8 seeds, with mean gap $-4.038$
-and 95\% CI $[-4.498,-3.578]$.  Every lag-8 cell is weak-only unlearnable, so these
-32 rows are not labeled starvation.  Final accuracy is 1.0 throughout, and no row
-meets the target at initialization.
+eight seed IDs) have positive paired weak-AUC deficits and learnable weak-only
+controls under the specified gate.  Averaged across $\rho$, the lag-wise deficits
+are 5.76, 8.93, and 6.11, respectively; the measured effect peaks at lag 2 rather
+than decreasing monotonically with lag.  At every fixed lag, the mean deficit
+increases monotonically over the measured $\rho$ grid.  The negative-control cell
+is transfer in 8/8 seeds, with mean gap $-4.038$ and 95\% CI
+$[-4.498,-3.578]$.  Every lag-8 cell fails the weak-only gate: all 32 are weak-only
+nonlearnable and causally indeterminate under $\beta=0.25,H=5$.  They supply
+neither causal-starvation certificates nor evidence that starvation is absent.
+Final accuracy is 1.0 throughout, and no row meets the target at initialization.
 
 \artifactfigure{../paper/artifacts/historical/e1_dense_rerun-20260823-085142/e1_causal_regions.pdf}
-{Controlled dense-linear causal regions.  The learnability gate prevents lag-8
-points from being mislabeled as starvation.}{fig:e1}
+{Controlled dense-linear paired weak-AUC deficits and weak-only gate status.  The
+specified learnability gate makes all lag-8 points causally indeterminate rather
+than positive or negative starvation evidence.}{fig:e1}
 
 \subsection{Empirical width trends and exact zero-lag checks}
 E2 compares finite networks with a disjoint-seed empirical
@@ -1241,15 +1464,18 @@ record remains false by construction because all general-DMFT checks are blocked
 {Finite-width agreement with a held-out empirical finite-network closure reference.
 This is not DMFT validation.}{fig:e2}
 
-\subsection{Nonlinear crossover is seed-dependent}
-Table~\ref{tab:enl} is the authoritative nonlinear result.  Tanh has a complete
-exact-drift/response/tail-area causal certificate in 3/8 seeds; the other five have
-negative exact relative drift from initialization and therefore do not exhibit
-transfer-to-starvation.  GRU has exact drift and response crossings in 5/8 seeds,
-but the weak-only trajectory fails to reach $\beta=0.5$ in all eight seeds; its
-causal count is therefore zero.  The nonzero direct-versus-projected residuals
-empirically confirm that $Gg$ cannot be silently treated as the exact nonlinear
-probe derivative.
+\subsection{Tanh certificates versus ungated GRU crossings}
+Table~\ref{tab:enl} is the authoritative nonlinear result at the fixed
+$(\rho,\mathrm{lag})=(4,2)$ cell.  Tanh has a complete exact-drift/response/tail-
+area transfer-to-starvation certificate in 3/8 observed seeds; the other five have
+negative exact relative drift from initialization and therefore do not exhibit the
+transfer-to-starvation path type.  GRU has exact drift and response crossings in
+5/8 seeds, but every weak-only trajectory fails to reach $\beta=0.5$; its causal
+count is therefore 0/8 and causal status is indeterminate under that gate.  This
+separates rate/outcome suppression from causal starvation; it does not rank
+architectures or estimate prevalence.  The nonzero direct-versus-projected
+residuals empirically confirm that $Gg$ cannot be silently treated as the exact
+nonlinear probe derivative.
 
 \begin{table}[t]
 \centering
@@ -1276,10 +1502,12 @@ retrained: Figure~\ref{fig:enl-learnability-profile} is derived from the tracked
 per-seed E-NL summary.  Tanh terminal min/mean/max are
 $4.41313266754/4.49664855003/4.67605876923$, with 8/8 above $\beta=0.5$; GRU
 min/mean/max are $0.0828229486942/0.129690139554/0.187142759562$, with 0/8 above
-$0.5$.  Thus the GRU failure is not marginal at that operating point.  Terminal
-reach is not generally interchangeable with the preregistered first-hit event on a
-nonmonotone trajectory, and this post-hoc diagnostic supports neither a new
-confirmatory endpoint nor an architecture ranking.
+$0.5$.  Thus the GRU weak-only gate failure is not marginal at that operating
+point, but it still provides neither a causal-starvation certificate nor evidence
+that starvation is absent.  Terminal reach is not generally interchangeable with
+the preregistered first-hit event on a nonmonotone trajectory, and this post-hoc
+diagnostic supports neither a new confirmatory endpoint nor an architecture
+ranking.
 
 \ifdefined\ICLRSubmission\else
 \artifactfigure{../paper/artifacts/enl_tanh_crossover-20260824-141207/enl_learnability_profile.pdf}
@@ -1298,10 +1526,10 @@ $\tau^*=1.6112$ used a different response convention and are not valid under the
 final definition.
 
 \artifactfigure{../paper/artifacts/enl_tanh_crossover-20260824-141207/enl_crossover.pdf}
-{Theorem-aligned nonlinear trajectories.  Direct-autograd drift is primary;
+{Paired nonlinear diagnostic trajectories.  Direct-autograd drift is primary;
 projected and matched-state quantities are separately styled diagnostics.}{fig:enl}
 
-\subsection{E19 fails broadly; E20 succeeds only on restricted event labels}
+\subsection{E19 falsification; E20 restricted event-label follow-up}
 The initialization-frozen tangent surrogate was first tested under a sealed five-output
 pilot using one unseen data seed and eight unseen model seeds per architecture.  It
 obtained 12/16 phase, 14/16 drift-crossing, 14/16 response-crossing, 14/16 causal-
@@ -1346,17 +1574,19 @@ causal starvation, learnability, trajectory magnitude, calibrated time, or
 prevalence.  Appendix~\ref{app:frozen-negative} reports the complete failure,
 restricted-success, timing-bias, and magnitude-error numbers.
 
-\subsection{CDC has the local guarantee, not the best final tradeoff}
-All five shadow-based methods reduce the causal weak AUC gap from ERM's 10.5155 to
-approximately zero and attain their shared weak-drift target at every logged step.
+\subsection{Historical E3 CDC ablation: local mechanism control, not best final tradeoff}
+In historical E3, all five shadow-based methods reduce the causal weak AUC gap from
+ERM's 10.5155 to approximately zero and attain their shared weak-drift target at
+every logged step.
 Their weak outcomes are numerically similar to roughly four decimal places, but
 not statistically equivalent: 9/10 direct paired comparisons are significant at
 0.05, while the differences are practically tiny relative to the roughly 10.5
 change from ERM.  CDC alone preserves instantaneous strong drift to rounding scale,
 $4.77\times10^{-7}$, versus $1.48\times10^{-1}$ to $3.75\times10^{-1}$ for the
 alternative shadow constraints.  This local property does not yield the best final
-strong response: unconstrained rescue and the PCGrad-style arm end at 1.295,
-compared with CDC's 1.042 and ERM's 1.364.
+strong response: unconstrained rescue and the PCGrad-style shadow-target rescue end at
+1.295, compared with CDC's 1.042 and ERM's 1.364.  These are historical E3
+outcomes, distinct from E28's later frozen tradeoff.
 
 \begin{table}[t]
 \centering
@@ -1376,8 +1606,8 @@ Interaction & no & 10.5145 & --- & 1.365 \\
 CDC & yes & $-0.0005$ & $4.77\times10^{-7}$ & 1.042 \\
 Loss-gradient projection & yes & $-0.0002$ & $3.75\times10^{-1}$ & 0.371 \\
 Unconstrained rescue & yes & $-0.0007$ & $1.48\times10^{-1}$ & 1.295 \\
-Bloop-style & yes & $0.0002$ & $3.75\times10^{-1}$ & 0.370 \\
-PCGrad-style & yes & $-0.0007$ & $1.48\times10^{-1}$ & 1.295 \\
+Bloop-style shadow-target rescue & yes & $0.0002$ & $3.75\times10^{-1}$ & 0.370 \\
+PCGrad-style shadow-target rescue & yes & $-0.0007$ & $1.48\times10^{-1}$ & 1.295 \\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -1387,99 +1617,221 @@ PCGrad-style & yes & $-0.0007$ & $1.48\times10^{-1}$ & 1.295 \\
 instantaneous first-order preservation, not superior weak rescue or final strong
 retention.}{fig:e3}
 
-\section{Discussion and limitations}
-\paragraph{Theory and causal scope.}
-The finite-width cross-kernel identity, exact sample-logit/response dynamics,
-initialization-frozen tangent surrogate, conditional continuous/secant-SGD
-comparison, dense-linear geometry, cumulative drift balance and single-crossing
-corollary, conditional rank-one criterion, transverse hitting-time bound,
-recurrence-invisible zero-lag wide limit, and fixed-chart local CDC results are
-mathematical statements with proofs.  Their scopes differ.  The cumulative balance
-characterizes outcome suppression but does not supply weak-only learnability; the
-rank-one criterion addresses rate crossing; the frozen comparison assumes unproved
-kernel-movement control; the wide limit requires recurrence-invisible zero lag and
-zero background input but permits any finite realized recurrent matrix; and CDC
-has a local one-step guarantee, not a trajectory theorem.
+\subsection{Causal gate indeterminacy and comparator-restricted mechanism control}
+E26 completed 64 semi-real records.  MNIST 3-vs-8 and FashionMNIST 0-vs-6 each
+had 0/32 weak-only-learnable records and therefore 0/32 causal certificates under
+the specified gate.  Their mean weak-AUC gaps were as follows.  For MNIST 3-vs-8,
+the gap was $-1.2362842136667493\times10^{-3}$.  Its 95\% CI was
+$[-3.4405428466004646,\allowbreak 1.0159591371180453]\times10^{-3}$.  For
+FashionMNIST 0-vs-6, the gap was $-1.0921728159018996\times10^{-4}$.  Its 95\%
+CI was $[-4.129384520886106,\allowbreak 3.182670049955049]\times10^{-3}$.
+Positive means weak-only core gain exceeds both-feature core gain.  The frozen
+hypothesis failed.  Because every weak-only first-hit gate failed, the causal gate
+correctly rejects a false-positive starvation interpretation, but the zero causal
+counts remain negative/indeterminate: they are not evidence that starvation is
+absent and do not show that either dataset is intrinsically unlearnable.
 
-\paragraph{Empirical interpretation.}
-E1 shows positive weak AUC gaps in all 32 $\rho$--seed cells per lag at lags 0, 2,
-and 4, but those cells reuse eight seed IDs.  E-NL contains only eight seeds per
-architecture at one synthetic task cell: tanh is seed-dependent, and GRU exhibits
-outcome crossings without passing the causal gate.  The post-hoc terminal profile
-shows that the GRU failure is not marginal at $\beta=0.5$, but it neither replaces
-the first-hit gate nor ranks architectures.  These counts are descriptive, not
-prevalence estimates.  The exploratory search found no 4/4 robust cell.
+E27 completed 192 nonlinear records.  The equal-weight three-cell all-$\beta$
+causal-certificate macro estimate was $0.2916666666666667$ for tanh (95\% CI
+$[0.16666666666666666,0.4166666666666667]$) and $0$ for GRU (95\% CI $[0,0]$);
+the Holm-adjusted one-sided $p$-value was $1.0$ for each.  The overall beta-robust
+claim is false.  Architecture ranking was forbidden and neither performed nor
+supported.
+
+E28 completed 256 method-records.  Define weak rescue as
+$-\lvert\text{weak AUC gap}\rvert$, so the CDC-minus-comparator contrast is
+higher-better.  Define trajectory and final deviation as absolute deviations from
+paired ERM, so comparator-minus-CDC is positive when CDC preserves the strong
+response better.  Table~\ref{tab:e28-tradeoff} reports every frozen macro contrast.
+The frozen joint weak-rescue/strong-preservation tradeoff is true only versus
+Bloop-style shadow-target rescue.  It is false versus PCGrad-style shadow-target
+rescue, so CDC does not beat that variant under the frozen joint criterion.  Both
+comparators have \code{canonical:false}; these results establish neither SOTA
+performance, canonical parity, nor broad CDC superiority.
+
+\begin{table}[t]
+\centering
+\caption{E28 equal-weight two-cell macro contrasts over 256 method-records.  Both
+comparators are non-canonical.  Brackets are 95\% bootstrap CIs.}
+\label{tab:e28-tradeoff}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lllll}
+\toprule
+Comparator & CDC$-$comparator weak rescue & Comparator$-$CDC trajectory dev. & Comparator$-$CDC final dev. & Joint \\
+\midrule
+Bloop-style shadow-target rescue & $0.002198259399210656$ $[0.0009779187294930126,0.003277366267916477]$ & $3.4651361294978416$ $[3.3443827215131754,3.5849715262780952]$ & $0.6422362388111651$ $[0.6288088704226539,0.6563168084365315]$ & true \\
+PCGrad-style shadow-target rescue & $-0.00015351238407674823$ $[-0.00047909348592838785,0.00013248012419808214]$ & $-0.48709889128076556$ $[-0.6897378944428417,-0.27379327373499074]$ & $-0.2565436437726021$ $[-0.3016841153614223,-0.2087651835754514]$ & false \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+E20 remains the submission-primary empirical study, with only drift- and
+response-crossing classification primary.  E26--E28 were prospectively frozen but
+completed later; their outcomes do not reprioritize E20 or promote its secondary
+phase, causal, learnability, timing, or magnitude outputs.
+
+\section{Discussion and limitations}
+\paragraph{Causal diagnosis and empirical findings.}
+Weak learning failure alone is not gradient starvation.  E1 shows positive paired
+weak-AUC deficits with learnable weak-only controls in all 32 $\rho$--seed cells
+per lag at lags 0, 2, and 4, but those cells reuse eight seed IDs and do not imply a
+universal law.  All 32 lag-8 cells instead fail the gate under
+$\beta=0.25,H=5$, making their causal status indeterminate.  At E-NL's fixed
+$(\rho,\mathrm{lag})=(4,2)$ cell, tanh has complete transfer-to-starvation
+certificates in 3/8 observed seeds; GRU has drift and response crossings in 5/8 but
+0/8 causal certificates because every weak-only path fails $\beta=0.5$.  The post-
+hoc terminal profile shows that this GRU gate failure is not marginal at that
+operating point, but it neither replaces the first-hit gate nor ranks
+architectures.  These counts are descriptive, not prevalence estimates, and the
+exploratory search found no 4/4 robust cell.  E26 adds semi-real breadth but is
+negative/indeterminate because MNIST 3-vs-8 and FashionMNIST 0-vs-6 each have 0/32
+weak-only-learnable and 0/32 causal records; the gate blocks a false-positive
+starvation label but cannot establish absence or intrinsic dataset unlearnability.
+E27 rejects the frozen all-$\beta$ claim for both architectures without licensing a
+ranking.  E28 is mixed and comparator-restricted: its frozen joint tradeoff holds
+against the non-canonical Bloop-style shadow-target rescue but not the non-
+canonical PCGrad-style shadow-target rescue.  None of these later outcomes changes
+E20's formal submission-primary drift/response-only scope.
+
+\paragraph{Exact dynamics and pathwise attribution.}
+The exact finite-width identity $\dot M_w=c_w^\top q(r)/n$ separates
+cross-entropy sample weighting $q(r)$ from response-specific geometry $c_w$ with no
+DMFT assumption.  Together with exact sample-logit dynamics, dense-linear geometry,
+and the matched intervention, it identifies where a weak-response rate difference
+comes from without silently imposing a two-response closure.  The cumulative
+balance then gives pathwise attribution for arbitrary sign changes:
+$\Delta=P-N$, so outcome suppression occurs only when accumulated suppression
+overtakes accumulated help.  Neither rate nor outcome suppression is by itself a
+causal-starvation certificate; independently demonstrated weak-only learnability
+is still required.
+
+\paragraph{Partial prediction and formal scope.}
+The realized-initialization $d(0)$ criterion gives an exact local sign in its stated
+dense-linear setting.  Where a higher local jet is proved, such as
+$d(0)=0,d'(0)<0$ in the recurrence-invisible zero-lag result, it likewise gives a
+rigorous local sign in that scope.  The conditional parameter-tube and rank-one
+criteria, transverse hitting-time bound, recurrence-invisible zero-lag wide limit,
+and fixed-chart CDC result are mathematical statements with proofs, but their
+scopes differ.  The cumulative balance characterizes outcome suppression without
+supplying weak-only learnability; the rank-one criterion addresses rate crossing;
+the wide limit requires zero lag and zero background input, although it permits any
+finite realized recurrent matrix.  Stronger positive-lag parameter-level
+prediction from $\rho$, lag, and recurrent geometry remains unresolved because no
+nonvacuous general product-ball or kernel-movement constants are constructed.
 
 \paragraph{Frozen-surrogate sequence.}
-E19 failed its preregistered five-endpoint rule; correctness on other labels cannot
-rescue the tanh learnability failure.  E20 was designed only after that rejection
-and supports a narrower claim: drift/response crossing-event classification on one
-fresh crossed-seed factorial.  Its phase, causal, and learnability labels were
-secondary, its time predictions were systematically early, and tanh trajectory
-magnitudes were poor.  Manifest integrity proves that frozen inputs were consumed
-unchanged; it does not prove kernel stability or surrogate accuracy.
+The initialization-frozen tangent surrogate retains nonlinear cross-entropy but is
+exact only for its tangent model.  Its comparison with trained tanh/GRU networks
+assumes unproved instantaneous or secant-kernel movement control.  E19 failed its
+preregistered five-endpoint rule; correctness on other labels cannot rescue the
+tanh learnability failure.  E20 was designed only after that rejection and supports
+a narrower claim: drift/response crossing-event classification on one fresh
+crossed-seed factorial.  Its phase, causal, and learnability labels were secondary,
+its time predictions were systematically early, and tanh trajectory magnitudes
+were poor.  Manifest integrity proves that frozen inputs were consumed unchanged;
+it does not prove kernel stability, surrogate accuracy, or general causal
+prediction.
 
-\paragraph{CDC and baselines.}
-CDC uniquely preserves the instantaneous strong drift within the tested shadow-
-method family, as its theorem predicts.  The ablation does not show a general
-practical advantage: weak rescue is numerically similar across shadow arms, and
-other arms retain a larger final strong response.  CDC also assumes a constructible
-weak-only shadow and roughly doubled model work.  The Bloop-style and PCGrad-style
-arms are repository implementations motivated by those methods, not independently
-audited replicas.
+\paragraph{Local mechanism-level control and baselines.}
+In the fixed implemented chart, feasible uncapped target-attaining CDC is the
+unique minimum-Euclidean-norm correction satisfying zero instantaneous strong-
+drift change and the weak-drift lower bound; its finite-step guarantee is local and
+one-step.  Historical E3 exhibits that instantaneous distinction within its tested
+shadow-method family, but does not show a general practical advantage: weak rescue
+is numerically similar across shadow arms, other arms retain a larger final strong
+response, and all shadow methods use stronger matched-counterfactual information.
+E28 passes the separately frozen joint weak-rescue/strong-preservation criterion
+only against Bloop-style shadow-target rescue; CDC does not beat PCGrad-style
+shadow-target rescue under that criterion.  Both comparators are non-canonical
+response-gradient shadow-target variants, not independently audited canonical
+replicas.  CDC assumes a constructible weak-only shadow and roughly doubled model
+work; no SOTA, canonical parity, or broad superiority follows.
 
-\paragraph{Open theory and external validity.}
-A positive-lag optimization-time recurrent DMFT still requires an effective
-process, visible and loss-invisible closure variables, finite-horizon
-well-posedness, joint quenched concentration, and discretization/hitting-time
-control.  Neither an empirical closure nor event classification supplies these
-objects.  An analytic $\rho_c$ and certified or quantitatively accurate tanh/GRU
-crossing times therefore remain open.  All citable outcomes remain synthetic; no
-real-data or semi-real experiment has been run.  The frozen generated-cue
-MNIST and FashionMNIST intervention is defensible at the design level but unauthorized
-and outcome-free, and the expanded beta/nonlinear/CDC protocol is likewise
-unexecuted.  Neither changes the empirical scope.  The unrun Waterbirds adapter is
-a minibatch head-coordinate surrogate outside the full-batch matched-shadow
+\paragraph{External validity.}
+The evidence covers controlled synthetic task families and one semi-real generated-
+cue intervention over fixed cells and seed grids.  E26 is not an unmodified natural
+shortcut or natural-spurious-correlation study.  E27/E28 broaden the fixed
+synthetic cells and methods but do not establish architecture rankings, prevalence,
+canonical baseline parity, or broad CDC superiority.  The unrun Waterbirds adapter
+is a minibatch head-coordinate surrogate outside the full-batch matched-shadow
 theorem, and its intercept is not an identified bird-shape response.  We make no
-Waterbirds claim.
+Waterbirds or natural-spurious-correlation claim.  General recurrent causal
+prediction and calibrated tanh/GRU crossing times remain open.
 
 \paragraph{Provenance.}
 The final E-NL source is reconstructible through its archived 17-file executable-
 source fingerprint and preserved metadata.  E19 and E20 preserve compact outcomes,
 seals, and source digests, but not the exact dirty source bytes; they are auditable
-but not historically replayable.  Earlier E1, E2, E2-R, exploratory E-NL, and E3
-runs share a disclosed dirty-source limitation.
+but not historically replayable.  Earlier E1, E2, E2-R, exploratory E-NL, and
+historical E3 share a disclosed dirty-source limitation.  E26--E28 instead ran from
+clean commit \code{9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0}; their recorded
+source manifests make source reconstruction possible.  The E26 compact archive
+omits 192 \path{records/**} files and the combined E27/E28 archive omits 1,792.
+Their committed hashes and central files support audit, but omitted bytes cannot be
+recovered from hashes, so the compact archives are not standalone replay packages.
 
 \section{Conclusion}
-Gradient starvation requires more than a declining weak-feature rate.  Relative
-rate suppression becomes outcome suppression only when cumulative negative drift
-exceeds the earlier positive advantage; causal starvation additionally requires
-that the matched weak-only trajectory first-hit the learnability target.  Exact
-finite-width response dynamics and the general cumulative balance make these
-separations formal.  The realized-initialization threshold is exact, but its
-positive-lag sign is seed-dependent and its trajectory consequences require
-independently proved product-ball constants.  The rank-one, hitting-time,
-recurrence-invisible zero-lag, and CDC results state their assumptions explicitly;
-the noiseless symmetric zero-lag reference starts suppressed, permits arbitrary
-finite recurrent gain, and does not supply a transfer phase.
+Weak learning failure alone is not gradient starvation.  A small weak response can
+reflect failure of the weak-only control to meet the specified target, altered
+cross-entropy weighting, response-specific geometry, rate suppression that has not
+yet reversed earlier help, or causally gated outcome suppression.  The matched
+same-initialization intervention separates these possibilities.  Exact finite-
+width dynamics give $\dot M_w=c_w^\top q(r)/n$ without a DMFT assumption; the
+pathwise identity $\Delta=P-N$ then shows that outcome suppression begins only when
+accumulated suppression overtakes accumulated help.  Causal starvation additionally
+requires an independently learnable weak-only counterfactual.  A failed gate
+licenses neither a starvation certificate nor evidence that starvation is absent;
+causal status is indeterminate under the specified target and horizon.
 
-The empirical sequence supports the same discipline.  Corrected E1 is positive
-across 32 $\rho$--seed cells per lag, not 32 independent seeds.  In E-NL, tanh
-causal crossover is seed-dependent and GRU outcome crossings fail the learnability
-gate; the post-hoc terminal profile strengthens that operating-point diagnosis
-without replacing the gate.  E19 remains a failed broad predictor, whereas E20
-supports only restricted drift/response crossing-event labels.  CDC demonstrates
-its exact local constraint but not broad practical superiority.  With eight-seed
-nonlinear evidence, no real-data experiment, unreconstructible historical dirty
-source for E19/E20, and no general positive-lag DMFT, general recurrent causal
-prediction and calibrated crossover times remain open.  The frozen
-semi-real and expanded nonlinear/CDC protocols remain prospective design artifacts
-with no outcomes, so they do not alter that conclusion.
+Prediction remains partial.  Realized $d(0)$ and proved higher local jets give
+rigorous local or assumption-scoped sufficient signs.  The conditional rank-one,
+parameter-tube, hitting-time, and recurrence-invisible zero-lag results state their
+additional assumptions explicitly; the noiseless symmetric zero-lag reference
+starts suppressed, permits arbitrary finite recurrent gain, and does not supply a
+transfer phase.  Because nonvacuous general positive-lag product-ball and kernel-
+movement constants are unavailable, the paper does not provide a global predictor
+from $\rho$, lag, and RNN geometry.
+
+The empirical sequence supports the diagnostic separation rather than a universal
+starvation law.  Corrected E1 has positive paired weak-AUC deficits and learnable
+weak-only controls across all 32 $\rho$--seed cells per lag at lags 0, 2, and 4,
+not 32 independent seeds; every lag-8 cell fails the gate under
+$\beta=0.25,H=5$ and is causally indeterminate.  At E-NL's fixed
+$(\rho,\mathrm{lag})=(4,2)$ cell, tanh has complete transfer-to-starvation
+certificates in 3/8 observed seeds, whereas GRU has drift and response crossings in
+5/8 but 0/8 causal certificates because every weak-only path fails $\beta=0.5$.
+The post-hoc terminal profile strengthens that operating-point diagnosis without
+replacing the first-hit gate, ranking architectures, or estimating prevalence.
+E19 remains a failed broad frozen-kernel pilot.  E20 remains the formal submission-primary
+empirical study and supports only restricted frozen drift/response crossing-event
+labels.  E26 is a completed negative/indeterminate semi-real study: MNIST 3-vs-8
+and FashionMNIST 0-vs-6 each have 0/32 weak-only learnability and 0/32 causal
+records, so the gate blocks a false-positive label but cannot show absent
+starvation or intrinsic dataset unlearnability.  E27's all-$\beta$ claim is
+negative for both architectures without a ranking.
+
+As mechanism-level control, in the fixed implemented chart, feasible uncapped
+target-attaining CDC is the unique minimum-Euclidean-norm correction satisfying
+zero instantaneous strong-drift change and the weak-drift lower bound; its finite-
+step guarantee is local and one-step.  Historical E3 demonstrates that local
+constraint but not broad practical superiority or best final retention.  E28's
+frozen joint weak-rescue/strong-preservation tradeoff succeeds only against the
+non-canonical Bloop-style shadow-target rescue; CDC does not beat the non-canonical
+PCGrad-style shadow-target rescue under that criterion.  Thus no SOTA,
+architecture ranking, canonical parity, or broad CDC superiority follows.
+
+The strongest supported chain is exact dynamics $\to$ matched causal intervention
+$\to$ pathwise attribution $\to$ local mechanism-level control.  With fixed seed
+grids, no natural-spurious-correlation benchmark, historically unreconstructible
+source for E19/E20, compact E26--E28 archives that are not standalone replay
+packages, and no general positive-lag DMFT, general recurrent causal prediction and
+calibrated crossover times remain open.
 
 \ifdefined\ICLRSubmission\else
 \appendix
 \fi
-\section{Proofs for the finite-width theorem package}
+\section{Proofs for exact dynamics and causal-separation results}
 \label{app:finite-proofs}
 
 \subsection{Proof of Proposition~\ref{prop:cross-kernel} and
@@ -1775,7 +2127,7 @@ exactly Theorem~\ref{thm:wide-limit} applied at deterministic suppression and
 target-attainment witness times with margins smaller than both strict witness
 margins.  \qed
 
-\section{Proofs for Counterfactual Drift Correction}
+\section{Proofs for local Counterfactual Drift Correction}
 \label{app:cdc-proofs}
 \subsection{Instantaneous preservation}
 If $a=0$, both strong drifts vanish.  Otherwise,
@@ -1834,8 +2186,10 @@ The executable certificate requires one strict block of positive increments foll
 by one strict block of negative increments.  The peak-minus-initial value is its
 positive area; peak-minus-final is its negative tail area.  It certifies causal
 starvation only if the final trajectory is strictly below the initial gap and the
-external weak-only learnability flag is true.  This finite-step certificate makes
-no assertion between logged points.
+external weak-only learnability flag is true.  A false learnability flag blocks the
+causal certificate but does not establish that starvation is absent; status is
+indeterminate under that gate.  This finite-step certificate makes no assertion
+between logged points.
 
 \paragraph{Excluded engineering outcomes.}
 Data seed 100 with model seeds 1000--1007 is excluded from scientific evidence.  A
@@ -1873,38 +2227,48 @@ Contract & Mathematical object & Scope guard \\
 
 \begin{table}[ht]
 \centering
-\caption{Final synthetic experiment configurations.  ``Shadow'' methods train a
-second weak-only model and therefore use roughly twice the model memory and
-per-step compute.}
+\caption{Executed experiment configurations.  ``Shadow'' methods train a second
+weak-only model and therefore use roughly twice the model memory and per-step
+compute.}
 \label{tab:protocol}
 \small
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{lllllll}
 \toprule
-Experiment & Model / width & Task grid & Samples & Steps / LR & Seeds & Primary purpose \\
+Experiment & Model / width & Task grid & Samples & Steps / LR & Seeds / records & Primary purpose \\
 \midrule
-E1 & dense linear / 96 & $\rho\in\{1,2,4,8\}$, lag $\in\{0,2,4,8\}$ & 256 & 500 / .01 & 4--11 & causal phase grid \\
+E1 & dense linear / 96 & $\rho\in\{1,2,4,8\}$, lag $\in\{0,2,4,8\}$ & 256 & 500 / .01 & 4--11 & paired deficit / gate audit \\
 E2 & dense linear / 32--256 & $(1,0),(2,2),(4,4),(8,8)$ & 1024 & 400 / .01 & 0--7 & empirical reference \\
 E-NL & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & 20--27 & direct-drift certificate \\
 Tangent pilot & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & $1\times8$ & five-output falsification \\
-Tangent factorial & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & $4\times8$ & crossing-event audit \\
-E3 & dense linear / 96 & $\rho=4$, lag 2 & 256 & 500 / .01 & 40--47 & CDC ablation \\
+Tangent factorial (E20) & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & $4\times8$ / model & primary crossing-event audit \\
+Historical E3 & dense linear / 96 & $\rho=4$, lag 2 & 256 & 500 / .01 & 40--47 & CDC local ablation \\
+E26 & semi-real CNN & MNIST 3-vs-8; FashionMNIST 0-vs-6 & 512/256/256 per dataset & 500 / .01 & $4\times8$ / dataset; 64 & generated-cue intervention \\
+E27 & tanh, GRU / 32 & three cells; $\beta\in\{.25,.5,1,2\}$ & 256 & 1000 / .01 & $4\times8$; 192 & all-$\beta$ robustness \\
+E28 & tanh / 64 & two cells; ERM, CDC, Bloop-style shadow-target rescue, PCGrad-style shadow-target rescue & 256 & 1000 / .01 & $4\times8$; 256 method-records & comparator-restricted CDC tradeoff \\
 \bottomrule
 \end{tabular}}
 \end{table}
 
 \ifdefined\ICLRSubmission
 \paragraph{Supplementary artifact map and commands.}
-The anonymous supplementary archive separates the controlled phase grid,
+The anonymous supplementary archive separates the controlled paired-deficit and
+gate audit,
 finite-width reference, exact solver checks, final nonlinear run and terminal
-$\beta$ audit, failed broad tangent pilot, restricted tangent factorial, exploratory
-negative search, and CDC ablation.  Machine-readable provenance records bind each
-claim to its surviving configuration, outcomes, figures, seals, and source-status
-classification.  Current-source commands create new runs; they do not relabel
-historical dirty-source outcomes as replayable.  In particular, any new frozen-
-tangent study must seal a fresh preflight before evaluation, whereas rebuilding the
-learnability profile is a read-only derivation from the archived E-NL summary and
-does not train a model.
+$\beta$ audit, failed broad tangent pilot, restricted E20 tangent factorial,
+exploratory negative search, historical E3 CDC ablation, E26 semi-real
+negative/indeterminate study, E27 beta-robust negative study, and E28 mixed CDC
+tradeoff.  E20 remains submission-primary with only drift/response crossings
+primary.  Machine-readable provenance binds each claim to configurations, outcomes,
+seals, and source status.  Run \code{python verify\_release\_artifacts.py} for the
+read-only compact-archive audit.  New scientific runs
+use \code{scripts/run\_semi\_real\_study.py} or
+\code{scripts/run\_expanded\_studies.py} only after fresh preflight and external
+seal; they are not replays of omitted record bytes.  E26--E28 use reconstructible
+clean source at commit \code{9ebbc617...2d3517d0}, but the E26 and combined E27/E28
+compact archives omit 192 and 1,792 \path{records/**} files, respectively, so they
+are auditable rather than standalone replay packages.  E19/E20 instead lack their
+historical dirty source bytes and are not historically replayable.
 \else
 \begin{table}[ht]
 \centering
@@ -1915,14 +2279,17 @@ does not train a model.
 \toprule
 Claim family & Artifact directory \\
 \midrule
-Controlled dense phase grid & \path{results/e1_dense_rerun-20260823-085142} \\
+Controlled paired deficits and gate status & \path{results/e1_dense_rerun-20260823-085142} \\
 Finite-width empirical closure & \path{results/e2_corrected_validation-20260821-224630} \\
 Exact special solver checks & \path{results/e2r_solver_checks-20260823-084911} \\
 Final nonlinear crossover and $\beta$ audit & \path{paper/artifacts/enl_tanh_crossover-20260824-141207} \\
 Broad frozen-NTK pilot (failed) & \path{paper/artifacts/enl_ntk_pilot-20260825} \\
 Restricted frozen-NTK factorial (crossing labels passed) & \path{paper/artifacts/enl_ntk_crossing_factorial-20260825} \\
 Exploratory nonlinear audit & \path{results/enl_exact_regime_search-20260824-105003} \\
-Dense CDC ablation & \path{results/e3_cdc_dense_ablation-20260823-090702} \\
+Historical dense CDC ablation & \path{results/e3_cdc_dense_ablation-20260823-090702} \\
+E26 semi-real generated cue (negative/indeterminate) & \path{paper/artifacts/semi-real-generated-cue-v1-20260830} \\
+E27 beta-robust nonlinear (negative) & \path{paper/artifacts/expanded-studies-v1-20260830} \\
+E28 CDC tradeoff (comparator-restricted mixed) & \path{paper/artifacts/expanded-studies-v1-20260830} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1937,7 +2304,27 @@ python run_experiment.py e2r --config configs/e2r_solver_checks.yaml
 python run_experiment.py enl --config configs/enl_tanh_crossover.yaml
 python scripts/build_enl_learnability_profile.py
 python run_experiment.py e3  --config configs/e3_cdc_dense_ablation.yaml
+python verify_release_artifacts.py
 \end{verbatim}
+The last command is a read-only audit of the committed compact archives.  Fresh
+E26-style execution uses
+\begin{verbatim}
+python scripts/run_semi_real_study.py preflight \
+  --data-root DATA --output-dir PREFLIGHT
+\end{verbatim}
+followed, only with an external seal, by
+\begin{verbatim}
+python scripts/run_semi_real_study.py run \
+  --preflight PREFLIGHT --seal SEAL \
+  --data-root DATA --output-dir RUN
+\end{verbatim}
+Fresh E27/E28-style execution similarly uses
+\begin{verbatim}
+python scripts/run_expanded_studies.py preflight \
+  --output-dir PREFLIGHT
+\end{verbatim}
+and the sealed \code{run} subcommand.  Such runs are new studies, not replays of
+the compact archives' omitted 192 or 1,792 \path{records/**} files.
 The checked-in frozen evaluate configs are historical evidence records: they pin the
 original preflights and intentionally fail against later source.  A new protocol run
 must first execute \code{enl-preflight}, then copy the matching evaluate config and
@@ -1954,6 +2341,118 @@ omitted from the confirmatory list; its complete configuration and negative resu
 remain archived in the repository.  The learnability-profile command is a
 read-only derivation from the tracked E-NL summary and does not run training.
 \fi
+
+\section{Completed causal-gate and mechanism-control outcome and provenance audit}
+\label{app:completed-extensions}
+These studies were prospectively frozen, externally authorized, and executed from
+clean Git commit \code{9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0}.  They are
+later breadth studies, not an outcome-dependent replacement for E20: E20 remains
+the submission-primary empirical claim and only its drift- and response-crossing
+classification endpoints are primary.
+
+\subsection{E26: semi-real causal indeterminacy after weak-only gate failure}
+E26 contains 64 crossed records: four data seeds by eight model seeds for MNIST
+3-vs-8 and the same factorial for FashionMNIST 0-vs-6.  The core channel contains
+selected real benchmark pixels; the paired intervention exactly zeros only the
+generated cue channel.  Thus the evidence label is semi-real generated-cue, not an
+unmodified real-world or natural-spurious-correlation benchmark.  Positive weak
+AUC gap means the weak-only core gain exceeds the both-feature core gain.
+
+\begin{table}[ht]
+\centering
+\caption{Complete E26 primary outcomes.  CIs are dataset-specific crossed-seed
+intervals.}
+\label{tab:e26-complete}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lccc}
+\toprule
+Dataset & Weak-only learnable & Causal certificate & Mean weak AUC gap (95\% CI) \\
+\midrule
+MNIST 3-vs-8 & 0/32 & 0/32 & $-0.0012362842136667493$
+$[-0.0034405428466004646,0.0010159591371180453]$ \\
+FashionMNIST 0-vs-6 & 0/32 & 0/32 & $-0.00010921728159018996$
+$[-0.004129384520886106,0.003182670049955049]$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The frozen hypothesis was not accepted.  Because the weak-only first-hit gate
+failed in all 32 records per dataset, the causal gate rejects a false-positive
+starvation interpretation.  The zero causal counts remain negative/indeterminate:
+they cannot be interpreted as evidence that starvation is absent or that either
+dataset is intrinsically unlearnable.  The compact archive appears under
+\path{paper/artifacts/} as \path{semi-real-generated-cue-v1-20260830}; the central
+provenance manifest records its exact archive, artifact, and 22-file clean-source
+digests.
+Source is reconstructible from the clean commit, but the compact archive omits 192
+\path{records/**} files; hashes bind those files but cannot recover their bytes, so
+the archive is not a standalone replay package.
+
+\subsection{E27: expanded beta-robust nonlinear study}
+E27 contains 192 records: tanh and GRU across three fixed task cells and a crossed
+$4\times8$ seed design.  Each record evaluates the prospectively frozen first-hit
+grid $\beta\in\{0.25,0.5,1,2\}$; the architecture estimand equally weights the
+three cell prevalences.  A 5,000-replicate two-way pigeonhole bootstrap supplies
+raw percentile intervals, and the two one-sided architecture tests form one Holm
+family.
+
+\begin{table}[ht]
+\centering
+\caption{Complete E27 all-$\beta$ architecture endpoints.}
+\label{tab:e27-complete}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lccc}
+\toprule
+Architecture & Macro estimate & 95\% CI & Holm-adjusted $p$ \\
+\midrule
+tanh & $0.2916666666666667$ & $[0.16666666666666666,0.4166666666666667]$ & $1.0$ \\
+GRU & $0$ & $[0,0]$ & $1.0$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The overall beta-robust claim is false.  Architecture ranking was forbidden by the
+frozen contract and was neither performed nor supported.
+
+\subsection{E28: comparator-restricted mechanism-level control}
+E28 contains 256 method-records for ERM, CDC, Bloop-style shadow-target rescue,
+and PCGrad-style shadow-target rescue over two fixed cells and crossed seeds.  Both
+comparators are non-canonical (\code{canonical:false}) response-gradient
+shadow-target variants; the study does not establish canonical implementation
+parity.  Weak rescue is $-\lvert\text{weak AUC gap}\rvert$ and is higher-better, so
+CDC-minus-comparator positive values favor CDC.  Trajectory deviation is absolute
+strong-response AUC deviation from paired ERM and final deviation is absolute final
+strong-response deviation from paired ERM; both are lower-better, so
+comparator-minus-CDC positive values favor CDC.
+
+\begin{table}[ht]
+\centering
+\caption{Complete E28 frozen equal-weight two-cell macro contrasts.  Brackets are
+95\% two-way-bootstrap CIs.}
+\label{tab:e28-complete}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lllll}
+\toprule
+Comparator & CDC$-$comparator weak rescue & Comparator$-$CDC trajectory deviation & Comparator$-$CDC final deviation & Joint tradeoff \\
+\midrule
+Bloop-style shadow-target rescue & $0.002198259399210656$ $[0.0009779187294930126,0.003277366267916477]$ & $3.4651361294978416$ $[3.3443827215131754,3.5849715262780952]$ & $0.6422362388111651$ $[0.6288088704226539,0.6563168084365315]$ & true \\
+PCGrad-style shadow-target rescue & $-0.00015351238407674823$ $[-0.00047909348592838785,0.00013248012419808214]$ & $-0.48709889128076556$ $[-0.6897378944428417,-0.27379327373499074]$ & $-0.2565436437726021$ $[-0.3016841153614223,-0.2087651835754514]$ & false \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The frozen joint weak-rescue/strong-preservation tradeoff is true only against
+Bloop-style shadow-target rescue and false against PCGrad-style shadow-target
+rescue.  CDC therefore does not beat the latter under the frozen joint criterion.
+Because both comparators are non-canonical, E28 supports no SOTA, canonical parity,
+or broad CDC superiority.  E27 and E28 share
+\path{paper/artifacts/expanded-studies-v1-20260830}; the central provenance manifest
+records its exact archive, artifact, and 23-file clean-source digests.  Source is
+reconstructible from the clean commit, but the compact archive omits 1,792
+\path{records/**} files and is not a standalone replay package.
 
 \section{Frozen-tangent falsification and restricted follow-up}
 \label{app:frozen-negative}

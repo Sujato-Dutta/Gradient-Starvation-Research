@@ -1,0 +1,188 @@
+{
+  "archive_root": "paper/artifacts/expanded-studies-v1-20260830",
+  "archive_type": "completed_run_compact",
+  "archived_file_bytes": 2791754,
+  "archived_file_count": 27,
+  "archived_files": [
+    {
+      "archive_relative_path": "artifact_manifest.json",
+      "bytes": 279352,
+      "sha256": "54e4c4acd7d0e1b177f6c8da05bcb1ba848397d44056c447843a1df778564a96",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/artifact_manifest.json"
+    },
+    {
+      "archive_relative_path": "artifact_manifest.sha256",
+      "bytes": 89,
+      "sha256": "67e76b15e94c7f9713d8b68cb8e81843bc59f2c4428012f2e428b6b3630876b6",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/artifact_manifest.sha256"
+    },
+    {
+      "archive_relative_path": "authorization.seal.json",
+      "bytes": 17444,
+      "sha256": "bfd463611bc89a12797975afc77935377e88bd3654d53ce780378439af1552ef",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/authorization.seal.json"
+    },
+    {
+      "archive_relative_path": "bootstrap_draw_manifest.json",
+      "bytes": 613,
+      "sha256": "220e3f07bb7dded448c370b8b181fe502e43e7ddb4c9122d09a8d41172dc7141",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/bootstrap_draw_manifest.json"
+    },
+    {
+      "archive_relative_path": "contract.resolved.json",
+      "bytes": 30902,
+      "sha256": "bcd81018f0a3efd64cf6ce0daadef9ce5ac5ef7ce20acbf07bf7b4eabeae1dd9",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/contract.resolved.json"
+    },
+    {
+      "archive_relative_path": "environment-lock.txt",
+      "bytes": 687,
+      "sha256": "651ba112e67b38f80eb60d26ef92a348b3e3228fbb0a7aae8a0f24930b823c1c",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/environment-lock.txt"
+    },
+    {
+      "archive_relative_path": "environment.json",
+      "bytes": 1454,
+      "sha256": "00e3779ec25316010053258c527d72a30c0edf6e64e5723e27411fd6c8628a49",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/environment.json"
+    },
+    {
+      "archive_relative_path": "historical-contract.json",
+      "bytes": 7488,
+      "sha256": "481508ee5381caf6a279d7c992e8e77e5f04679f013309f35c1b5b1a023ce439",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/historical-contract.json"
+    },
+    {
+      "archive_relative_path": "initialization_manifest.json",
+      "bytes": 215964,
+      "sha256": "3712008f0c4e9c725687bfc0670da1b3ded1d42b8010992b7f02884d26f25152",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/initialization_manifest.json"
+    },
+    {
+      "archive_relative_path": "preflight.manifest.json",
+      "bytes": 17833,
+      "sha256": "9f4a39101667f821c30978009d0e4b742d348ad68b6f329f9aaf2971b3c30d2b",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/preflight.manifest.json"
+    },
+    {
+      "archive_relative_path": "preflight.manifest.sha256",
+      "bytes": 90,
+      "sha256": "d0f43413640e99599ce82dd6e565785882e5bfa4f04b225a9e91728857ce07e2",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/preflight.manifest.sha256"
+    },
+    {
+      "archive_relative_path": "provenance.json",
+      "bytes": 16539,
+      "sha256": "6a60caae494cebee807f406403dfb5885a238d286b89932d07264b6ec3822fa6",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/provenance.json"
+    },
+    {
+      "archive_relative_path": "record_manifest.json",
+      "bytes": 15610,
+      "sha256": "37b7c6e752907366f5f11b26ad52ef125dfa5b9add1e7d7e62dad3e531a90c72",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/record_manifest.json"
+    },
+    {
+      "archive_relative_path": "resource_usage.json",
+      "bytes": 726047,
+      "sha256": "37547346e81409c396ea5cc2c071f66d07e7d02a864efc7086469dc3aa01bcbf",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/resource_usage.json"
+    },
+    {
+      "archive_relative_path": "source_manifest.json",
+      "bytes": 3327,
+      "sha256": "b8ced125ed3d8c566724a69e514deea860805bafb9a32f384f4f9bdf7b916098",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/source_manifest.json"
+    },
+    {
+      "archive_relative_path": "study_a_claims.json",
+      "bytes": 418,
+      "sha256": "ccf7ae4cf6bb4e19d4d37a5f65ebf3c2309373504e6a9287636726650e484493",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_a_claims.json"
+    },
+    {
+      "archive_relative_path": "study_a_first_hit_profile.csv",
+      "bytes": 133625,
+      "sha256": "1114af181e71fe77e73a006be026bd2e7ff7cc3db67c03e141f2a4203eeb984e",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_a_first_hit_profile.csv"
+    },
+    {
+      "archive_relative_path": "study_a_inference.json",
+      "bytes": 2706,
+      "sha256": "e6ce10ead007a1e1d9aaffee306226aa63ce761702076e8a748584c4b0671473",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_a_inference.json"
+    },
+    {
+      "archive_relative_path": "study_a_record_summary.json",
+      "bytes": 701382,
+      "sha256": "687609359e664067ac6a0c45be67502937b8c57f6ae2fe423faaa0d944ad035d",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_a_record_summary.json"
+    },
+    {
+      "archive_relative_path": "study_b_claims.json",
+      "bytes": 891,
+      "sha256": "b21407857b43427d169343bfd1afd986728f7fb00493e8d832661c8277fa476b",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_b_claims.json"
+    },
+    {
+      "archive_relative_path": "study_b_cost.csv",
+      "bytes": 25140,
+      "sha256": "3598a6f7bf5bbc0c1f090386940705e36c5408f72a015529a27109db401226a3",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_b_cost.csv"
+    },
+    {
+      "archive_relative_path": "study_b_diagnostics.csv",
+      "bytes": 24664,
+      "sha256": "63ac92239c0e3ec56e7a94931564d2f3e7377d7970e5f05ac952f5e4a1891e47",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_b_diagnostics.csv"
+    },
+    {
+      "archive_relative_path": "study_b_inference.json",
+      "bytes": 14991,
+      "sha256": "ee8d4a0f1972791e51f7ff735935a88b6a2f448d0947ccfa66e67a37cb508d43",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_b_inference.json"
+    },
+    {
+      "archive_relative_path": "study_b_pareto_final.json",
+      "bytes": 489,
+      "sha256": "3d3b4d3d002400fa7d1e8e68aedd84c80685ff48f3ebe2ca5ead742b194062be",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_b_pareto_final.json"
+    },
+    {
+      "archive_relative_path": "study_b_pareto_trajectory.json",
+      "bytes": 498,
+      "sha256": "dbd6e5bb541a9e77bd92683d834e1ea3804ed493a299524e4cfaac1b098b8c5a",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_b_pareto_trajectory.json"
+    },
+    {
+      "archive_relative_path": "study_b_record_summary.csv",
+      "bytes": 80496,
+      "sha256": "2d95fbe9c2a32b9cc158f4cefe79979d7fea1e4d6d259c1f5ca2c12254d6e812",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_b_record_summary.csv"
+    },
+    {
+      "archive_relative_path": "study_b_record_summary.json",
+      "bytes": 473015,
+      "sha256": "fad9ae919d35f122c79a79d5869ce13d87bb20f9648318634d253e8abc13ab0f",
+      "source_path": "data/expanded_studies_execution_v1/scientific-run-9ebbc61/study_b_record_summary.json"
+    }
+  ],
+  "claim_ids": [
+    "E27",
+    "E28"
+  ],
+  "clean_source_commit": "9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0",
+  "full_run_commitment": {
+    "artifact_manifest_bytes": 279352,
+    "artifact_manifest_sha256": "54e4c4acd7d0e1b177f6c8da05bcb1ba848397d44056c447843a1df778564a96",
+    "declared_file_count": 1817,
+    "omitted_bytes_archived": false,
+    "omitted_bytes_recoverable_from_hashes": false,
+    "omitted_file_count": 1792,
+    "omitted_path_prefix": "records/"
+  },
+  "limitation": "This compact archive preserves every top-level completed-run file and the full-run artifact manifest, but omits 1,792 records/** files. Their paths, hashes, and sizes remain committed by artifact_manifest.json; omitted bytes cannot be recovered from hashes, so this archive is auditable but not a self-contained replay package.",
+  "schema_version": "completed-run-compact-archive-v1",
+  "source_run": "data/expanded_studies_execution_v1/scientific-run-9ebbc61",
+  "study_id": "expanded-nonlinear-beta-cdc-tradeoff-v1"
+}
