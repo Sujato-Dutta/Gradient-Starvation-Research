@@ -751,7 +751,7 @@ def _require_evidence_terms(gate: dict[str, Any], terms: tuple[str, ...]) -> Non
 def _validate_findings_first_documents(repo_root: Path) -> None:
     expected_digests = {
         "README.md": "059235c2b64289c76e940117c85bd05c4033c4992b1f99d145c949343f7305f6",
-        "paper/main.tex": "01684baa6f25ee5c7019beceb2850e1d9248975bd454cc989c18da7494f7f50d",
+        "paper/main.tex": "9f9b4f94d9eb12af0d070b2f86d5d73b05f5368c53f3ce7442aea06667e92061",
     }
     for relative_path, expected_digest in expected_digests.items():
         document = repo_root / relative_path

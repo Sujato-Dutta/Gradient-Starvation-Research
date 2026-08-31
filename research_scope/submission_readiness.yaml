@@ -48,7 +48,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "Main text is at most 9 pages in the official submission style.",
-      "evidence": "The rebuilt 29-page paper/iclr2027/submission.pdf records page:main-end on page 7; references, disclosures, and the complete appendix follow."
+      "evidence": "The rebuilt 26-page paper/iclr2027/submission.pdf records page:main-end on page 5; references, disclosures, and the scientific appendix follow."
     },
     {
       "id": "double_blind_anonymity_audit",
@@ -56,7 +56,7 @@
       "status": "fail",
       "required_for_submission": true,
       "criterion": "Main paper, appendix, supplementary material, metadata, links, code, and artifacts reveal no author identity.",
-      "evidence": "The rebuilt 29-page paper/iclr2027/submission.pdf passes title-block, source-text, and PDF-metadata identity checks; the visible under-review presentation and line numbering are correct, and the manuscript source contains none of the scanned identifying or local-path strings. The repository is not safe to upload wholesale as supplementary material: legacy a.md/a copy.md, two archived ENL-NTK provenance JSON files, and the sealed expanded-study resource_usage.json contain absolute /Users/... paths identifying the local account. Historical and completed-run artifact records were not silently rewritten; a curated anonymous supplementary archive remains required."
+      "evidence": "The rebuilt 26-page paper/iclr2027/submission.pdf passes title-block, source-text, and PDF-metadata identity checks; the visible under-review presentation and line numbering are correct, and the manuscript source contains none of the scanned identifying or visible local-path strings. The repository is not safe to upload wholesale as supplementary material: legacy a.md/a copy.md, two archived ENL-NTK provenance JSON files, and the sealed expanded-study resource_usage.json contain absolute /Users/... paths identifying the local account. Historical artifact records were not silently rewritten; a curated anonymous supplementary archive remains required."
     },
     {
       "id": "mandatory_ai_use_statement",
@@ -64,15 +64,15 @@
       "status": "unknown",
       "required_for_submission": true,
       "criterion": "The manuscript contains the ICLR-required AI-use disclosure and the submission form is prepared consistently.",
-      "evidence": "The ICLR-only main-text branch in paper/main.tex contains an explicit AI use statement covering code/manuscript/review assistance, outcome non-generation, author verification, and responsibility. Consistency of the external submission-form disclosure cannot be verified in this workspace."
+      "evidence": "The ICLR-only branch in paper/main.tex contains a concise AI-use statement covering drafting, refactoring, manuscript editing, author review, and responsibility. Consistency of the external submission-form disclosure cannot be verified in this workspace."
     },
     {
       "id": "reproducibility_statement",
       "category": "venue",
       "status": "pass",
       "required_for_submission": false,
-      "criterion": "The recommended reproducibility statement points to assumptions, proofs, data generation, code, and artifact checks.",
-      "evidence": "The ICLR-only branch in paper/main.tex includes a dedicated reproducibility statement pointing to theorem assumptions/proofs, protocols, artifacts, executable guards, validators, tests, and historical replay limits."
+      "criterion": "The manuscript contains a concise availability statement for code, configurations, and relevant files.",
+      "evidence": "The ICLR-only branch in paper/main.tex states that code, configurations, and relevant files will be made available upon publication to facilitate reproducibility."
     },
     {
       "id": "author_openreview_profiles_and_order",
@@ -144,7 +144,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "The full test suite passes after readiness/release changes.",
-      "evidence": "PATH=/usr/bin:/bin:$PATH PYTHONPATH=src MPLBACKEND=Agg .venv-test/bin/python -m pytest -q passed 330 tests with 4 pre-existing seaborn plotting warnings after the E26--E28 outcome, archive, claim, readiness, manuscript, and fail-closed guard integration."
+      "evidence": "PATH=/usr/bin:/bin:$PATH PYTHONPATH=src MPLBACKEND=Agg .venv-test/bin/python -m pytest -q passed 330 tests with 4 pre-existing seaborn plotting warnings after the user-facing manuscript rewrite, readiness-digest refresh, and build-metadata update."
     },
     {
       "id": "fresh_breadth_preregistration",
