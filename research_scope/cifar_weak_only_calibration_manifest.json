@@ -1,0 +1,47 @@
+{
+  "schema_version": "cifar-phase1-pilot-manifest-v1",
+  "status": "exploratory_W_only_not_confirmation",
+  "archive_sha256": "62017064a23a1585cc1bafbeaf24f9cadd3d4c9df30d8717575e7b8da94637c5",
+  "dataset_archive_sha256": "6d958be074577803d12ecdefd02955f39262c83c16fe9348329d7fe0b5c001ce",
+  "draft_config_sha256": "c1daed9634dfc5b99eae968e22181f9fa1f5020197337a99b36be1407b6cf663",
+  "protocol_code_sha256": "c70e903951498384db25fbd632e78a49e77198de3bcb67870abf5aad4b42c634",
+  "calibration_runner_code_sha256": "b39be16eeb13d3ff5366045edae1ccc85330f02070f5fc605642185b1fca853a",
+  "candidate_not_frozen": {
+    "horizon_updates": 4710,
+    "checkpoint_spacing_updates": 157,
+    "beta": 0.5,
+    "scale_S": 0.75,
+    "learning_rate": 0.05,
+    "weight_decay": 0.0005
+  },
+  "runs": [
+    {
+      "directory": "results/cifar_w_calibration_seed13001_30ep",
+      "seed": 13001,
+      "condition": "weak_only",
+      "amplitude": 0.0,
+      "final_accuracy": 0.8428000211715698,
+      "final_brier_skill": 0.7556629180908203,
+      "first_logged_beta_0_5_hit_update": 1099,
+      "split_indices_sha256": "240ffb30fec4b15aa812b43ede59fd38aec3890feb175bd469d9a040fe98ba39",
+      "initial_weights_sha256": "02e744796dc24ad7957d75665fd26285351b4dd7613ab08805e71dc34b25b20c",
+      "metadata_sha256": "f2a9331d37b144f7ed7b41e1162023512179d7ff858aa614585671aba9af1b91",
+      "trace_sha256": "428e7f1f55069ffb024c9a3345a80c98515d819953d8537e9b9e56901031cea1",
+      "final_model_sha256": "da4d7e1d26e4171af3c07eb0bcc6d3e518fe07d7d03767365c9d9524539f81ca"
+    },
+    {
+      "directory": "results/cifar_w_calibration_seed13002_30ep",
+      "seed": 13002,
+      "condition": "weak_only",
+      "amplitude": 0.0,
+      "final_accuracy": 0.8396000266075134,
+      "final_brier_skill": 0.7483744621276855,
+      "first_logged_beta_0_5_hit_update": 942,
+      "split_indices_sha256": "11548f9842a1b0d50ffec71fb691d56c49334ed8573d617acb42a322d2985a43",
+      "initial_weights_sha256": "374fa21c0380fd9d3d6d02b151d4255e7177d2c8ac307d4e52f69aa5bacdb816",
+      "metadata_sha256": "da1a9f2f28d3f93c9c77f91ee5f161f0cbf1f87876660e577f330c43fae08403",
+      "trace_sha256": "0fb7436a796acb8063f9ff677a881f655bc1fe7d3f8613d2e62816fc5cb32652",
+      "final_model_sha256": "8c6ea4272fe29a91041fb22418a54021c0cf9686a76d7d4676c3979fb82f1ac0"
+    }
+  ]
+}

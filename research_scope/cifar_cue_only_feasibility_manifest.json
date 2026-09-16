@@ -1,0 +1,38 @@
+{
+  "schema_version": "cifar-phase1-pilot-manifest-v1",
+  "status": "exploratory_cue_only_not_confirmation",
+  "archive_sha256": "62017064a23a1585cc1bafbeaf24f9cadd3d4c9df30d8717575e7b8da94637c5",
+  "dataset_archive_sha256": "6d958be074577803d12ecdefd02955f39262c83c16fe9348329d7fe0b5c001ce",
+  "draft_config_sha256": "c1daed9634dfc5b99eae968e22181f9fa1f5020197337a99b36be1407b6cf663",
+  "protocol_code_sha256": "c70e903951498384db25fbd632e78a49e77198de3bcb67870abf5aad4b42c634",
+  "calibration_runner_code_sha256": "b39be16eeb13d3ff5366045edae1ccc85330f02070f5fc605642185b1fca853a",
+  "candidate_cue_amplitude_not_frozen": 0.5,
+  "runs": [
+    {
+      "directory": "results/cifar_cueonly_seed13001_amp05_30ep",
+      "seed": 13001,
+      "condition": "strong_only",
+      "amplitude": 0.5,
+      "final_accuracy": 0.9046000242233276,
+      "final_brier_skill": 0.7979925274848938,
+      "split_indices_sha256": "240ffb30fec4b15aa812b43ede59fd38aec3890feb175bd469d9a040fe98ba39",
+      "initial_weights_sha256": "02e744796dc24ad7957d75665fd26285351b4dd7613ab08805e71dc34b25b20c",
+      "metadata_sha256": "df6b832d99a36814c179bd4d71fb18e452a3ed26f286a348112dc94d18faf3da",
+      "trace_sha256": "3de815c73029c33613eae4a1a74ac01c7d7e3ca70e90f5cafdf449da079dd38d",
+      "final_model_sha256": "930651c20f9057303fc9767573d1d3b1fc4b73bc728a889cc1bebcaedffe9484"
+    },
+    {
+      "directory": "results/cifar_cueonly_seed13002_amp05_30ep",
+      "seed": 13002,
+      "condition": "strong_only",
+      "amplitude": 0.5,
+      "final_accuracy": 0.8925999999046326,
+      "final_brier_skill": 0.7744887471199036,
+      "split_indices_sha256": "11548f9842a1b0d50ffec71fb691d56c49334ed8573d617acb42a322d2985a43",
+      "initial_weights_sha256": "374fa21c0380fd9d3d6d02b151d4255e7177d2c8ac307d4e52f69aa5bacdb816",
+      "metadata_sha256": "2d1ba97c16dc1540d8fd4646ab2726468fa573fe7307a57058c3847eadc86e77",
+      "trace_sha256": "eafcb37f7b79c90eb39cb9760727dd069145256a8105b579743c70836a540d50",
+      "final_model_sha256": "a0bf0aa57d953c6f340f935806a2581fc5df3b66481ed010b12b3bec13a577e9"
+    }
+  ]
+}
