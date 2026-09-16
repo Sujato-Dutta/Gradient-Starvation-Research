@@ -2,6 +2,16 @@
 
 Status: **exploratory calibration only; no B run, no frozen preregistration, and no Gradient Starvation claim.**
 
+Freeze addendum, 16 September 2026: the calibration evidence was subsequently
+used without inspecting any B outcome to generate
+`configs/cifar_matched_preregistration.frozen.json` (SHA-256
+`8f662f9982f8445bc144a021b9717b2986ee7d4f7d19c03c9a1868f5aa1e2fea`).
+It pins reviewed source commit
+`0726aea12947a30eb60ae32fc9c1eb0a7a122660` and DGX environment-v2 manifest
+SHA-256 `1c1e2d126093f449e176a9ef22e637a8a52ceb0ac0574028f7930e0e2266a034`.
+The focused 25-test suite passed on the locked A100 1g.5gb MIG environment.
+No B run had occurred at freeze time.
+
 ## Evidence and integrity
 
 The four DGX pilot directories are preserved in the ignored local archive

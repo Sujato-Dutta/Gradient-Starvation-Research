@@ -1,0 +1,171 @@
+{
+  "schema_version": "cifar-matched-v1",
+  "status": "frozen",
+  "study_id": "cifar10-matched-ribbon-one-architecture",
+  "scope": "one architecture, eight fresh B/W paired seed blocks",
+  "source_commit": "0726aea12947a30eb60ae32fc9c1eb0a7a122660",
+  "environment_sha256": "1c1e2d126093f449e176a9ef22e637a8a52ceb0ac0574028f7930e0e2266a034",
+  "weak_only_calibration_manifest_sha256": "c119544e2ba514d44d24ea58fe4d9523bbc815cb451aa71ad46700cca812f525",
+  "cue_only_feasibility_manifest_sha256": "ff0b3fe0968c7526eb5829ea27c68472e4fec091c885b9bb4b30dddd3926863e",
+  "frozen_utc": "2026-09-16T18:11:51.157583+00:00",
+  "dataset": {
+    "name": "CIFAR-10",
+    "dataset_archive_sha256": "6d958be074577803d12ecdefd02955f39262c83c16fe9348329d7fe0b5c001ce",
+    "train_per_class": 4000,
+    "validation_per_class": 500,
+    "diagnostic_per_class": 500,
+    "diagnostic_probe_fit_per_class": 250,
+    "diagnostic_evaluation_per_class": 250,
+    "test": "original_10000_images_held_out",
+    "split_unit": "source_image",
+    "core_height": 32,
+    "core_width": 32,
+    "ribbon_height": 8,
+    "neutral_ribbon_value_before_normalization": 0.5,
+    "normalization": "(x-0.5)/0.5_after_ribbon_construction",
+    "codebook": "first_10_nonconstant_rows_of_16x16_Sylvester_Hadamard_as_4x4_patterns",
+    "patch_rows_within_ribbon": [
+      0,
+      4
+    ],
+    "patch_columns": [
+      0,
+      28
+    ],
+    "cue_reliability": 0.9,
+    "cue_amplitude": 0.5,
+    "matched_core_pixels_required": true,
+    "weak_arm_cue_after_normalization": 0.0
+  },
+  "model": {
+    "architecture_count": 1,
+    "architecture_id": "cnn4_gn",
+    "channels": [
+      32,
+      64,
+      128,
+      128
+    ],
+    "group_norm_groups": 8,
+    "classification_classes": 10,
+    "architecture_code_sha256": "c70e903951498384db25fbd632e78a49e77198de3bcb67870abf5aad4b42c634"
+  },
+  "training": {
+    "optimizer": "SGD_momentum",
+    "momentum": 0.9,
+    "batch_size": 256,
+    "learning_rate": 0.05,
+    "weight_decay": 0.0005,
+    "schedule": "cosine",
+    "horizon_updates": 4710,
+    "checkpoint_updates": [
+      157,
+      314,
+      471,
+      628,
+      785,
+      942,
+      1099,
+      1256,
+      1413,
+      1570,
+      1727,
+      1884,
+      2041,
+      2198,
+      2355,
+      2512,
+      2669,
+      2826,
+      2983,
+      3140,
+      3297,
+      3454,
+      3611,
+      3768,
+      3925,
+      4082,
+      4239,
+      4396,
+      4553,
+      4710
+    ],
+    "shared_initialization": true,
+    "shared_training_image_order": true,
+    "shared_augmentation_randomness": true,
+    "shared_optimizer_configuration": true
+  },
+  "seed_blocks": {
+    "weak_only_calibration": [
+      13001,
+      13002
+    ],
+    "debug_pilot_exploratory": [
+      23001
+    ],
+    "confirmation": [
+      33001,
+      33002,
+      33003,
+      33004,
+      33005,
+      33006,
+      33007,
+      33008
+    ]
+  },
+  "response": {
+    "name": "class_balanced_Brier_skill_on_fixed_common_neutral_diagnostic_set",
+    "beta": 0.5,
+    "scale_S": 0.75,
+    "weak_only_minimum_neutral_accuracy": 0.8,
+    "weak_only_scale_minimum": 0.25,
+    "primary_certificate": "nondegenerate_W_first_hit_and_negative_B_minus_W_gap_at_that_hit",
+    "secondary_certificate": "nondegenerate_W_first_hit_and_any_negative_gap_after_initialization",
+    "gap_tolerance": 1e-06
+  },
+  "confirmatory_analysis": {
+    "normalized_signed_auc_target": 0.1,
+    "pointwise_deficit_fraction_of_S": 0.1,
+    "contiguous_duration_fraction_of_H": 0.1,
+    "neutral_or_conflict_accuracy_harm_target": 0.05,
+    "uncertainty_unit": "paired_seed_block",
+    "confidence_interval": "two_sided_95_percent_paired_t_interval_with_all_8_blocks_reported",
+    "missing_runs": "report_and_do_not_replace_after_outcome_inspection",
+    "failed_W_gate": "indeterminate_not_negative"
+  },
+  "evaluation": [
+    "neutral_core_accuracy",
+    "random_cue_accuracy",
+    "conflict_accuracy_average_nine_wrong_codes_within_image",
+    "weak_response_gap_trajectory",
+    "signed_and_positive_part_weak_auc",
+    "persistent_suppression_duration",
+    "Brier_skill_and_cross_entropy",
+    "E4_lite_final_checkpoint_balanced_fresh_linear_head"
+  ],
+  "external_execution": {
+    "facility": "Mahindra University DGX",
+    "partition": "gpu_student",
+    "storage_quota_gb": 50,
+    "login_node_training_allowed": false,
+    "slurm_resources": {
+      "partition": "gpu_student",
+      "gpus": 1,
+      "gres": "gpu:a100_1g.5gb:1",
+      "cpus_per_task": 4,
+      "memory_gb": 16,
+      "time_limit": "02:00:00"
+    }
+  },
+  "e4_lite": {
+    "probe_l2_grid": [
+      0.0,
+      0.001,
+      0.01
+    ],
+    "max_iter": 100,
+    "selection_metric": "validation_cross_entropy",
+    "initialization": "all_zero_linear_softmax_head"
+  }
+}
