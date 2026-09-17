@@ -10,7 +10,7 @@
   },
   "freeze_policy": {
     "claims_frozen_before_new_confirmatory_outcomes": true,
-    "new_confirmatory_outcomes_allowed_now": false,
+    "new_confirmatory_outcomes_allowed_now": true,
     "unblock_requirements": [
       "a reviewed clean Git source state",
       "a content-addressed environment specification",

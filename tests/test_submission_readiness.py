@@ -54,12 +54,11 @@ def test_current_claim_and_readiness_manifests_are_consistent_and_not_ready():
     ] == ["E19", "E20", "E26", "E27", "E28", "E29"]
     assert claims["empirical_claims"]["submission_primary_claim_id"] == "E29"
     assert blocking
-    assert "clean_git_source_release" in blocking
+    assert "clean_git_source_release" not in blocking
     assert readiness["overall_submission_ready"] is False
     assert readiness["overall_decision"] == "no_go"
-    assert readiness["go_no_go"]["new_confirmatory_outcomes"]["blocking_gate_ids"] == [
-        "clean_git_source_release"
-    ]
+    assert readiness["go_no_go"]["new_confirmatory_outcomes"]["decision"] == "go"
+    assert readiness["go_no_go"]["new_confirmatory_outcomes"]["blocking_gate_ids"] == []
 
 
 def test_claim_set_rejects_wrong_evidence_freeze_branch():
@@ -137,7 +136,8 @@ def test_completed_program_state_and_readiness_states_are_frozen():
     assert _gate(readiness, "fresh_breadth_preregistration")["status"] == "pass"
     assert _gate(readiness, "fresh_breadth_validation")["status"] == "pass"
     assert _gate(readiness, "sequential_benchmark")["status"] == "fail"
-    assert _gate(readiness, "clean_git_source_release")["status"] == "blocked"
+    assert _gate(readiness, "clean_git_source_release")["status"] == "pass"
+    assert _gate(readiness, "clean_clone_artifact_reproduction")["status"] == "pass"
 
 
 def test_readiness_rejects_deleted_mandatory_gate():
@@ -363,7 +363,9 @@ def test_claim_set_cannot_extend_historical_limitation_to_completed_claims():
 def test_new_outcome_blocker_list_is_derived_from_canonical_gates():
     claims, readiness, _ = _payloads()
     mutated = copy.deepcopy(readiness)
-    mutated["go_no_go"]["new_confirmatory_outcomes"]["blocking_gate_ids"] = []
+    mutated["go_no_go"]["new_confirmatory_outcomes"]["blocking_gate_ids"] = [
+        "clean_git_source_release"
+    ]
 
     with pytest.raises(ManifestError, match="blocking_gate_ids"):
         validate_readiness(mutated, claims)

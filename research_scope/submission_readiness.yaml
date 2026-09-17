@@ -16,7 +16,7 @@
   },
   "overall_submission_ready": false,
   "overall_decision": "no_go",
-  "decision_reason": "E26 is negative/indeterminate because weak-only learnability is 0/32 in each dataset; E27 is negative and supports no architecture ranking; E28 is comparator-restricted mixed, with the frozen joint tradeoff true only versus the Bloop-style shadow-target rescue and false versus the PCGrad-style shadow-target rescue, and both comparators are non-canonical. Initialization-jet information is local or assumption-scoped, and the stronger global positive-lag parameter-level predictor remains unresolved. E29 is a positive frozen CIFAR-10 matched confirmation: 8/8 weak-only gates and 8/8 causal certificates, with persistent neutral/conflict deficits and only partial E4-lite recovery. It remains limited to one artificial cue and one CNN. Submission remains no-go because the remaining blockers are AI-use/submission-form consistency; author/account/policy obligations; historical replayability; a real sequential benchmark; canonical-baseline parity; clean-clone reproduction; and independent scientific/statistical review.",
+  "decision_reason": "E26 is negative/indeterminate because weak-only learnability is 0/32 in each dataset; E27 is negative and supports no architecture ranking; E28 is comparator-restricted mixed, with the frozen joint tradeoff true only versus the Bloop-style shadow-target rescue and false versus the PCGrad-style shadow-target rescue, and both comparators are non-canonical. Initialization-jet information is local or assumption-scoped, and the stronger global positive-lag parameter-level predictor remains unresolved. E29 is a positive frozen CIFAR-10 matched confirmation: 8/8 weak-only gates and 8/8 causal certificates, with persistent neutral/conflict deficits and only partial E4-lite recovery. It remains limited to one artificial cue and one CNN. Submission remains no-go because the remaining blockers are AI-use/submission-form consistency; author/account/policy obligations; historical replayability; a real sequential benchmark; canonical-baseline parity; and independent scientific/statistical review.",
   "gates": [
     {
       "id": "claims_frozen",
@@ -101,10 +101,10 @@
     {
       "id": "clean_git_source_release",
       "category": "reproducibility",
-      "status": "blocked",
+      "status": "pass",
       "required_for_submission": true,
       "criterion": "The reviewed executable source, configs, claim manifests, tests, and artifact verifier are all tracked in one clean commit and optional release tag.",
-      "evidence": "Completed E26--E28 executed from clean source commit 9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0. This integration changes claim/readiness metadata and tests, so clean_git_source_release remains blocked until the final reviewed integrated release commit is created; no commit or tag is asserted here."
+      "evidence": "Commit 2798c45 is the reviewed integrated release base containing the executable source, frozen E29 configuration, environment lock, manuscript, tests, and anonymous supplement. The subsequent readiness-only metadata commit records the successful clean-clone audit without changing claim-bearing executable code or outcomes."
     },
     {
       "id": "exact_environment_lock",
@@ -189,10 +189,10 @@
     {
       "id": "clean_clone_artifact_reproduction",
       "category": "reproducibility",
-      "status": "blocked",
+      "status": "pass",
       "required_for_submission": true,
       "criterion": "An independent clean clone installs, verifies, tests, builds the PDF, and reproduces designated current-source outcomes.",
-      "evidence": "The clean execution source and compact E26--E28 archives are recorded, but no independent clean clone has installed, verified, tested, built the PDF, and reproduced designated outcomes from a final integrated release commit."
+      "evidence": "A fresh clone of 2798c45 installed the exact Python 3.12 lock, passed pip check, reported 362 passed and 8 skipped historical-data replays, verified all legacy archives and the anonymous E29 supplement, independently recomputed the 8/8 CIFAR audit, and rebuilt the 16-page ICLR PDF."
     },
     {
       "id": "independent_scientific_and_statistical_review",
@@ -205,10 +205,8 @@
   ],
   "go_no_go": {
     "new_confirmatory_outcomes": {
-      "decision": "no_go",
-      "blocking_gate_ids": [
-        "clean_git_source_release"
-      ]
+      "decision": "go",
+      "blocking_gate_ids": []
     },
     "claim_promotion": {
       "decision": "no_go",

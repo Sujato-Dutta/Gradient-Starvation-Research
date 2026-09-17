@@ -74,7 +74,7 @@ READINESS_DECISION_REASON = (
     "limited to one artificial cue and one CNN. Submission remains no-go because the remaining "
     "blockers are AI-use/submission-form consistency; author/account/policy obligations; "
     "historical replayability; a real sequential benchmark; canonical-baseline parity; "
-    "clean-clone reproduction; and independent scientific/statistical review."
+    "and independent scientific/statistical review."
 )
 PROMOTION_SCOPE = (
     "E20 restricted drift/response crossing classification; E26 negative/indeterminate "
@@ -136,7 +136,7 @@ EXPECTED_GATE_STATUSES = {
     "author_openreview_profiles_and_order": "unknown",
     "coauthor_quota_and_reciprocal_reviewing": "unknown",
     "dual_submission_compliance": "unknown",
-    "clean_git_source_release": "blocked",
+    "clean_git_source_release": "pass",
     "exact_environment_lock": "pass",
     "historical_empirical_replayability": "fail",
     "compact_archive_integrity_verifier": "pass",
@@ -147,7 +147,7 @@ EXPECTED_GATE_STATUSES = {
     "kernel_certificate_or_empirical_reframing": "pass",
     "sequential_benchmark": "fail",
     "baseline_parity_audit": "blocked",
-    "clean_clone_artifact_reproduction": "blocked",
+    "clean_clone_artifact_reproduction": "pass",
     "independent_scientific_and_statistical_review": "blocked",
 }
 NEW_OUTCOME_GATE_IDS = [
@@ -913,7 +913,7 @@ def validate_readiness(
         supplement_digest == ANONYMOUS_CIFAR_SUPPLEMENT_SHA256,
         "Anonymous CIFAR supplement digest is stale.",
     )
-    _require_evidence_terms(gates_by_id["clean_git_source_release"], (EXECUTION_SOURCE_COMMIT, "final reviewed integrated release commit"))
+    _require_evidence_terms(gates_by_id["clean_git_source_release"], ("2798c45", "integrated release base"))
     _require_evidence_terms(gates_by_id["historical_empirical_replayability"], ("E19/E20", "E26--E28", "E29", "full checkpoints remain on DGX"))
     _require_evidence_terms(gates_by_id["compact_archive_integrity_verifier"], ("four historical physical archives", "67 files", "3510433 bytes", "E29 anonymous archive"))
     _require_evidence_terms(gates_by_id["fresh_breadth_preregistration"], (EXECUTION_SOURCE_COMMIT, CIFAR_SOURCE_COMMIT, "passed no-training preflight"))
@@ -950,7 +950,7 @@ def validate_readiness(
     )
     _require_evidence_terms(gates_by_id["sequential_benchmark"], ("E29", "not a real sequential benchmark", "0/32"))
     _require_evidence_terms(gates_by_id["baseline_parity_audit"], ("Bloop-style shadow-target rescue", "PCGrad-style shadow-target rescue", "canonical:false", "broad CDC superiority"))
-    _require_evidence_terms(gates_by_id["clean_clone_artifact_reproduction"], ("no independent clean clone", "final integrated release commit"))
+    _require_evidence_terms(gates_by_id["clean_clone_artifact_reproduction"], ("2798c45", "362 passed", "8 skipped", "16-page"))
 
     go_no_go = readiness.get("go_no_go")
     _require(isinstance(go_no_go, dict), "go_no_go must be a mapping.")
