@@ -1,4 +1,5 @@
 torch
+torchvision
 numpy
 scipy
 pandas
@@ -7,4 +8,3 @@ seaborn
 PyYAML
 tqdm
 pytest
-

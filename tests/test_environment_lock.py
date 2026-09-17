@@ -30,8 +30,8 @@ def test_validated_python_environment_is_exact_and_content_addressed():
     )
 
     assert report.python_version == "3.12.4"
-    assert report.package_count == 31
-    assert report.direct_requirement_count == 9
+    assert report.package_count == 32
+    assert report.direct_requirement_count == 10
 
 
 def test_environment_lock_rejects_nonexact_requirement(tmp_path):

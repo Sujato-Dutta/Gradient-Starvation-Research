@@ -62,8 +62,9 @@ def collect_files(repo_root: Path, evidence_root: Path) -> dict[str, bytes]:
             continue
         relative = source.relative_to(evidence_root)
         if relative.parts[:2] == ("results", "slurm"):
-            continue
-        if source.suffix.lower() not in {".json", ".csv", ".md", ".txt"}:
+            if source.suffix.lower() != ".err" or source.stat().st_size != 0:
+                continue
+        elif source.suffix.lower() not in {".json", ".csv", ".md", ".txt"}:
             continue
         archive_path = (Path("evidence") / relative).as_posix()
         data = source.read_bytes()
@@ -79,7 +80,7 @@ def build(repo_root: Path, evidence_root: Path, output: Path) -> dict[str, objec
     manifest: dict[str, object] = {
         "schema_version": "anonymous-cifar-supplement-v1",
         "source_commit": "0726aea12947a30eb60ae32fc9c1eb0a7a122660",
-        "scope": "CIFAR-10 matched confirmation; model checkpoints and Slurm logs excluded",
+        "scope": "CIFAR-10 matched confirmation; model checkpoints and identifying Slurm stdout excluded; empty stderr sentinels retained",
         "file_count_excluding_manifest": len(files),
         "files": [
             {"path": path, "bytes": len(data), "sha256": _sha256(data)}
@@ -121,8 +122,9 @@ def verify(archive_path: Path) -> dict[str, object]:
                 entry = expected[path]
                 if len(data) != entry["bytes"] or _sha256(data) != entry["sha256"]:
                     raise ValueError(f"size or digest mismatch for {path}")
-        if any(path.startswith("evidence/results/slurm/") for path in names):
-            raise ValueError("Slurm logs are forbidden in the anonymous supplement")
+        slurm_members = [path for path in names if path.startswith("evidence/results/slurm/")]
+        if any(not path.endswith(".err") or archive.read(path) for path in slurm_members):
+            raise ValueError("Only empty Slurm stderr sentinels are allowed")
     return {"sha256": _sha256(archive_path.read_bytes()), "file_count": len(names)}
 
 

@@ -39,9 +39,12 @@ def _fixture(root: Path, *, identifying: bool = False) -> tuple[Path, Path]:
         '{"path": "/dgxa_home/user/run"}\n' if identifying else '{"status": "complete"}\n',
         encoding="utf-8",
     )
-    slurm = evidence / "results" / "slurm" / "job.out"
+    slurm = evidence / "results" / "slurm" / "job.err"
     slurm.parent.mkdir(parents=True)
-    slurm.write_text("/dgxa_home/user is deliberately excluded\n", encoding="utf-8")
+    slurm.write_bytes(b"")
+    (slurm.parent / "job.out").write_text(
+        "/dgxa_home/user is deliberately excluded\n", encoding="utf-8"
+    )
     return repo, evidence
 
 
@@ -52,7 +55,8 @@ def test_anonymous_package_is_deterministic_and_excludes_slurm(tmp_path: Path):
     assert build(repo, evidence, first)["sha256"] == build(repo, evidence, second)["sha256"]
     assert verify(first)["file_count"] > 1
     with zipfile.ZipFile(first) as archive:
-        assert not any("/slurm/" in name for name in archive.namelist())
+        assert "evidence/results/slurm/job.err" in archive.namelist()
+        assert "evidence/results/slurm/job.out" not in archive.namelist()
 
 
 def test_anonymous_package_fails_closed_on_identifying_result(tmp_path: Path):

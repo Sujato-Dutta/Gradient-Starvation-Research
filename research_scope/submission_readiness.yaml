@@ -8,11 +8,11 @@
     "python_version": "3.12.4",
     "python_version_path": ".python-version",
     "lock_path": "requirements-lock-py312.txt",
-    "lock_sha256": "6f4c33c33b01104270197a14cbafd83145c8b3706839d7e6b7c03ac0d6e9c52b",
+    "lock_sha256": "66723099dbbf9a3a0e67e96eca6c4fccd421030e4f1ab291085fd4c06ddba2fc",
     "direct_requirements_path": "requirements.txt",
-    "package_count": 31,
+    "package_count": 32,
     "waterbirds_extras_included": false,
-    "scope_note": "This lock records the exact versions in the validated synthetic Python environment; optional unrun Waterbirds dependencies remain outside the claim-bearing environment, and clean-clone installation is a separate blocked gate."
+    "scope_note": "This lock records the exact versions in the validated synthetic and CIFAR Python environment, including torchvision; optional unrun Waterbirds-only extras remain outside the claim-bearing environment, and clean-clone installation is evaluated separately."
   },
   "overall_submission_ready": false,
   "overall_decision": "no_go",
@@ -56,7 +56,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "Main paper, appendix, supplementary material, metadata, links, code, and artifacts reveal no author identity.",
-      "evidence": "The rebuilt 16-page paper/iclr2027/submission.pdf passes title-block, source-text, and PDF-metadata identity checks. The repository is still not safe to upload wholesale because historical records contain local paths, but paper/artifacts/cifar-confirmation-anonymous-v1.zip (SHA-256 302c2e98a9b69f6c13c89875f20dfcf452cbf7b8954dd11325754717649adcaa) is a curated deterministic supplement that excludes Slurm logs and model payloads and passes the fail-closed identifying-token scan."
+      "evidence": "The rebuilt 16-page paper/iclr2027/submission.pdf passes title-block, source-text, and PDF-metadata identity checks. The repository is still not safe to upload wholesale because historical records contain local paths, but paper/artifacts/cifar-confirmation-anonymous-v1.zip (SHA-256 da4acec99abdfc4994c81fb27cca140a3937120dbf56eb14eacaf00e6b0464b8) is a curated deterministic supplement that excludes identifying Slurm stdout and model payloads, retains only empty stderr sentinels, and passes the fail-closed identifying-token scan."
     },
     {
       "id": "mandatory_ai_use_statement",
@@ -112,7 +112,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "The canonical validated environment has an exact, reviewed, content-addressed version manifest; clean-clone installation is evaluated separately.",
-      "evidence": "Python 3.12.4 is pinned in .python-version; requirements-lock-py312.txt contains 31 exact package pins from the validated environment and is bound by SHA-256 in this manifest. Optional unrun Waterbirds extras are explicitly excluded."
+      "evidence": "Python 3.12.4 is pinned in .python-version; requirements-lock-py312.txt contains 32 exact package pins, including torchvision for CIFAR, and is bound by SHA-256 in this manifest. Optional unrun Waterbirds-only extras are explicitly excluded."
     },
     {
       "id": "historical_empirical_replayability",
