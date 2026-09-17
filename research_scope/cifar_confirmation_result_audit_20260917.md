@@ -64,7 +64,7 @@ This result is strong enough to serve as the paper's flagship empirical demonstr
 Before submission, the critical path is:
 
 1. Correct the E0 manuscript counts and labels already identified in `research_scope/e0_consistency_audit_20260914.md`; regenerate affected tables/figures from the audited run-level source.
-2. Integrate this CIFAR result and the E4 wording into the nine-page main paper, with all eight seed points and confidence intervals in the appendix. Keep theory and empirical claims explicitly separated.
+2. Review and finalize the drafted CIFAR/E4 integration in the nine-page main paper, with all eight seed outcomes in the appendix. The local build now keeps the main narrative on pages 1--9 and starts references on page 10; keep theory and empirical claims explicitly separated during coauthor edits.
 3. Preserve the full DGX checkpoints and archive their hashes. Run one final held-out CIFAR test-set evaluation only if the fixed protocol/model-selection rules make it a clean one-shot check; label it post-preregistered if it was not frozen.
 4. Obtain independent proof review and either reproduce the external parameter-certificate package or remove claims that imply it was independently verified.
 5. Run the full test/readiness suite, rebuild both PDFs, check anonymity/page limits/AI-use statement, and audit every retained number against its pinned artifact.
