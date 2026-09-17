@@ -47,8 +47,9 @@ trajectory/prediction tables. More importantly, the exact dirty Python source by
 corresponding to the two recorded source fingerprints were not archived and are no
 longer reconstructible; the later tree fails the source guard. Thus a clean checkout
 can audit the compact outcomes and seals but cannot replay either archived study.
-E20 remains the submission-primary empirical claim only for its preregistered drift-
-and response-crossing classification endpoints. The digests establish artifact
+E20 remains a restricted historical claim only for its preregistered drift- and
+response-crossing classification endpoints. E29 is now the submission-primary
+empirical claim. The digests establish artifact
 identity and record historical source fingerprints; they do not reconstruct omitted
 source, prove kernel stability, or establish scientific validity.
 
@@ -65,6 +66,13 @@ digests, and sizes remain committed by each `artifact_manifest.json`, but hashes
 cannot recover the omitted bytes. This archive incompleteness is distinct from
 source reconstructibility and does not weaken the preserved top-level outcomes,
 seals, or integrity records.
+
+E29 is the frozen eight-block CIFAR-10 matched confirmation executed from clean
+source commit `0726aea12947a30eb60ae32fc9c1eb0a7a122660`. Its compact archive
+SHA-256 is `4310e61a825b9be939063e59ab27f229a3b4545c819b2de2c610ef1620e7bea8`;
+the tracked independent audit is `research_scope/cifar_confirmation_result_audit_20260917.md`.
+The compact archive intentionally omits model payloads. Full checkpoints remain on
+DGX working storage and still require a durable external backup.
 
 Historical E1, E2, E2-R, exploratory E-NL, and E3 artifacts were also dirty but
 predate source fingerprinting; their exact executed source cannot be reconstructed
@@ -225,6 +233,7 @@ general positive-disorder/positive-lag optimization-time DMFT.
 | E26 | In the completed semi-real generated-cue study, MNIST had `0/32` weak-only-learnable records and `0/32` causal certificates, with mean weak-AUC gap `−0.0012362842136667493` and 95% CI `[−0.0034405428466004646, 0.0010159591371180453]`; FashionMNIST likewise had `0/32` weak-only-learnable records and `0/32` causal certificates, with mean weak-AUC gap `−0.00010921728159018996` and 95% CI `[−0.004129384520886106, 0.003182670049955049]` | **EMPIRICAL NEGATIVE / INDETERMINATE RESULT** | `paper/artifacts/semi-real-generated-cue-v1-20260830`; zero causal certificates cannot be interpreted as evidence of no starvation because the weak-only learnability gate failed in every record of both datasets |
 | E27 | In completed expanded Study A (`192` records), the preregistered beta-robust architecture endpoint was negative for tanh, point estimate `0.2916666666666667`, 95% CI `[0.16666666666666666, 0.4166666666666667]`, Holm-adjusted `p=1`, and for GRU, point estimate `0`, 95% CI `[0, 0]`, Holm-adjusted `p=1` | **EMPIRICAL NEGATIVE RESULT** | `paper/artifacts/expanded-studies-v1-20260830`; neither architecture satisfies the frozen beta-robust claim, and no architecture ranking was performed or is supported |
 | E28 | In completed expanded Study B (`256` method-records), against the **Bloop-style shadow-target rescue** (`canonical: false`), CDC minus comparator weak rescue was `0.002198259399210656` with 95% CI `[0.0009779187294930126, 0.003277366267916477]`, comparator minus CDC trajectory deviation was `3.4651361294978416` with 95% CI `[3.3443827215131754, 3.5849715262780952]`, and comparator minus CDC final deviation was `0.6422362388111651` with 95% CI `[0.6288088704226539, 0.6563168084365315]`; the frozen joint tradeoff was true. Against the **PCGrad-style shadow-target rescue** (`canonical: false`), the corresponding estimates were `−0.00015351238407674823` with 95% CI `[−0.00047909348592838785, 0.00013248012419808214]`, `−0.48709889128076556` with 95% CI `[−0.6897378944428417, −0.27379327373499074]`, and `−0.2565436437726021` with 95% CI `[−0.3016841153614223, −0.2087651835754514]`; the frozen joint tradeoff was false | **EMPIRICAL, RESTRICTED MIXED RESULT** | `paper/artifacts/expanded-studies-v1-20260830`; only the Bloop-style comparator satisfies the frozen joint tradeoff, the PCGrad-style comparator does not, neither comparator has canonical parity, and no broad CDC superiority is supported |
+| E29 | In the frozen CIFAR-10 matched intervention, all `8/8` weak-only controls passed the learnability gate and all `8/8` cue-present partners satisfied the preregistered causal-starvation certificate. The normalized deficit AUC was `0.4887` (95% CI `[0.4135,0.5639]`) and material suppression persisted for `98.3%` of the post-onset horizon (95% CI `[97.6%,99.0%]`). Relative to W, B lost `19.9` points on neutral inputs, `27.6` on random cue, and `31.9` on conflict cue while gaining `16.8` on consistent cue. A fresh balanced head recovered `9.1` points but left a `10.8`-point B--W gap | **EMPIRICAL, CONFIRMATORY CONTROLLED EXISTENCE RESULT** | source `0726aea...`; config `8f662f...`; compact archive `4310e61a...`; `research_scope/cifar_confirmation_result_audit_20260917.md`. Scope is one artificial ribbon cue and one CNN; this is not prevalence, architecture universality, or a direct test of the continuous-time tail-area theorem |
 
 ---
 
@@ -240,6 +249,7 @@ new claims.
 |---|---|---|---|
 | Semi-real generated-cue intervention | `64` records across MNIST 3-vs-8 and FashionMNIST 0-vs-6, using common real core pixels plus an exactly removable label-aligned cue channel and paired BOTH/WEAK probes | **COMPLETED; E26 NEGATIVE / INDETERMINATE** | `paper/artifacts/semi-real-generated-cue-v1-20260830`; external pre-outcome seal and human authorization archived; clean source digest `02ba4ce4d6aff3ff726d9e798606aed29cff1276a6837e10ff43fb37824ca042` |
 | Expanded nonlinear and CDC tradeoff | Study A: `192` nonlinear records over frozen `beta` values `[0.25,0.5,1,2]`; Study B: `256` method-records for ERM, CDC, Bloop-style shadow-target rescue, and PCGrad-style shadow-target rescue | **COMPLETED; E27 NEGATIVE AND E28 RESTRICTED MIXED** | `paper/artifacts/expanded-studies-v1-20260830`; external pre-outcome seal and human authorization archived; clean source digest `7f43b602b71199367938c1df51aa201a7d601e57ebb47835bdb5c9282b42f84e` |
+| CIFAR-10 matched confirmation | `8` frozen paired seed blocks, core-plus-ribbon B versus core-only W, with neutral/random/consistent/conflict behavior and E4-lite fresh-head evaluation | **COMPLETED; E29 PASSED CONFIRMATORY** | source commit `0726aea12947a30eb60ae32fc9c1eb0a7a122660`; compact archive SHA-256 `4310e61a825b9be939063e59ab27f229a3b4545c819b2de2c610ef1620e7bea8`; all array tasks completed and passed preflight |
 
 The frozen Study-B victory rule was conjunctive: weak rescue plus trajectory-level
 and final strong-preservation superiority, with feasibility, cap, cost, and
@@ -369,3 +379,6 @@ CDC superiority.
 16. E28 establishes broad CDC superiority. Its frozen joint tradeoff passed only
     against the Bloop-style shadow-target rescue and failed against the PCGrad-style
     shadow-target rescue.
+17. E29 establishes prevalence, natural-cue validity, recurrent-network universality,
+    or the continuous-time tail-area theorem. It is one controlled CIFAR-10 existence
+    result for one artificial cue and one CNN architecture.

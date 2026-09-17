@@ -47,12 +47,12 @@ def test_current_claim_and_readiness_manifests_are_consistent_and_not_ready():
     blocking = validate_readiness(readiness, claims)
 
     assert claims["schema_version"] == "submission-claim-set-v2"
-    assert claims["freeze_revision"] == 4
+    assert claims["freeze_revision"] == 5
     assert provenance["schema_version"] == 3
     assert [
         study["id"] for study in claims["empirical_claims"]["studies"]
-    ] == ["E19", "E20", "E26", "E27", "E28"]
-    assert claims["empirical_claims"]["submission_primary_claim_id"] == "E20"
+    ] == ["E19", "E20", "E26", "E27", "E28", "E29"]
+    assert claims["empirical_claims"]["submission_primary_claim_id"] == "E29"
     assert blocking
     assert "clean_git_source_release" in blocking
     assert readiness["overall_submission_ready"] is False
@@ -91,11 +91,12 @@ def test_readiness_rejects_stale_decision_reason():
         validate_readiness(mutated, claims)
 
 
-def test_e26_e28_exact_membership_values_and_shared_archive_are_frozen():
+def test_e26_e29_exact_membership_values_and_shared_archive_are_frozen():
     claims, _, _ = _payloads()
     e26 = _study(claims, "E26")
     e27 = _study(claims, "E27")
     e28 = _study(claims, "E28")
+    e29 = _study(claims, "E29")
 
     assert e26["status"] == "failed_negative_indeterminate"
     assert e26["records"] == 64
@@ -114,6 +115,12 @@ def test_e26_e28_exact_membership_values_and_shared_archive_are_frozen():
         "expanded-nonlinear-beta-cdc-tradeoff-v1"
     )
     assert e27["evidence"]["claim_ids"] == ["E27", "E28"]
+    assert e29["status"] == "passed_confirmatory"
+    assert e29["weak_only_gate_pass_count"] == 8
+    assert e29["primary_causal_certificate_count"] == 8
+    assert e29["metrics"]["signed_normalized_deficit_auc"]["mean"] == pytest.approx(
+        0.48870154668887456
+    )
 
 
 def test_completed_program_state_and_readiness_states_are_frozen():
@@ -181,7 +188,17 @@ def test_claim_set_rejects_missing_e28_membership():
         if study["id"] != "E28"
     ]
 
-    with pytest.raises(ManifestError, match="exactly E19, E20, E26, E27, and E28"):
+    with pytest.raises(ManifestError, match="exactly E19, E20, E26, E27, E28, and E29"):
+        validate_claim_set(mutated, provenance)
+
+
+def test_claim_set_rejects_promoted_cifar_scope_or_mutated_result():
+    claims, _, provenance = _payloads()
+    mutated = copy.deepcopy(claims)
+    e29 = _study(mutated, "E29")
+    e29["scope_limit"] = "This proves universal gradient starvation."
+
+    with pytest.raises(ManifestError, match="E29 CIFAR confirmatory"):
         validate_claim_set(mutated, provenance)
 
 

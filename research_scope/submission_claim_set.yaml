@@ -1,7 +1,7 @@
 {
   "schema_version": "submission-claim-set-v2",
   "format_note": "This file uses the JSON subset of YAML 1.2 so it can be validated with the Python standard library.",
-  "freeze_revision": 4,
+  "freeze_revision": 5,
   "source_of_truth": {
     "claim_ledger": "research_scope/claim_ledger.md",
     "provenance_manifest": "paper/artifacts/provenance_manifest.json",
@@ -90,7 +90,7 @@
       "T19", "T20"
     ],
     "blocked_or_excluded_theory_claim_ids": ["T17", "T18"],
-    "interpretation": "Weak learning failure alone is not gradient starvation. Exact finite-width response dynamics and the matched BOTH/WEAK intervention separate cross-entropy weighting and response-specific geometry, rate suppression, outcome suppression, weak-only gate failure, and causal starvation. T19 and the initialization-jet results provide only local or assumption-scoped signs; they do not supply a global positive-lag parameter-level predictor. That predictor remains unresolved, as do general positive-disorder closure and nonlinear kernel-stability claims."
+    "interpretation": "Weak learning failure alone is not gradient starvation. Exact finite-width response dynamics and the matched BOTH/WEAK intervention separate cross-entropy weighting and response-specific geometry, rate suppression, outcome suppression, weak-only gate failure, and causal starvation. T19 and the initialization-jet results provide only local or assumption-scoped signs; they do not supply a global positive-lag parameter-level predictor. That predictor remains unresolved, as do general positive-disorder closure and nonlinear kernel-stability claims. A frozen eight-block CIFAR-10 matched intervention now establishes one controlled existence result: all eight weak-only controls learn, while all eight cue-present partners satisfy the preregistered causal-starvation certificate and lose neutral/conflict performance. This one artificial cue and one CNN do not establish prevalence, architecture universality, or the continuous-time tail-area theorem."
   },
   "theory_claims": [
     {
@@ -215,8 +215,8 @@
     }
   ],
   "empirical_claims": {
-    "submission_primary_claim_id": "E20",
-    "submission_primary_endpoints": ["drift_crossing", "response_crossing"],
+    "submission_primary_claim_id": "E29",
+    "submission_primary_endpoints": ["weak_only_gate", "at_hit_causal_certificate", "behavioral_accuracy", "e4_lite"],
     "studies": [
       {
         "id": "E19",
@@ -451,6 +451,39 @@
           "central_indexed_file_count": 28,
           "central_indexed_bytes": 2800551
         }
+      },
+      {
+        "id": "E29",
+        "status": "passed_confirmatory",
+        "role": "frozen one-architecture CIFAR-10 matched confirmation",
+        "paired_seed_blocks": 8,
+        "weak_only_gate_pass_count": 8,
+        "primary_causal_certificate_count": 8,
+        "all_post_initialization_checkpoint_gaps_negative": true,
+        "metrics": {
+          "signed_normalized_deficit_auc": {"mean": 0.48870154668887456, "ci95": [0.4134652840634009, 0.5639378093143482]},
+          "maximum_material_deficit_duration_fraction": {"mean": 0.9829501353141692, "ci95": [0.975690854764631, 0.9902094158637074]},
+          "original_head_neutral_accuracy_gap_B_minus_W": {"mean": -0.19894999265670776, "ci95": [-0.22594634589590384, -0.17195363941751168]},
+          "original_head_random_accuracy_gap_B_minus_W": {"mean": -0.27559999376535416, "ci95": [-0.28722279389842154, -0.2639771936322868]},
+          "original_head_consistent_accuracy_gap_B_minus_W": {"mean": 0.16825001686811447, "ci95": [0.15797709192234982, 0.17852294181387912]},
+          "original_head_conflict_accuracy_gap_B_minus_W": {"mean": -0.3188333362340927, "ci95": [-0.32958905569404773, -0.3080776167741377]},
+          "fresh_head_neutral_accuracy_gap_B_minus_W": {"mean": -0.1075499951839447, "ci95": [-0.11137304047692884, -0.10372694989096057]},
+          "fresh_head_gap_recovery": {"mean": 0.09139999747276306, "ci95": [0.06529960806819932, 0.1175003868773268]}
+        },
+        "scope_limit": "One artificial ribbon cue and one CNN architecture establish a controlled existence and diagnostic result, not prevalence, architecture universality, or the continuous-time tail-area theorem.",
+        "evidence": {
+          "source_commit": "0726aea12947a30eb60ae32fc9c1eb0a7a122660",
+          "config_sha256": "8f662f9982f8445bc144a021b9717b2986ee7d4f7d19c03c9a1868f5aa1e2fea",
+          "environment_sha256": "1c1e2d126093f449e176a9ef22e637a8a52ceb0ac0574028f7930e0e2266a034",
+          "dataset_archive_sha256": "6d958be074577803d12ecdefd02955f39262c83c16fe9348329d7fe0b5c001ce",
+          "compact_archive_sha256": "4310e61a825b9be939063e59ab27f229a3b4545c819b2de2c610ef1620e7bea8",
+          "audit_metrics_path": "research_scope/cifar_confirmation_audit_metrics_20260917.json",
+          "audit_metrics_sha256": "88cf4aa2ce37aaa7c41123e2f5807e23602ed5914f35b13af7dd4285b07263c7",
+          "audit_report_path": "research_scope/cifar_confirmation_result_audit_20260917.md",
+          "audit_report_sha256": "1323d05cfddda32c15f23de0e7bc964e2350c29213666c4f569ea965d1acbd6d",
+          "compact_archive_contains_model_payloads": false,
+          "full_model_payload_retention": "DGX working storage; external durable backup pending"
+        }
       }
     ],
     "secondary_non_promotable_outputs": [
@@ -516,6 +549,17 @@
         "externally_sealed_preoutcome": true,
         "human_authorization_seal_archived": true,
         "baseline_parity_audit_complete": false
+      },
+      {
+        "id": "cifar_matched_confirmation",
+        "status": "completed_passed_confirmatory",
+        "claim_ids": ["E29"],
+        "paired_seed_blocks": 8,
+        "source_commit": "0726aea12947a30eb60ae32fc9c1eb0a7a122660",
+        "design": "Frozen matched CIFAR-10 core-plus-ribbon versus core-only intervention with eight paired seed blocks, behavioral evaluation, and E4-lite fresh linear probes.",
+        "externally_frozen_preoutcome": true,
+        "preflight_passed": true,
+        "all_array_tasks_completed": true
       }
     ]
   },

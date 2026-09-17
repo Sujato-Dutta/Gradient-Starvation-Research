@@ -28,9 +28,17 @@ ALLOWED_READINESS_STATUSES = {
 THEORY_IDS = [f"T{index}" for index in range(1, 21)]
 INCLUDED_THEORY_IDS = [*[f"T{index}" for index in range(1, 17)], "T19", "T20"]
 BLOCKED_THEORY_IDS = ["T17", "T18"]
-PRIMARY_ENDPOINTS = ["drift_crossing", "response_crossing"]
+CROSSING_ENDPOINTS = ["drift_crossing", "response_crossing"]
+CIFAR_PRIMARY_ENDPOINTS = [
+    "weak_only_gate",
+    "at_hit_causal_certificate",
+    "behavioral_accuracy",
+    "e4_lite",
+]
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 EXECUTION_SOURCE_COMMIT = "9ebbc617a9aaad5c3c19e9d5fd4fa08f2d3517d0"
+CIFAR_SOURCE_COMMIT = "0726aea12947a30eb60ae32fc9c1eb0a7a122660"
+ANONYMOUS_CIFAR_SUPPLEMENT_SHA256 = "302c2e98a9b69f6c13c89875f20dfcf452cbf7b8954dd11325754717649adcaa"
 CANONICAL_SOURCE_BRANCH = "codex/gradient-starvation-research"
 FINDINGS_FIRST_HEADLINE_LABEL = "reviewed findings-first causal-gradient-starvation synthesis"
 FINDINGS_FIRST_HEADLINE_INTERPRETATION = (
@@ -40,7 +48,12 @@ FINDINGS_FIRST_HEADLINE_INTERPRETATION = (
     "weak-only gate failure, and causal starvation. T19 and the initialization-jet "
     "results provide only local or assumption-scoped signs; they do not supply a global "
     "positive-lag parameter-level predictor. That predictor remains unresolved, as do "
-    "general positive-disorder closure and nonlinear kernel-stability claims."
+    "general positive-disorder closure and nonlinear kernel-stability claims. A frozen "
+    "eight-block CIFAR-10 matched intervention now establishes one controlled existence "
+    "result: all eight weak-only controls learn, while all eight cue-present partners "
+    "satisfy the preregistered causal-starvation certificate and lose neutral/conflict "
+    "performance. This one artificial cue and one CNN do not establish prevalence, "
+    "architecture universality, or the continuous-time tail-area theorem."
 )
 BLOOP_COMPARATOR_LABEL = "Bloop-style shadow-target rescue"
 PCGRAD_COMPARATOR_LABEL = "PCGrad-style shadow-target rescue"
@@ -55,18 +68,22 @@ READINESS_DECISION_REASON = (
     f"comparator-restricted mixed, with the frozen joint tradeoff true only versus the {BLOOP_COMPARATOR_LABEL} "
     f"and false versus the {PCGRAD_COMPARATOR_LABEL}, and both comparators are non-canonical. "
     "Initialization-jet information is local or assumption-scoped, and the stronger "
-    "global positive-lag parameter-level predictor remains unresolved. Submission remains "
-    "no-go because the remaining blockers are anonymity; AI-use/submission-form consistency; "
-    "author/account/policy obligations; a final integrated clean release; historical "
-    "replayability; a sequential benchmark; a parity audit; clean-clone reproduction; "
-    "and independent scientific/statistical review."
+    "global positive-lag parameter-level predictor remains unresolved. E29 is a positive "
+    "frozen CIFAR-10 matched confirmation: 8/8 weak-only gates and 8/8 causal certificates, "
+    "with persistent neutral/conflict deficits and only partial E4-lite recovery. It remains "
+    "limited to one artificial cue and one CNN. Submission remains no-go because the remaining "
+    "blockers are AI-use/submission-form consistency; author/account/policy obligations; "
+    "historical replayability; a real sequential benchmark; canonical-baseline parity; "
+    "clean-clone reproduction; and independent scientific/statistical review."
 )
 PROMOTION_SCOPE = (
     "E20 restricted drift/response crossing classification; E26 negative/indeterminate "
     "semi-real result with 0/32 weak-only learnability per dataset; E27 negative "
     "beta-robust result without architecture ranking; E28 comparator-restricted mixed "
     f"result, with the frozen joint tradeoff true only versus the non-canonical {BLOOP_COMPARATOR_LABEL} "
-    f"and false versus the non-canonical {PCGRAD_COMPARATOR_LABEL}"
+    f"and false versus the non-canonical {PCGRAD_COMPARATOR_LABEL}; E29 frozen CIFAR-10 "
+    "matched confirmation with 8/8 causal certificates, restricted to one artificial cue "
+    "and one CNN architecture"
 )
 KERNEL_REFRAMING_CRITERION = (
     "Either a nonvacuous initialization-time movement certificate is established or all "
@@ -113,7 +130,7 @@ EXPECTED_GATE_STATUSES = {
     "official_2027_requirements_sourced": "pass",
     "official_style_package_integrated": "pass",
     "submission_main_text_at_most_9_pages": "pass",
-    "double_blind_anonymity_audit": "fail",
+    "double_blind_anonymity_audit": "pass",
     "mandatory_ai_use_statement": "unknown",
     "reproducibility_statement": "pass",
     "author_openreview_profiles_and_order": "unknown",
@@ -162,7 +179,7 @@ FROZEN_ACCEPTANCE_CONTRACTS = {
         },
     },
     "E20": {
-        "accepted_primary_outputs": PRIMARY_ENDPOINTS,
+        "accepted_primary_outputs": CROSSING_ENDPOINTS,
         "acceptance_contract": {
             "total_records": 64,
             "records_by_model": {"tanh": 32, "gru": 32},
@@ -485,10 +502,10 @@ def _validate_completed_execution(claims: dict[str, Any]) -> None:
     _require(isinstance(programs, list), "Completed execution programs must be a list.")
     _require(
         [program.get("id") for program in programs if isinstance(program, dict)]
-        == ["semi_real_generated_cue", "expanded_nonlinear_cdc"],
-        "Completed execution must contain exactly both sealed programs in order.",
+        == ["semi_real_generated_cue", "expanded_nonlinear_cdc", "cifar_matched_confirmation"],
+        "Completed execution must contain exactly the two historical programs and CIFAR confirmation in order.",
     )
-    semi_real, expanded = programs
+    semi_real, expanded, cifar = programs
     _require(
         semi_real.get("status") == "completed_failed_negative_indeterminate"
         and semi_real.get("claim_ids") == ["E26"]
@@ -510,6 +527,16 @@ def _validate_completed_execution(claims: dict[str, Any]) -> None:
         and expanded.get("human_authorization_seal_archived") is True
         and expanded.get("baseline_parity_audit_complete") is False,
         "Expanded completed execution state is not canonical.",
+    )
+    _require(
+        cifar.get("status") == "completed_passed_confirmatory"
+        and cifar.get("claim_ids") == ["E29"]
+        and cifar.get("paired_seed_blocks") == 8
+        and cifar.get("source_commit") == CIFAR_SOURCE_COMMIT
+        and cifar.get("externally_frozen_preoutcome") is True
+        and cifar.get("preflight_passed") is True
+        and cifar.get("all_array_tasks_completed") is True,
+        "CIFAR matched confirmation execution state is not canonical.",
     )
 
 
@@ -675,9 +702,76 @@ def _validate_e28(study: dict[str, Any]) -> None:
     )
 
 
+def _validate_e29(study: dict[str, Any]) -> None:
+    expected_metrics = {
+        "signed_normalized_deficit_auc": {
+            "mean": 0.48870154668887456,
+            "ci95": [0.4134652840634009, 0.5639378093143482],
+        },
+        "maximum_material_deficit_duration_fraction": {
+            "mean": 0.9829501353141692,
+            "ci95": [0.975690854764631, 0.9902094158637074],
+        },
+        "original_head_neutral_accuracy_gap_B_minus_W": {
+            "mean": -0.19894999265670776,
+            "ci95": [-0.22594634589590384, -0.17195363941751168],
+        },
+        "original_head_random_accuracy_gap_B_minus_W": {
+            "mean": -0.27559999376535416,
+            "ci95": [-0.28722279389842154, -0.2639771936322868],
+        },
+        "original_head_consistent_accuracy_gap_B_minus_W": {
+            "mean": 0.16825001686811447,
+            "ci95": [0.15797709192234982, 0.17852294181387912],
+        },
+        "original_head_conflict_accuracy_gap_B_minus_W": {
+            "mean": -0.3188333362340927,
+            "ci95": [-0.32958905569404773, -0.3080776167741377],
+        },
+        "fresh_head_neutral_accuracy_gap_B_minus_W": {
+            "mean": -0.1075499951839447,
+            "ci95": [-0.11137304047692884, -0.10372694989096057],
+        },
+        "fresh_head_gap_recovery": {
+            "mean": 0.09139999747276306,
+            "ci95": [0.06529960806819932, 0.1175003868773268],
+        },
+    }
+    expected_evidence = {
+        "source_commit": CIFAR_SOURCE_COMMIT,
+        "config_sha256": "8f662f9982f8445bc144a021b9717b2986ee7d4f7d19c03c9a1868f5aa1e2fea",
+        "environment_sha256": "1c1e2d126093f449e176a9ef22e637a8a52ceb0ac0574028f7930e0e2266a034",
+        "dataset_archive_sha256": "6d958be074577803d12ecdefd02955f39262c83c16fe9348329d7fe0b5c001ce",
+        "compact_archive_sha256": "4310e61a825b9be939063e59ab27f229a3b4545c819b2de2c610ef1620e7bea8",
+        "audit_metrics_path": "research_scope/cifar_confirmation_audit_metrics_20260917.json",
+        "audit_metrics_sha256": "88cf4aa2ce37aaa7c41123e2f5807e23602ed5914f35b13af7dd4285b07263c7",
+        "audit_report_path": "research_scope/cifar_confirmation_result_audit_20260917.md",
+        "audit_report_sha256": "1323d05cfddda32c15f23de0e7bc964e2350c29213666c4f569ea965d1acbd6d",
+        "compact_archive_contains_model_payloads": False,
+        "full_model_payload_retention": "DGX working storage; external durable backup pending",
+    }
+    scope_limit = (
+        "One artificial ribbon cue and one CNN architecture establish a controlled "
+        "existence and diagnostic result, not prevalence, architecture universality, "
+        "or the continuous-time tail-area theorem."
+    )
+    _require(
+        study.get("status") == "passed_confirmatory"
+        and study.get("role") == "frozen one-architecture CIFAR-10 matched confirmation"
+        and study.get("paired_seed_blocks") == 8
+        and study.get("weak_only_gate_pass_count") == 8
+        and study.get("primary_causal_certificate_count") == 8
+        and study.get("all_post_initialization_checkpoint_gaps_negative") is True
+        and study.get("metrics") == expected_metrics
+        and study.get("scope_limit") == scope_limit
+        and study.get("evidence") == expected_evidence,
+        "E29 CIFAR confirmatory verdict, exact values, scope, or evidence is not canonical.",
+    )
+
+
 def validate_claim_set(claims: dict[str, Any], provenance: dict[str, Any]) -> None:
     _require(claims.get("schema_version") == "submission-claim-set-v2", "Unsupported submission claim-set schema.")
-    _require(claims.get("freeze_revision") == 4, "Submission claim-set freeze revision must be 4.")
+    _require(claims.get("freeze_revision") == 5, "Submission claim-set freeze revision must be 5.")
     source_of_truth = claims.get("source_of_truth")
     _require(isinstance(source_of_truth, dict), "source_of_truth must be a mapping.")
     _require(
@@ -697,21 +791,22 @@ def validate_claim_set(claims: dict[str, Any], provenance: dict[str, Any]) -> No
 
     empirical = claims.get("empirical_claims")
     _require(isinstance(empirical, dict), "empirical_claims must be a mapping.")
-    _require(empirical.get("submission_primary_claim_id") == "E20", "E20 must remain the submission primary claim.")
-    _require(empirical.get("submission_primary_endpoints") == PRIMARY_ENDPOINTS, "Submission primary endpoints must be exactly drift_crossing and response_crossing.")
+    _require(empirical.get("submission_primary_claim_id") == "E29", "E29 must be the submission primary empirical claim.")
+    _require(empirical.get("submission_primary_endpoints") == CIFAR_PRIMARY_ENDPOINTS, "Submission primary endpoints must match the frozen CIFAR confirmation.")
     studies = empirical.get("studies")
     _require(isinstance(studies, list), "empirical_claims.studies must be a list.")
     study_ids = [study.get("id") for study in studies if isinstance(study, dict)]
-    _require(study_ids == ["E19", "E20", "E26", "E27", "E28"], "Frozen studies must be exactly E19, E20, E26, E27, and E28 in order.")
+    _require(study_ids == ["E19", "E20", "E26", "E27", "E28", "E29"], "Frozen studies must be exactly E19, E20, E26, E27, E28, and E29 in order.")
     studies_by_id = {study["id"]: study for study in studies}
     _require(studies_by_id["E19"].get("status") == "failed" and studies_by_id["E19"].get("broad_hypothesis_accepted") is False, "E19 must remain failed.")
-    _require(studies_by_id["E20"].get("status") == "passed_restricted" and studies_by_id["E20"].get("primary_outputs") == PRIMARY_ENDPOINTS, "E20 must remain a restricted crossing-event success.")
+    _require(studies_by_id["E20"].get("status") == "passed_restricted" and studies_by_id["E20"].get("primary_outputs") == CROSSING_ENDPOINTS, "E20 must remain a restricted crossing-event success.")
     for study_id in ("E19", "E20"):
         _validate_historical_study(study_id, studies_by_id[study_id], historical_by_id[study_id])
 
     _validate_e26(studies_by_id["E26"])
     _validate_e27(studies_by_id["E27"])
     _validate_e28(studies_by_id["E28"])
+    _validate_e29(studies_by_id["E29"])
     for study_id in ("E26", "E27", "E28"):
         archive_id = CLAIM_TO_COMPLETED_ARCHIVE[study_id]
         _require(archive_id in completed_by_id, f"{study_id} completed archive is missing from central provenance.")
@@ -751,7 +846,7 @@ def _require_evidence_terms(gate: dict[str, Any], terms: tuple[str, ...]) -> Non
 def _validate_findings_first_documents(repo_root: Path) -> None:
     expected_digests = {
         "README.md": "059235c2b64289c76e940117c85bd05c4033c4992b1f99d145c949343f7305f6",
-        "paper/main.tex": "9f9b4f94d9eb12af0d070b2f86d5d73b05f5368c53f3ce7442aea06667e92061",
+        "paper/main.tex": "f1dd153bee7ddd02845d5fe5fcaaad698b0797dfc501ab9d015bef418a24fdba",
     }
     for relative_path, expected_digest in expected_digests.items():
         document = repo_root / relative_path
@@ -804,15 +899,28 @@ def validate_readiness(
         is (gates_by_id["official_2027_requirements_sourced"]["status"] == "pass"),
         "Claim-set and readiness venue-verification states disagree.",
     )
-    _require_evidence_terms(gates_by_id["claims_frozen"], ("E19", "E20", "E26", "E27", "E28"))
+    _require_evidence_terms(gates_by_id["claims_frozen"], ("revision 5", "E19", "E20", "E26", "E27", "E28", "E29"))
+    _require_evidence_terms(
+        gates_by_id["double_blind_anonymity_audit"],
+        ("cifar-confirmation-anonymous-v1.zip", ANONYMOUS_CIFAR_SUPPLEMENT_SHA256),
+    )
+    supplement = Path(__file__).resolve().parents[1] / "paper" / "artifacts" / "cifar-confirmation-anonymous-v1.zip"
+    try:
+        supplement_digest = hashlib.sha256(supplement.read_bytes()).hexdigest()
+    except OSError as error:
+        raise ManifestError("Anonymous CIFAR supplement is unavailable.") from error
+    _require(
+        supplement_digest == ANONYMOUS_CIFAR_SUPPLEMENT_SHA256,
+        "Anonymous CIFAR supplement digest is stale.",
+    )
     _require_evidence_terms(gates_by_id["clean_git_source_release"], (EXECUTION_SOURCE_COMMIT, "final reviewed integrated release commit"))
-    _require_evidence_terms(gates_by_id["historical_empirical_replayability"], ("E19/E20", "E26--E28", "not self-contained replay packages"))
-    _require_evidence_terms(gates_by_id["compact_archive_integrity_verifier"], ("four physical archives", "67 files", "3510433 bytes", "Shared claim_ids"))
-    _require_evidence_terms(gates_by_id["fresh_breadth_preregistration"], (EXECUTION_SOURCE_COMMIT, "preflight manifests", "human authorization seals"))
+    _require_evidence_terms(gates_by_id["historical_empirical_replayability"], ("E19/E20", "E26--E28", "E29", "full checkpoints remain on DGX"))
+    _require_evidence_terms(gates_by_id["compact_archive_integrity_verifier"], ("four historical physical archives", "67 files", "3510433 bytes", "E29 anonymous archive"))
+    _require_evidence_terms(gates_by_id["fresh_breadth_preregistration"], (EXECUTION_SOURCE_COMMIT, CIFAR_SOURCE_COMMIT, "passed no-training preflight"))
     fresh_validation = gates_by_id["fresh_breadth_validation"]
     _require(
         fresh_validation.get("criterion")
-        == "Fresh untouched cells and seeds execute the frozen Study-A beta-robust endpoint, Study-B comparator-specific joint tradeoff, and semi-real generated-cue outcomes under preregistered gates, whether the claims support, falsify, or restrict promotion.",
+        == "Fresh untouched cells and seeds execute the frozen Study-A beta-robust endpoint, Study-B comparator-specific joint tradeoff, semi-real generated-cue outcomes, and eight-block CIFAR-10 matched confirmation under preregistered gates, whether claims support, falsify, or restrict promotion.",
         "fresh_breadth_validation criterion must name the actual frozen endpoints.",
     )
     _require_evidence_terms(
@@ -826,6 +934,9 @@ def validate_readiness(
             PCGRAD_COMPARATOR_LABEL,
             "Both E28 comparators are non-canonical",
             "no broad CDC superiority",
+            "E29",
+            "8/8 weak-only gates",
+            "one artificial cue and one CNN",
         ),
     )
     kernel_reframing = gates_by_id["kernel_certificate_or_empirical_reframing"]
@@ -837,7 +948,7 @@ def validate_readiness(
     _validate_findings_first_documents(
         (framing_root or Path(__file__).resolve().parents[1]).resolve()
     )
-    _require_evidence_terms(gates_by_id["sequential_benchmark"], ("0/32", "Zero certificates", "no starvation"))
+    _require_evidence_terms(gates_by_id["sequential_benchmark"], ("E29", "not a real sequential benchmark", "0/32"))
     _require_evidence_terms(gates_by_id["baseline_parity_audit"], ("Bloop-style shadow-target rescue", "PCGrad-style shadow-target rescue", "canonical:false", "broad CDC superiority"))
     _require_evidence_terms(gates_by_id["clean_clone_artifact_reproduction"], ("no independent clean clone", "final integrated release commit"))
 

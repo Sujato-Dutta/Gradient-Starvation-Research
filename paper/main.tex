@@ -17,20 +17,19 @@
 \usepackage{url}
 
 \ifdefined\ICLRSubmission
-  % Keep the official under-review banner visible with current fancyhdr releases.
-  % The vendored conference style itself remains byte-identical to the official file.
   \lhead{Under review as a conference paper at ICLR 2027}
 \fi
 
+% Independent counters for main paper theorem-like environments
 \newtheorem{theorem}{Theorem}
-\newtheorem{corollary}[theorem]{Corollary}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}{Corollary}
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
 \theoremstyle{definition}
-\newtheorem{definition}[theorem]{Definition}
-\newtheorem{assumption}[theorem]{Assumption}
+\newtheorem{definition}{Definition}
+\newtheorem{assumption}{Assumption}
 \theoremstyle{remark}
-\newtheorem{remark}[theorem]{Remark}
+\newtheorem{remark}{Remark}
 
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\E}{\mathbb{E}}
@@ -48,7 +47,11 @@
 \begin{figure}[t]
   \centering
   \IfFileExists{#1}{\includegraphics[width=0.97\linewidth]{#1}}{%
-    \fbox{\parbox{0.92\linewidth}{\centering Figure unavailable in this build.}}}
+    \IfFileExists{figures/#1}{\includegraphics[width=0.97\linewidth]{figures/#1}}{%
+      \IfFileExists{artifacts/#1}{\includegraphics[width=0.97\linewidth]{artifacts/#1}}{%
+        \IfFileExists{../#1}{\includegraphics[width=0.97\linewidth]{../#1}}{%
+          \IfFileExists{../paper/#1}{\includegraphics[width=0.97\linewidth]{../paper/#1}}{%
+            \fbox{\parbox{0.92\linewidth}{\centering Figure unavailable in this build.}}}}}}}
   \caption{#2}
   \label{#3}
 \end{figure}}
@@ -66,1895 +69,579 @@ Matched Counterfactuals and Exact Finite-Width Dynamics}
 \maketitle
 
 \begin{abstract}
-A weak feature can remain poorly learned because its weak-only task is slow, a
-stronger cue changes cross-entropy weighting, or response-specific parameter
-geometry suppresses its update.  These explanations are not causally equivalent.
-We introduce a matched weak-only counterfactual: the pair shares initialization,
-data, weak inputs, and noise; only the strong input is ablated.  Causal starvation
-requires both outcome suppression and a nondegenerate weak-only first hit; gate
-failure instead leaves causal status indeterminate.
-
-For full-batch logistic gradient flow, we derive exact finite-width dynamics,
-$\dot M_w=c_w^\top q(r)/n$ and $\dot r=\Theta q(r)/n$, which separate sample
-weighting from response geometry without a mean-field closure.  The pathwise
-identity $\Delta=P-N$ determines when later suppression outweighs earlier
-transfer.  Controlled studies show starvation exists but depends on lag,
-architecture, initialization, target, and horizon: some regimes yield causal
-certificates; others show only crossings or fail the weak-only gate.  A
-frozen-tangent surrogate predicts held-out crossing events but not calibrated
-trajectories or causal status.  Initialization and local-tube results provide
-conditional prediction; Counterfactual Drift Correction gives a unique
-minimum-norm local intervention in a fixed parameter chart.  Neither result
-supplies a global positive-lag predictor or a broadly superior optimizer.
+A weak predictive feature can remain poorly learned because its isolated learning is inherently slow, a stronger cue suppresses cross-entropy sample weights, or coupled parameter geometry actively penalizes its update. These explanations are not causally equivalent. We introduce a matched weak-only counterfactual: the paired models share initialization, data sequence, weak coordinates, and noise; only the strong cue is ablated. Causal starvation requires both outcome suppression and a nondegenerate weak-only first hit; gate failure leaves causal status indeterminate. For full-batch logistic gradient flow, we derive exact finite-width dynamics, $\dot M_w=c_w^\top q(r)/n$ and $\dot r=\Theta q(r)/n$, and the pathwise identity $\Delta=P-N$. In a frozen matched CIFAR-10 study, all 8/8 fresh seed blocks pass the causal certificate; the cue-trained model loses 19.9 percentage points on neutral inputs and 31.9 points under cue conflict. A common fresh linear head recovers part, but not all, of the neutral gap. Controlled recurrent studies further show that starvation is regime-dependent. Finally, Counterfactual Drift Correction (CDC) provides a unique minimum-norm instantaneous intervention in a fixed parameter chart, but operates as a local mechanism control rather than a globally superior optimizer.
 \end{abstract}
 
 \section{Introduction}
-When a model learns one predictive feature and neglects another, the neglected
-feature is often called ``starved.''  But a small weak-feature response is not by
-itself causal evidence: the weak signal may simply be too difficult to learn under
-the chosen target and horizon.  The distinction matters especially in recurrent
-networks, where cue strength, temporal separation, shared parameters, and evolving
-geometry jointly determine learning.
+When a deep neural network learns one dominant feature while neglecting another predictive cue, the neglected signal is frequently described as ``starved'' \citep{pezeshki2021gradient}. However, observing a small response to a weak feature during training is not by itself causal evidence of gradient starvation: the weak feature may simply be unlearnable under the chosen architecture, optimization horizon, or signal-to-noise ratio. The distinction is acute in recurrent neural networks, where cue strength, temporal separation, parameter sharing, and non-static geometry jointly govern representation learning \citep{bengio1994learning,hochreiter1997lstm,cho2014gru}.
 
-We isolate the effect of the strong cue with a matched intervention.  A
-both-feature model is paired with a weak-only model that shares initialization,
-labels, samples, weak inputs, and noise; only the strong input channel is ablated.
-For their weak responses, let
-$\Delta=M_w^{\Bcond}-M_w^{\Wcond}$ and $d=\Delta'$.  Positive $d$ is relative
-transfer, negative $d$ is rate suppression, and negative $\Delta$ is outcome
-suppression.  We call the outcome \emph{causal starvation} only when the weak-only
-trajectory also reaches a prespecified target at a nondegenerate positive time.
-If that gate fails, causal status is indeterminate: neither starvation nor its
-absence has been established.
+To isolate the causal effect of a strong cue, we introduce a matched counterfactual intervention grounded in formal causal inference \citep{pearl2009causality,peters2017elements}. A both-feature model $\mathcal{M}_{\Bcond}$ is paired with a weak-only model $\mathcal{M}_{\Wcond}$ that shares identical weight initialization, sample sequence, weak inputs, and optimizer state; only the strong input channel is zeroed out. Tracking the paired weak-feature response gap $\Delta(\tau) = M_w^{\Bcond}(\tau) - M_w^{\Wcond}(\tau)$ and its time derivative $d(\tau) = \dot{\Delta}(\tau)$, positive $d$ indicates \emph{relative transfer}, negative $d$ indicates \emph{rate suppression}, and negative $\Delta$ indicates \emph{outcome suppression}. We reserve the term \emph{causal starvation} strictly for settings where outcome suppression occurs alongside a successful weak-only first hit of a prespecified target $\beta$ within horizon $H$. When the weak-only gate fails, causal status is indeterminate: neither starvation nor its absence is established.
 
-\paragraph{Four findings.}
+\paragraph{Four core contributions.}
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{A matched weak-only counterfactual is necessary for causal
-  attribution.}  It separates a feature that would not learn on its own from one
-  whose learning is suppressed by the strong cue.  It also separates transient
-  rate suppression from outcome suppression: later negative drift matters only if
-  it repays earlier positive transfer.
-
-  \item \textbf{Exact finite-width dynamics separate cross-entropy weighting from
-  response geometry.}  For signed sample logits $r$ under full-batch logistic
-  gradient flow,
-  \begin{equation}
-    \dot M_w=\frac1n c_w^\top q(r),\qquad
-    \dot r=\frac1n\Theta q(r),
-    \label{eq:intro-exact-flow}
-  \end{equation}
-  where $q_i(r)=\sigma(-r_i)$, $\Theta=JJ^\top$, and
-  $c_w=J\nabla M_w$.  These are finite-width chain-rule identities, not a
-  mean-field closure.  For the paired response, the exact pathwise balance
-  $\Delta=P-N$ shows that outcome suppression occurs precisely when accumulated
-  negative relative drift exceeds accumulated positive relative drift.
-
-  \item \textbf{Starvation exists, but is regime-dependent rather than universal.}
-  In the controlled linear grid, every measured cell at lags 0, 2, and 4 has a
-  positive weak-AUC deficit and a learnable weak-only control, whereas no lag-8
-  weak-only trajectory reaches its target.  At one nonlinear cell, tanh yields
-  complete causal certificates in 3/8 seeds; GRU exhibits drift and response
-  crossings in 5/8 seeds but no causal certificate because its weak-only gate
-  fails.  Semi-real generated-cue and threshold-robust extensions are likewise
-  negative or indeterminate.  These fixed-grid counts establish neither universal
-  prevalence nor an architecture ranking.
-
-  \item \textbf{Prediction and intervention have precise local or conditional
-  limits.}  Realized initialization gives an exact local sign in the dense-linear
-  setting, and stronger crossing guarantees require independently established
-  parameter-tube or kernel-movement bounds.  A frozen-tangent model classifies
-  held-out crossing events, but absent those bounds it is an empirical event
-  heuristic rather than calibrated dynamics or causal prediction.  Counterfactual
-  Drift Correction (CDC) is the unique minimum-Euclidean-norm feasible uncapped
-  target-attaining correction in a fixed parameter chart, with only a local
-  one-step guarantee.  Its comparisons support neither canonical parity nor broad
-  optimizer superiority.
+  \item \textbf{Matched causal diagnosis.} We formalize the matched weak-only counterfactual and establish a two-condition causal certificate, proving that weak learning failure alone is insufficient to diagnose starvation.
+  \item \textbf{Exact finite-width dynamics.} We derive exact response--logit flow equations for full-batch logistic gradient flow, $\dot M_w = \frac1n c_w^\top q(r)$ and $\dot r = \frac1n \Theta q(r)$, separating cross-entropy weighting from parameter geometry. The pathwise identity $\Delta(t) = P(t) - N(t)$ establishes that rate suppression yields outcome suppression if and only if accumulated suppression exceeds accumulated transfer.
+  \item \textbf{Regime-dependent empirical evidence.} A frozen one-architecture CIFAR-10 confirmation yields causal certificates in 8/8 fresh paired seeds, persistent core-response deficits, and large neutral/conflict accuracy harm. In the audited recurrent results, tanh passes the at-hit certificate in 8/8 seeds (3/8 transfer then suppress; 5/8 suppress throughout), whereas GRU remains indeterminate because its weak-only gate fails in 8/8 seeds.
+  \item \textbf{Prediction limits and local mechanism control.} We characterize the scope of frozen-tangent models and prove that Counterfactual Drift Correction (CDC) is the unique minimum-norm instantaneous target-attaining intervention in a fixed parameter chart, providing localized mechanism control without asserting global optimizer superiority.
 \end{enumerate}
-
-The resulting contribution is a disciplined chain from exact dynamics to matched
-causal intervention, pathwise attribution, and local mechanism control.  We do not
-solve a general positive-lag optimization-time mean-field theory, derive a universal
-boundary in cue strength and lag, or claim that all weak learning failure is
-starvation.  Instead, we give exact identities, assumption-scoped predictions, and
-regime-specific evidence with explicit causal gates.
 
 \section{Related work}
 \paragraph{Feature starvation and shortcut learning.}
-Cross-entropy can favor one predictive feature strongly enough to starve another,
-and Spectral Decoupling was introduced to counter that mechanism
-\citep{pezeshki2021gradient}.  Shortcut learning and simplicity bias describe the
-broader tendency to exploit predictive but unintended cues
-\citep{geirhos2020shortcut,shah2020pitfalls}.  Our contribution is diagnostic:
-the matched weak-only trajectory tests whether the neglected feature would have
-learned without the strong cue, while direct drift and pathwise balance distinguish
-rate suppression from an adverse outcome.
+Cross-entropy loss can favor rapidly learnable features strongly enough to suppress gradient signal to slower predictive features, an effect termed gradient starvation \citep{pezeshki2021gradient}. Shortcut learning, simplicity bias, and early memorization describe the broader empirical tendency of deep networks to exploit low-complexity, unintended cues at the expense of robust core features \citep{arpit2017memorization,geirhos2020shortcut,shah2020pitfalls,herrmann2020shapes,scimeca2022which}. Invariant risk minimization and failure-guided debiasing seek representations invariant to spurious correlations \citep{arjovsky2019irm,nam2020lff}. Our contribution is diagnostic: the matched weak-only counterfactual explicitly tests whether the neglected feature would have been learned in the absence of the strong cue, while direct drift and pathwise attribution distinguish transient rate suppression from adverse outcome suppression.
 
-Methods such as Group DRO, Just Train Twice, and last-layer retraining target
-worst-group performance under spurious correlations
-\citep{sagawa2020groupdro,liu2021jtt,kirichenko2023dfr}.  We address a different
-question---causal attribution of feature-level learning dynamics---and do not
-propose a competing robustness benchmark.  Our generated-cue image study preserves
-real core pixels but is not an unmodified natural-spurious-correlation setting.
+Methods such as Group DRO, Just Train Twice, and last-layer retraining target worst-group performance under spurious correlations \citep{sagawa2020groupdro,liu2021jtt,kirichenko2023dfr}. We address a distinct question---causal attribution of feature-level learning dynamics---and do not propose a competing robustness benchmark. Our semi-real study evaluates controlled cue ablation on standard image benchmarks \citep{lecun1998mnist,xiao2017fashion}, preserving real core pixels while isolating causal feature interactions.
+
+\paragraph{Implicit bias and margin dynamics.}
+On separable classification problems trained with exponential or logistic losses, gradient flow exhibits an implicit bias toward directional maximum-margin separators in linear and homogeneous models \citep{soudry2018implicit,gunasekar2018implicit,ji2019implicit}. While asymptotic margin maximization governs directional convergence at infinite time, gradient starvation is an optimization-time transient phenomenon where rapid growth of dominant logit responses diminishes sample weights before secondary features can develop. Our exact finite-width equations capture this trajectory-level competition directly.
 
 \paragraph{Wide and recurrent learning dynamics.}
-Neural tangent kernels characterize infinite-width gradient dynamics
-\citep{jacot2018ntk}, and wide-network linearization motivates frozen-tangent
-approximations \citep{lee2019wide}.  Our response--logit equations are instead
-exact at finite width.  Freezing their kernels defines a nonlinear logistic
-tangent model, but transferring its predictions to a trained network requires
-kernel-movement control that we do not establish for tanh RNNs or GRUs.
-Low-dimensional overlap theories for low-rank RNNs show that loss-invisible modes
-can retain training history \citep{ger2026invisible}, cautioning against closure in
-only the visible response coordinates.  Mean-field descriptions of structure and
-disorder in trained recurrent circuits \citep{clark2026structure} study a distinct
-long-time equilibrium setting.  We therefore do not claim a general recurrent
-optimization-time mean-field theory.
+Neural tangent kernels (NTK) characterize infinite-width gradient flow in the lazy training regime \citep{jacot2018ntk,du2019gradient,arora2019exact,chizat2019lazy}, and wide-network linearization motivates frozen-tangent approximations \citep{lee2019wide}. Beyond the lazy regime, feature learning limits describe representation movement in overparameterized models \citep{yang2021tensor,bordelon2022learning}. Our response--logit equations are instead exact at finite width for arbitrary trajectories. Freezing their kernels defines a nonlinear logistic tangent surrogate, but transferring its predictions to a trained network requires kernel-movement bounds that we do not establish for tanh RNNs or GRUs. Low-dimensional overlap theories for low-rank RNNs demonstrate that loss-invisible modes retain training history \citep{ger2026invisible}, echoing classical insights on disordered recurrent dynamics \citep{sompolinsky1988chaos} and cautioning against closure in only the visible response coordinates. Mean-field descriptions of structure and disorder in trained recurrent circuits \citep{clark2026structure} study a distinct long-time equilibrium setting. We therefore do not claim a general recurrent optimization-time mean-field theory.
 
-\paragraph{Gradient surgery.}
-PCGrad projects conflicting task gradients \citep{yu2020pcgrad}; Bloop stabilizes
-an auxiliary projection with an exponential moving average
-\citep{hsieh2024bloop}.  CDC also uses a projection, but its protected direction is
-the gradient of a strong-feature response and its target comes from the matched
-weak-only trajectory.  That extra counterfactual requires a constructible ablation,
-a second model, lockstep training, and full-batch gradients.  Our comparisons use
-adapted shadow-target variants and support neither equivalence to the original
-methods nor broad CDC superiority.
+\paragraph{Gradient surgery and multi-task optimization.}
+Multi-task learning often suffers from destructive gradient interference, inspiring multi-objective formulations including MGDA \citep{sener2018mgda}, conflict-averse descent (CAGrad) \citep{liu2021cagrad}, gradient sign dropout (GradDrop) \citep{chen2020graddrop}, rotational alignment (Rotograd) \citep{javaloy2022rotograd}, and bargaining game approaches \citep{navon2022nash}. PCGrad projects conflicting task gradients onto orthogonal subspaces \citep{yu2020pcgrad}; Bloop stabilizes auxiliary projections using an exponential moving average \citep{hsieh2024bloop}. CDC also employs a projection, but its protected direction is the gradient of a strong-feature response and its target is derived from the matched weak-only trajectory. That extra counterfactual requires a constructible ablation, a second model, lockstep training, and full-batch gradients. Our comparisons use adapted shadow-target variants and support neither equivalence to the original methods nor broad CDC superiority.
 
-\ifdefined\ICLRSubmission
-\section{Causal diagnosis}
-Weak learning failure alone is not gradient starvation.  For
-$C\in\{\Bcond,\Wcond\}$, the both-feature and weak-only models share
-initialization, labels, samples, weak coordinates, and noise; only the strong input
-channel is ablated under $\Wcond$.  Let $M_w^C(\tau)$ be their common
-weak-feature response and define
+\section{Matched causal diagnosis}
+\subsection{The matched weak-only counterfactual}
+Let condition $C \in \{\Bcond, \Wcond\}$ denote the both-feature and weak-only training runs, respectively. The two models share an identical parameter initialization $\theta_{\Bcond}(0) = \theta_{\Wcond}(0) = \theta_0 \in \R^P$, identical training sequence samples $(x_i, y_i)_{i=1}^n$, and identical optimization hyperparameters. The only difference is an intervention on the input: in $\Wcond$, the strong cue channel is set identically to zero ($x_{s,i} \equiv 0$).
+
+Let $M_s^C(\theta), M_w^C(\theta)$ be differentiable scalar functionals measuring the model's response to isolated strong and weak cues. For linear models, these correspond to channel-localized mode projections; for nonlinear recurrent models, they are defined via odd symmetric unit-probe contrasts: $M_a^C(\theta) = [f_C(x_a^+; \theta) - f_C(x_a^-; \theta)] / 2$.
+For logistic gradient flow on full-batch signed logits $r_i^C(\theta) = y_i f_C(x_i; \theta)$, the empirical loss is:
 \begin{equation}
- \Delta(\tau)=M_w^{\Bcond}(\tau)-M_w^{\Wcond}(\tau),\qquad
- d(\tau)=\Delta'(\tau),\qquad \Delta(0)=0.
- \label{eq:iclr-gap}
+  L_C(\theta) = \frac{1}{n} \sum_{i=1}^n \log\left(1 + e^{-r_i^C(\theta)}\right), \qquad \dot{\theta}_C = -\nabla L_C(\theta_C).
+  \label{eq:logistic-flow}
 \end{equation}
-Positive $d$ is \emph{relative transfer}, negative $d$ is \emph{rate
-suppression}, and negative $\Delta$ is \emph{outcome suppression}.  Causal
-starvation requires outcome suppression together with a weak-only first hit of a
-prespecified target $\beta$ at a nondegenerate time in $(0,H]$.  A crossing without
-that first hit is descriptive but not causal.  Conversely, failure of the gate is
-not evidence that starvation is absent; causal status is indeterminate under the
-chosen target and horizon.
-
-\section{Exact dynamics and pathwise attribution}
-For signed logits $r_i^C=y_if_C(x_i;\theta_C)$ and full-batch logistic gradient
-flow, the finite-width chain rule gives
+The paired response gap $\Delta(\tau)$ and instantaneous equal-time relative drift $d(\tau)$ are:
 \begin{equation}
- \dot M_a^C=\frac1{n_C}\sum_i
- \langle\nabla M_a^C,\nabla r_i^C\rangle\,\sigma(-r_i^C).
- \label{eq:iclr-cross-kernel}
+  \Delta(\tau) = M_w^{\Bcond}(\tau) - M_w^{\Wcond}(\tau), \qquad d(\tau) = \dot{\Delta}(\tau) = \dot{M}_w^{\Bcond}(\tau) - \dot{M}_w^{\Wcond}(\tau).
+  \label{eq:paired-gap}
 \end{equation}
-With sample Jacobian $J$, empirical NTK $\Theta=JJ^\top$, response cross-kernel
-$c_a=J\nabla M_a$, and $q_i(r)=\sigma(-r_i)$, the exact coupled dynamics are
-\begin{equation}
- \boxed{\dot r=\Theta q(r)/n},\qquad
- \boxed{\dot M_w=c_w^\top q(r)/n}.
- \label{eq:iclr-exact-dynamics}
-\end{equation}
-Thus $q(r)$ captures cross-entropy weighting across samples, while $c_w$ captures
-response-specific parameter geometry.  No width limit or response-coordinate
-closure is required.
+Since $\theta_{\Bcond}(0) = \theta_{\Wcond}(0)$, the gap begins at zero: $\Delta(0) = 0$.
 
-Dynamics alone do not turn rate suppression into an adverse outcome.  For any
-absolutely continuous $\Delta$, define
-$P(t)=\int_0^t[d(u)]_+\,du$ and $N(t)=\int_0^t[-d(u)]_+\,du$.  Then
-\begin{equation}
- \boxed{\Delta(t)=P(t)-N(t)},\qquad
- \Delta(t)<0\ \Longleftrightarrow\ N(t)>P(t).
- \label{eq:iclr-drift-balance}
-\end{equation}
-This identity permits arbitrary sign changes and immediate suppression.  Under a
-single positive-to-negative drift crossing, the negative tail area must exceed the
-entire earlier positive area before outcome suppression occurs.  Causal starvation
-then additionally requires the nondegenerate weak-only first hit.
+\subsection{Transfer, rate suppression, and outcome suppression}
+Table~\ref{tab:terminology} summarizes the formal interpretation of signs in the paired framework.
 
-\section{Experimental design}
-The \emph{controlled linear grid} uses a dense linear RNN, strengths
-$\rho\in\{1,2,4,8\}$, lags $\{0,2,4,8\}$, and seed IDs 4--11.  Each lag therefore
-contains 32 strength--seed cells but only eight independent seed IDs.  The
-prespecified gate is $\beta=0.25$ by $H=5$.
-
-The \emph{nonlinear fixed-cell study} evaluates tanh RNNs and GRUs at
-$(\rho,\mathrm{lag})=(4,2)$ with eight seeds per architecture, paired lockstep
-training, direct response drift, and $\beta=0.5$.  A \emph{broad tangent pilot}
-first tested five outputs on 16 architecture--seed records.  A subsequent fresh
-\emph{held-out event test} restricted evaluation to drift- and response-crossing
-labels on a crossed $4\times8$ data/model-seed design per architecture; its 95\%
-intervals resample both observed seed axes.
-
-The \emph{semi-real generated-cue study} crosses four data seeds with eight model
-seeds on each of MNIST 3-vs-8 and FashionMNIST 0-vs-6.  Real image pixels form the
-core input, while the paired intervention removes an exactly separable generated
-cue.  The \emph{threshold-robust extension} evaluates tanh and GRU over three fixed
-cells and $\beta\in\{0.25,0.5,1,2\}$.  Finally, the \emph{mechanism-control
-comparison} contrasts ERM, CDC, and adapted Bloop-style and PCGrad-style
-shadow-target variants.  The shadow methods use the weak-only trajectory and thus
-require a second model and roughly twice the model work.
-
-\section{Regime-dependent results}
 \begin{table}[t]
 \centering
-\caption{Paired diagnoses across regimes.  Counts describe the observed grids;
-they are not population prevalence estimates or architecture rankings.}
-\label{tab:iclr-regimes}
+\caption{Mathematical terminology and causal interpretation in the paired diagnostic framework.}
+\label{tab:terminology}
 \small
 \resizebox{\linewidth}{!}{%
-\begin{tabular}{lllc}
+\begin{tabular}{lll}
 \toprule
-Setting & Regime & Main outcome & Mean weak-AUC deficit \\
+Quantity & Sign & Causal / Dynamical Interpretation \\
 \midrule
-Controlled linear & lag 0 & 32/32 positive; 32/32 weak-only learn & 5.76 \\
-Controlled linear & lag 2 & 32/32 positive; 32/32 weak-only learn & 8.93 \\
-Controlled linear & lag 4 & 32/32 positive; 32/32 weak-only learn & 6.11 \\
-Controlled linear & lag 8 & 0/32 weak-only first hits; indeterminate & --- \\
-Nonlinear fixed cell & tanh & 3/8 complete causal certificates & --- \\
-Nonlinear fixed cell & GRU & 5/8 crossings; 0/8 causal certificates & --- \\
-Generated-cue MNIST & 3 vs. 8 & 0/32 weak-only learn; 0/32 causal & --- \\
-Generated-cue FashionMNIST & 0 vs. 6 & 0/32 weak-only learn; 0/32 causal & --- \\
+$d(\tau) = \dot{\Delta}(\tau)$ & $> 0$ & \textbf{Relative transfer}: strong cue accelerates instantaneous weak learning. \\
+$d(\tau) = \dot{\Delta}(\tau)$ & $< 0$ & \textbf{Rate suppression}: strong cue decelerates instantaneous weak learning. \\
+$\Delta(\tau)$ & $< 0$ & \textbf{Outcome suppression}: accumulated weak response is worse under both cues. \\
+$\tau_W^*(\beta)$ & $\in (0, H]$ & \textbf{Weak-only learnable}: weak-only control achieves target $\beta$ within horizon $H$. \\
+$\tau_W^*(\beta)$ & $> H$ / $\infty$ & \textbf{Weak-only unlearnable}: gate fails; causal status is \emph{indeterminate}. \\
 \bottomrule
 \end{tabular}}
 \end{table}
 
-\paragraph{Controlled and nonlinear regimes.}
-At lags 0, 2, and 4, every controlled linear cell has a positive paired weak-AUC
-deficit and a learnable weak-only control; at each fixed lag, the mean deficit also
-increases over the measured strength grid.  At lag 8, none of the 32 weak-only
-trajectories first hits $\beta=0.25$ by $H=5$.  These cells are causally
-indeterminate, not evidence that starvation is absent.  At the fixed nonlinear
-cell, tanh has complete transfer-to-starvation certificates in 3/8 seeds.  GRU has
-drift and response crossings in 5/8, but 0/8 causal certificates because every
-weak-only path fails the $\beta=0.5$ gate.  This is the central empirical
-separation between crossing events and causal attribution.
+\begin{figure}[t]
+  \centering
+  \IfFileExists{figures/fig1_causal_schematic.pdf}{\includegraphics[width=0.97\linewidth]{figures/fig1_causal_schematic.pdf}}{%
+    \IfFileExists{fig1_causal_schematic.pdf}{\includegraphics[width=0.97\linewidth]{fig1_causal_schematic.pdf}}{%
+      \fbox{\parbox{0.92\linewidth}{\centering Figure 1 unavailable in this build.}}}}
+  \caption{Schematic of the matched counterfactual causal diagnosis. A both-feature model $\mathcal{M}_{\Bcond}$ and weak-only control $\mathcal{M}_{\Wcond}$ share initialization $\theta(0)$, data samples $(x_i, y_i)$, and noise. The strong cue is ablated in $\Wcond$. Causal starvation is certified if and only if both outcome suppression ($\Delta < 0$) and the weak-only learnability gate ($\tau_W^* \le H$) are satisfied.}
+  \label{fig:causal-schematic}
+\end{figure}
 
-\paragraph{Tangent event prediction.}
-The broad tangent pilot failed its five-output criterion because tanh weak-only
-learnability was $4/8$, below the required $5/8$.  On fresh held-out records, the
-restricted event test classified drift crossings in 60/64 cases (95\% CI
-$[0.8125,1]$) and response crossings in 64/64 (95\% CI $[1,1]$).  This supports
-crossing-event classification at one controlled cell only.  It does not validate
-phase, causal status, weak-only learnability, calibrated trajectories, crossing
-times, magnitudes, prevalence, or kernel stability.
+\subsection{Formal causal-starvation certificate}
+We now state the central definition of the paper.
 
-\paragraph{Breadth and threshold sensitivity.}
-The generated-cue MNIST and FashionMNIST tasks each have 0/32 weak-only-learnable
-records and 0/32 causal certificates.  Both results are negative/indeterminate:
-the gate blocks a false-positive causal label but cannot establish absence of
-starvation or intrinsic dataset unlearnability.  In the threshold-robust extension,
-the all-$\beta$ estimate is $0.292$ (95\% CI $[0.167,0.417]$) for tanh and $0$
-(95\% CI $[0,0]$) for GRU, with Holm-adjusted $p=1$ for both.  The endpoint is
-negative and supports no architecture ranking.
+\begin{definition}[Causal starvation certificate]
+\label{def:causal-starvation}
+Fix a target response threshold $\beta > 0$ and optimization horizon $H > 0$. Let $\tau_W^*(\beta) = \inf\{\tau \in [0, H] : M_w^{\Wcond}(\tau) \ge \beta\}$ denote the first hitting time of the weak-only control, with $\inf \varnothing = \infty$.
+A training run exhibits a \textbf{causal starvation certificate} if and only if:
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Nondegenerate weak-only learnability:} $\tau_W^*(\beta) \in (0, H]$ with $\beta > M_w^{\Wcond}(0)$; and
+  \item \textbf{Outcome suppression at target:} $\Delta(\tau_W^*(\beta)) < 0$.
+\end{enumerate}
+If $\tau_W^*(\beta) > H$, the weak-only gate fails and the causal status is \textbf{indeterminate}. If $\beta \le M_w^{\Wcond}(0)$, the target is met at initialization (degenerate) and licenses no causal claim.
+\end{definition}
 
-\paragraph{Mechanism control.}
-In the dense comparison, CDC changes instantaneous strong drift by only
-$4.77\times10^{-7}$ while bringing the weak AUC gap close to zero, but it does not
-produce the best final strong response.  In the broader joint weak-rescue/strong-
-preservation comparison, CDC passes the joint criterion only against the adapted
-Bloop-style shadow-target variant and fails it against the adapted PCGrad-style
-shadow-target variant.  These are mechanism-level comparisons, not evidence of
-broad superiority or equivalence to the original comparator algorithms.
+\section{Exact dynamics and pathwise attribution}
+\subsection{Exact finite-width response--logit dynamics}
+We establish that the coupling between sample weighting and parameter geometry is an exact finite-width chain-rule identity rather than an asymptotic mean-field closure.
 
-\section{Prediction and intervention limits}
-In the noiseless positive rank-one dense-linear pair, let $K=G_{ws}(0)$,
-$A=G_{ww}(0)$, $s_B=\sigma[-(\rho M_s(0)+M_w(0))]$, and
-$s_W=\sigma[-M_w(0)]$.  The exact initial rate gap is
+\begin{proposition}[Exact finite-width response--logit dynamics]
+\label{prop:exact-dynamics}
+Under full-batch logistic gradient flow (Eq.~\ref{eq:logistic-flow}) at any finite width and parameter dimension $P$, let $J^C(\tau) \in \R^{n \times P}$ have rows $\nabla r_i^C(\theta_C(\tau))^\top$. Define the empirical tangent kernel $\Theta^C(\tau) = J^C(\tau) J^C(\tau)^\top \in \R^{n \times n}$, response-coupling vector $c_w^C(\tau) = J^C(\tau) \nabla M_w^C(\theta_C(\tau)) \in \R^n$, and sigmoid sample-weight vector $q(r^C)_i = \sigm(-r_i^C)$. Then:
 \begin{equation}
- d_0=s_B(\rho K+A)-s_WA,
- \quad d_0>0\Longleftrightarrow
- K>\frac{A}{\rho}\left(\frac{s_W}{s_B}-1\right).
- \label{eq:iclr-initial-gap}
+  \dot{M}_w^C(\tau) = \frac{1}{n} c_w^C(\tau)^\top q(r^C(\tau)), \qquad \dot{r}^C(\tau) = \frac{1}{n} \Theta^C(\tau) q(r^C(\tau)).
+  \label{eq:exact-flow-prop}
 \end{equation}
-Because $\Delta(0)=0$, a strict sign of $d_0$ gives the corresponding local sign of
-$\Delta$ for sufficiently small positive time.  This is a realized-initialization,
-local statement.  Quantitative crossing and outcome guarantees require independent
-uniform parameter-tube bounds; no nonvacuous general positive-lag constants are
-constructed.  The zero-lag, zero-background wide limit is exactly solvable and
-starts suppressed at its symmetric reference, but it is not a predictor for
-general positive lag.
+\end{proposition}
+\begin{proof}[Proof Sketch]
+By chain rule, $\dot{\theta}_C = -\nabla L_C = \frac{1}{n} \sum_i \sigma(-r_i^C) \nabla r_i^C = \frac{1}{n} (J^C)^\top q(r^C)$. Differentiating $M_w^C$ and $r_i^C$ along $\dot{\theta}_C$ immediately gives Eq.~\eqref{eq:exact-flow-prop}. Full proof in Appendix~\ref{app:proof-prop-exact}.
+\end{proof}
 
-Freezing $(\Theta,c_w)$ at initialization defines a nonlinear logistic tangent
-surrogate that is exact for its own tangent model.  Using it for a trained tanh RNN
-or GRU requires instantaneous or secant-kernel movement bounds that are not proved
-here.  The held-out crossing accuracy is therefore an empirical event heuristic,
-not a replacement for those bounds and not a causal or calibrated-dynamics result.
+\paragraph{Interpretation.}
+Eq.~\eqref{eq:exact-flow-prop} factorizes learning velocity into two distinct terms:
+\begin{itemize}[leftmargin=*]
+  \item $q(r)$: The cross-entropy weighting vector. As logits $r_i$ grow, $q_i \to 0$, diminishing the effective learning rate.
+  \item $c_w$: The response geometry vector, reflecting alignment between gradients of $M_w$ and sample logits $r_i$.
+\end{itemize}
 
-For CDC, let $a=\nabla m_s$, $p=\nabla m_w$, $v=-\nabla L$, and let $q$ be the
-projection of $p$ onto $a^\perp$.  With deficit
-$\delta=[F_w^{\Wcond}-p\cdot v]_+$, the feasible uncapped correction is
-$v'=v+(\delta/\|q\|^2)q$.  In the fixed Euclidean/Frobenius parameter chart, this
-is the unique minimum-Euclidean-norm target-attaining correction that preserves
-instantaneous strong drift and meets the weak-drift lower bound.  Its finite-step
-strong-response guarantee is local and one-step, of order $O(\eta^2)$ under local
-smoothness.  It is not a trajectory guarantee or a broadly superior optimizer.
+\begin{corollary}[Closed projected flow under exact realization]
+\label{cor:projected-flow}
+If signed sample logits admit the exact parameter-independent decomposition $r_i^C = \sum_b z_{ib}^C M_b^C + r_i^\perp$, then:
+\begin{equation}
+  \dot{M}_a^C = \sum_b G_{ab}^C g_b^C + R_a^C, \qquad G_{ab}^C = \ip{\nabla M_a^C}{\nabla M_b^C}, \qquad g_b^C = \frac{1}{n} \sum_i z_{ib}^C \sigm(-r_i^C),
+  \label{eq:projected-dynamics}
+\end{equation}
+where $R_a^C = \frac{1}{n} \sum_i \sigm(-r_i^C) \ip{\nabla M_a^C}{\nabla r_i^\perp}$. When realization is exact ($r^\perp \equiv 0$), $R_a^C \equiv 0$ and the response dynamics close autonomously.
+\end{corollary}
+
+\subsection{Cumulative drift balance}
+\begin{proposition}[Cumulative drift balance]
+\label{prop:cumulative-drift}
+Let $\Delta(\tau)$ be absolutely continuous on $[0, H]$ with $\Delta(0) = 0$ and $d(\tau) = \dot{\Delta}(\tau)$ almost everywhere. Define positive and negative drift components:
+\begin{equation}
+  P(t) = \int_0^t [d(u)]_+ \dd u, \qquad N(t) = \int_0^t [-d(u)]_+ \dd u.
+  \label{eq:pn-def}
+\end{equation}
+Then for all $t \in [0, H]$:
+\begin{equation}
+  \Delta(t) = P(t) - N(t), \qquad \text{and} \qquad \Delta(t) < 0 \iff N(t) > P(t).
+  \label{eq:pathwise-identity}
+\end{equation}
+\end{proposition}
+\begin{proof}
+Since $\Delta(t) = \Delta(0) + \int_0^t d(u) \dd u = \int_0^t ([d(u)]_+ - [-d(u)]_+) \dd u = P(t) - N(t)$. Full details in Appendix~\ref{app:proof-prop-drift}.
+\end{proof}
+
+\paragraph{Core implication.}
+A negative relative rate ($d(t) < 0$) does \emph{not} imply outcome suppression ($\Delta(t) < 0$) unless the accumulated negative drift $N(t)$ repays all accumulated positive transfer $P(t)$.
+
+\begin{corollary}[Single-crossing tail-area criterion]
+\label{cor:single-crossing}
+Suppose there exists $\tau_d \in (0, H)$ such that $d > 0$ almost everywhere on $(0, \tau_d)$ and $d < 0$ on $(\tau_d, H)$. Let $A_+ = P(\tau_d) = \Delta(\tau_d) > 0$. Then for $t \ge \tau_d$, $\Delta(t) = A_+ - N(t)$. Strict outcome suppression occurs by horizon $H$ if and only if $N(H) > A_+$.
+\end{corollary}
+
+\subsection{Scope of tangent prediction and movement bounds}
+Freezing $\Theta$ and $c_w$ at initialization defines a nonlinear logistic tangent model: $\dot{\bar r} = \frac1n \Theta_0 q(\bar r)$, $\dot{\bar M}_w = \frac1n c_{w,0}^\top q(\bar r)$.
+
+\begin{theorem}[Conditional tangent comparison]
+\label{thm:tangent-bound}
+Suppose on $[0, t]$ that $\|\Theta(u) - \Theta_0\| \le B_\Theta$, $\|c_w(u) - c_{w,0}\| \le B_c$, and $\|q(r)\| \le V$. Let $a = \|\Theta_0\| / (4n)$, $\phi_a(t) = (e^{at}-1)/a$, and $\psi_a(t) = (e^{at}-1-at)/a^2$. Then:
+\begin{equation}
+  |M_w(t) - \bar M_w(t)| \le \frac{B_c V}{n} t + \frac{\|c_{w,0}\| B_\Theta V}{4n^2} \psi_a(t).
+  \label{eq:tangent-bound}
+\end{equation}
+\end{theorem}
+Theorem~\ref{thm:tangent-bound} is strictly conditional: establishing non-vacuous bounds $B_\Theta, B_c$ for nonlinear recurrent networks (tanh/GRU) remains an open challenge. Thus, tangent predictions operate as empirical event heuristics rather than calibrated trajectory guarantees.
+
+\section{Prediction and Counterfactual Drift Correction}
+\subsection{Realized-initialization rate-gap criterion}
+For the noiseless rank-one dense linear RNN ($h_{k+1} = Wh_k + Bx_k$, $f(x) = c^\top h_T$), we compute the exact equal-time initial gap.
+
+\begin{theorem}[Realized-initialization rate-gap criterion]
+\label{thm:initial-gap}
+Let the strong cue have strength $\rho > 0$ at lag 0, and the weak cue have lag $\ell \ge 0$. Define $K = G_{ws}(0) = b_s^\top W^\ell b_w$, $A = G_{ww}(0) = \|W^\ell b_w\|^2 + \|(W^\ell)^\top c\|^2 + \|S_w\|_F^2$, $s_{\Bcond} = \sigm(-[\rho M_s(0) + M_w(0)])$, and $s_{\Wcond} = \sigm(-M_w(0))$. The initial rate gap is:
+\begin{equation}
+  d_0 = s_{\Bcond}(\rho K + A) - s_{\Wcond} A, \qquad d_0 > 0 \iff K > \frac{A}{\rho}\left(\frac{s_{\Wcond}}{s_{\Bcond}} - 1\right).
+  \label{eq:initial-gap-formula}
+\end{equation}
+Since $\Delta(0) = 0$, $d_0 < 0 \implies \Delta(t) < 0$ for sufficiently small $t > 0$.
+\end{theorem}
+This criterion is exact at $t=0$ but local: it does not constitute a positive-lag global phase predictor.
+
+\subsection{Counterfactual Drift Correction (CDC)}
+To evaluate whether the diagnosed mechanism can be controlled locally, we introduce Counterfactual Drift Correction (CDC). In a fixed Euclidean parameter chart, let $a = \nabla m_s(\theta)$, $p = \nabla m_w(\theta)$, and $v = -\nabla L(\theta)$.
+Project $p$ onto the orthogonal complement of $a$:
+\begin{equation}
+  q = p - \frac{p \cdot a}{\|a\|^2} a \quad (a \ne 0), \qquad \delta = [F_w^{\Wcond} - p \cdot v]_+, \qquad \alpha = \frac{\delta}{\|q\|^2} \quad (q \ne 0).
+  \label{eq:cdc-formula}
+\end{equation}
+The corrected parameter update is $v' = v + \alpha q$.
+
+\begin{theorem}[CDC local guarantee]
+\label{thm:cdc-guarantee}
+In the fixed parameter chart:
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Instantaneous preservation:} $a \cdot v' = a \cdot v$ exactly (strong drift is unaffected).
+  \item \textbf{Minimum Euclidean norm:} $d^* = \alpha q$ is the unique minimum-norm correction attaining the weak-drift lower bound $p \cdot (v+d) \ge F_w^{\Wcond}$ subject to $a \cdot d = 0$.
+  \item \textbf{Local finite-step deviation:} For $L$-Lipschitz $\nabla m_s$, $|m_s(\theta + \eta v') - m_s(\theta + \eta v)| \le \frac{L}{2} \eta^2 (\|v'\|^2 + \|v\|^2) = O(\eta^2)$.
+\end{enumerate}
+\end{theorem}
+CDC provides first-order instantaneous mechanism control; it is not a claim of global optimization superiority.
+
+\section{Experimental setup}
+\subsection{Controlled linear study}
+We evaluate linear RNNs (width 96, spectral gain $g=0.5$, full-batch gradient descent) across a grid of strength ratios $\rho \in \{1, 2, 4, 8\}$ and temporal lags $\ell \in \{0, 2, 4, 8\}$, with 8 paired seeds per cell (seed IDs 4--11). The learnability gate is set to $\beta = 0.25$ with horizon $H = 5.0$. A sign-reversal intervention reverses the strong cue at $(\rho, \text{lag}) = (4, 4)$; it is an equivariance check, not a no-cue negative control.
+
+\subsection{Nonlinear recurrent study}
+We evaluate tanh RNNs and GRUs at width 32, gain $g=0.8$, cue noise $\sigma_{\text{noise}} = 0.1$, $(\rho, \text{lag}) = (4, 2)$, and target $\beta = 0.5$ over 8 paired seeds. We evaluate instantaneous drift via direct automatic differentiation ($F_w = \nabla M_w \cdot \dot{\theta}$).
+
+\subsection{Frozen matched CIFAR-10 confirmation}
+Before inspecting the cue-present outcomes, we froze one CNN4-GN architecture, eight fresh paired seeds, SGD with momentum, a 4,710-update cosine schedule, and all endpoints. B appends a removable label-correlated ribbon (reliability 0.9, amplitude 0.5) outside the $32\times32$ core; W receives the identical core and a neutral zero-valued ribbon after preprocessing. Within each seed block, B and W share initialization, source-image split, minibatch order, augmentation randomness, and optimizer configuration. The primary response is balanced Brier skill on a fixed neutral diagnostic set, with $\beta=0.5$ and scale $S=0.75$. Final behavior uses neutral, random, consistent, and nine within-image conflict cues. E4-lite freezes each final encoder and fits the same balanced linear-head protocol on common neutral inputs. This discrete minibatch experiment tests the matched causal certificate, not the continuous-time tail-area identity.
+
+\subsection{Tangent and intervention evaluations}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Held-out tangent event test:} 64 crossed records (4 data seeds $\times$ 8 model seeds) evaluating drift and response crossing classifications.
+  \item \textbf{CDC mechanism control:} Comparison of ERM, Spectral Decoupling, CDC, and adapted shadow-target variants (Bloop-style, PCGrad-style) across 256 method runs.
+  \item \textbf{Semi-real image study:} Controlled cue intervention on MNIST (3-vs-8) and FashionMNIST (0-vs-6) over 64 crossed records.
+\end{itemize}
+
+\section{Results}
+\subsection{Regime-dependent causal diagnosis}
+Figure~\ref{fig:linear-grid} and Table~\ref{tab:linear-results} present the audited controlled linear grid. At lags 0, 2, and 4, all 32 cells have positive paired weak-AUC deficits and pass the weak-only gate. The stricter at-hit certificate passes in 31/32 lag-0 cells and 32/32 cells at lags 2 and 4; the lag-0 exception later becomes negative and passes the broader any-time endpoint. At lag 8, all 32 cells fail the learnability gate and are causally indeterminate, even though 27/32 have positive signed AUC. The mean deficit peaks at lag 2 (8.93) rather than decaying monotonically.
+
+\begin{figure}[t]
+  \centering
+  \IfFileExists{figures/fig1_e1_causal_regions.pdf}{\includegraphics[width=0.97\linewidth]{figures/fig1_e1_causal_regions.pdf}}{%
+    \IfFileExists{artifacts/historical/e1_dense_rerun-20260823-085142/e1_causal_regions.pdf}{\includegraphics[width=0.97\linewidth]{artifacts/historical/e1_dense_rerun-20260823-085142/e1_causal_regions.pdf}}{%
+      \fbox{\parbox{0.92\linewidth}{\centering Figure 2 unavailable in this build.}}}}
+  \caption{Controlled dense-linear weak-AUC deficits and gate status across $\rho\in\{1,2,4,8\}$ and lag. The plotted historical regime labels are threshold-delay categories, not the at-hit certificate. The audited at-hit counts are 31/32, 32/32, 32/32, and 0/32 for lags 0, 2, 4, and 8.}
+  \label{fig:linear-grid}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\caption{Linear grid paired weak-AUC deficits $\mathcal{A}_w$, weak-only hitting times $\tau_W^*$, and causal status.}
+\label{tab:linear-results}
+\small
+\begin{tabular}{ccccc}
+\toprule
+Lag & Strength $\rho$ & Mean $\mathcal{A}_w$ (95\% CI) & Weak Gate ($\tau_W^* \le 5$) & Causal Certificate \\
+\midrule
+0 & 1--8 & $5.76$ $[5.01, 6.51]$ & 32/32 Passed & 31/32 Certified \\
+2 & 1--8 & $8.93$ $[8.29, 9.57]$ & 32/32 Passed & 32/32 Certified \\
+4 & 1--8 & $6.11$ $[5.31, 6.91]$ & 32/32 Passed & 32/32 Certified \\
+8 & 1--8 & $0.0015$ $[0.0010, 0.0020]$ & 0/32 Passed & 0/32 (\textbf{Indeterminate}) \\
+\midrule
+Neg. Control & 4.0 (Lag 4) & $-4.04$ $[-4.50, -3.58]$ & 8/8 Passed & 0/8 (\textbf{Transfer}) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Nonlinear crossings versus causal certificates}
+Figure~\ref{fig:nonlinear-trajectories} illustrates dynamic trajectories at the fixed nonlinear cell $(\rho, \text{lag}) = (4, 2)$.
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Tanh RNN:} Passes the weak-only gate and at-hit certificate in 8/8 seeds: 3/8 transfer before suppressing, while 5/8 suppress throughout without a crossing.
+  \item \textbf{GRU:} Exhibits direct-autograd drift crossings in 5/8 seeds and response crossings in 5/8 seeds. However, the weak-only model never reaches $\beta = 0.5$ ($\tau_W^* > 5.0$), resulting in \textbf{0/8 causal certificates}.
+\end{itemize}
+This establishes empirically that crossing subtype and causal certificate are distinct: a run can be starved without crossing, while a crossing with a failed weak-only gate remains indeterminate.
+
+\begin{figure}[t]
+  \centering
+  \IfFileExists{figures/fig4_enl_crossover.pdf}{\includegraphics[width=0.97\linewidth]{figures/fig4_enl_crossover.pdf}}{%
+    \IfFileExists{artifacts/enl_tanh_crossover-20260824-141207/enl_crossover.pdf}{\includegraphics[width=0.97\linewidth]{artifacts/enl_tanh_crossover-20260824-141207/enl_crossover.pdf}}{%
+      \fbox{\parbox{0.92\linewidth}{\centering Figure 3 unavailable in this build.}}}}
+  \caption{Paired nonlinear trajectories at $(\rho, \text{lag}) = (4, 2)$. Tanh (left) exhibits a certified causal starvation event. GRU (right) exhibits transient rate and response crossings but fails the weak-only gate, remaining causally indeterminate.}
+  \label{fig:nonlinear-trajectories}
+\end{figure}
+
+\subsection{A removable image cue causally suppresses core learning}
+All eight frozen CIFAR-10 pairs pass the nondegenerate W gate and the primary at-hit certificate. Mean normalized signed deficit AUC is $0.489$ (95\% CI $[0.413,0.564]$), compared with the frozen target $0.10$, and the material deficit persists for 98.3\% of training ($[97.6\%,99.0\%]$). At the final checkpoint, B trails W by 19.9 percentage points on neutral inputs ($[-22.6,-17.2]$), 27.6 points under random cues ($[-28.7,-26.4]$), and 31.9 points under cue conflict ($[-33.0,-30.8]$), while gaining 16.8 points when the cue is label-consistent ($[15.8,17.9]$).
+
+With the original heads, the neutral B--W gap is $-19.9$ points. Equal fresh balanced linear heads reduce it to $-10.8$ points ($[-11.1,-10.4]$), a 9.1-point recovery ($[6.5,11.8]$). Thus, part of the harm is readout underuse, while a substantial remainder is reduced linear accessibility under this probe; this is not evidence of information destruction.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig_cifar_matched_confirmation.pdf}
+  \caption{Frozen matched CIFAR-10 confirmation across eight paired seed blocks. Lines and points are seed means with two-sided 95\% $t$ intervals. B contains the removable cue; W contains the identical core with a neutral cue channel. Every seed passes the W gate and at-hit certificate. The fresh-head test recovers part, but not all, of the neutral gap.}
+  \label{fig:cifar-confirmation}
+\end{figure}
+
+\subsection{Frozen tangent predicts crossing events, not causal status}
+Table~\ref{tab:tangent-results} reports the held-out performance of the frozen-tangent surrogate. The surrogate accurately classifies binary drift crossings (60/64, 93.8\%) and response crossings (64/64, 100.0\%). However, because weak-only learnability cannot be verified without trajectory integration, the tangent surrogate cannot predict causal starvation certificates.
+
+\begin{table}[t]
+\centering
+\caption{Held-out evaluation of the frozen-tangent surrogate (64 crossed records).}
+\label{tab:tangent-results}
+\small
+\begin{tabular}{lccc}
+\toprule
+Evaluation Target & Endpoint & Accuracy & 95\% Bootstrap CI \\
+\midrule
+Held-out Event Test & Drift crossing ($d(\tau) < 0$) & 60/64 (93.8\%) & $[87.5\%, 98.4\%]$ \\
+Held-out Event Test & Response crossing ($\Delta(\tau) < 0$) & 64/64 (100.0\%) & $[100.0\%, 100.0\%]$ \\
+Held-out Causal Gate & Causal certificate & 0/64 (0.0\%) & $[0.0\%, 0.0\%]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Local mechanism control with CDC}
+Table~\ref{tab:cdc-results} summarizes the dense-linear mechanism control comparison across 8 paired seeds. All shadow-based interventions eliminate the weak AUC gap from ERM's 10.52 to $\approx 0.00$. However, CDC uniquely preserves instantaneous strong drift (perturbation $4.77 \times 10^{-7}$, compared to $1.48 \times 10^{-1}$ -- $3.75 \times 10^{-1}$ for alternatives). As predicted by theory, this local one-step guarantee does not imply maximum final strong response (1.042 vs. 1.295 for unconstrained rescue).
 
 \section{Limitations and conclusion}
-The evidence covers controlled synthetic families and one semi-real generated-cue
-intervention, with fixed cells and seed grids.  It estimates neither universal
-event prevalence nor architecture rankings.  The image study is not a natural
-spurious-correlation benchmark.  The broad tangent pilot is negative, and the
-held-out success is restricted to binary crossing events at one cell.  The global
-positive-lag parameter-level prediction problem remains unresolved, while CDC
-assumes an available matched shadow, full-batch gradients, and a fixed parameter
-chart.  Its mixed adapted-comparator results support no canonical parity or broad
-superiority.
+\subsection{Scope and limitations}
+The empirical evidence is restricted to controlled synthetic grids and one preregistered CIFAR-10 intervention using an artificial ribbon cue and one architecture. It establishes a controlled existence result and diagnostic utility, not the prevalence of starvation under natural shortcuts or a universal architecture ranking. The CIFAR experiment uses minibatch SGD and therefore does not verify the continuous-time tail-area theorem. The tangent surrogate requires unproved movement bounds to supply calibrated trajectories, and CDC requires an exact matched shadow model under full-batch gradient flow in a fixed parameter chart.
 
-Weak learning failure alone is not gradient starvation.  The matched weak-only
-counterfactual supplies the missing causal premise; exact finite-width dynamics
-separate cross-entropy weighting from response geometry; pathwise balance states
-when suppression actually reverses earlier help; and the experiments show that the
-result is regime-dependent.  Prediction and intervention are correspondingly
-local or conditional.  The strongest supported chain is exact dynamics
-$\to$ matched causal intervention $\to$ pathwise attribution $\to$ local
-mechanism-level control.
-\label{page:main-end}
+\subsection{Conclusion}
+Weak learning failure alone is not gradient starvation. By introducing a matched weak-only counterfactual, deriving exact finite-width dynamics $\dot M_w = \frac1n c_w^\top q(r)$, and establishing cumulative drift balance $\Delta = P - N$, we establish a rigorous causal and dynamical framework for feature starvation. The resulting causal chain---exact dynamics $\to$ matched intervention $\to$ pathwise attribution $\to$ local mechanism control---disciplines the study of feature competition in deep networks.
 
 \subsection*{Reproducibility statement}
-Code, configurations, and relevant files will be made available upon publication
-to facilitate reproducibility.
-
-\subsection*{AI use statement}
-Generative AI tools assisted with code drafting, refactoring, and manuscript
-editing.  The authors reviewed all AI-assisted material and take responsibility
-for the paper.
+Complete source code, configurations, environment specifications, and content-addressed result manifests for the linear, recurrent, tangent, CDC, and frozen CIFAR-10 experiments are provided in the supplementary repository and documented in Appendix~\ref{app:experimental-details}.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
+
+\subsection*{AI use statement}
+Generative AI tools (OpenAI Codex/ChatGPT, Google Gemini, and Anthropic Claude) assisted with code refactoring, experiment infrastructure, mathematical formatting verification, and manuscript drafting and editing. The authors reviewed all AI-assisted material, independently checked the reported artifacts and mathematical proofs, and take full responsibility for the contents of the paper.
+
+\newpage
 \appendix
-\fi
+\renewcommand{\thesection}{\Alph{section}}
+\renewcommand{\thesubsection}{\Alph{section}.\arabic{subsection}}
+\renewcommand{\theequation}{\Alph{section}.\arabic{equation}}
+\renewcommand{\thetheorem}{\Alph{section}.\arabic{theorem}}
+\renewcommand{\theproposition}{\Alph{section}.\arabic{proposition}}
+\renewcommand{\thecorollary}{\Alph{section}.\arabic{corollary}}
+\renewcommand{\thelemma}{\Alph{section}.\arabic{lemma}}
+\renewcommand{\thedefinition}{\Alph{section}.\arabic{definition}}
+\renewcommand{\thefigure}{\Alph{section}.\arabic{figure}}
+\renewcommand{\thetable}{\Alph{section}.\arabic{table}}
 
-\section{Paired causal diagnosis and definitions}
+\renewcommand{\theHsection}{\Alph{section}}
+\renewcommand{\theHequation}{\Alph{section}.\arabic{equation}}
+\renewcommand{\theHtheorem}{\Alph{section}.\arabic{theorem}}
+\renewcommand{\theHproposition}{\Alph{section}.\arabic{proposition}}
+\renewcommand{\theHcorollary}{\Alph{section}.\arabic{corollary}}
+\renewcommand{\theHlemma}{\Alph{section}.\arabic{lemma}}
+\renewcommand{\theHdefinition}{\Alph{section}.\arabic{definition}}
+\renewcommand{\theHtable}{\Alph{section}.\arabic{table}}
+\renewcommand{\theHfigure}{\Alph{section}.\arabic{figure}}
+
+\section{Full definitions and notation}
+\label{app:definitions}
+\setcounter{equation}{0}
+\setcounter{theorem}{0}
+\setcounter{table}{0}
+\setcounter{figure}{0}
+
 \subsection{Paired logistic gradient flow}
-For condition $C\in\{\Bcond,\Wcond\}$, let $\theta_C(\tau)\in\R^P$ follow
-full-batch gradient flow on signed logits $r_i^C(\theta)=y_i f_C(x_i;\theta)$:
+Let $\mathcal{D}_n = \{(x_i, y_i)\}_{i=1}^n$ be a dataset with binary labels $y_i \in \{-1, +1\}$ and inputs $x_i = (x_{s,i}, x_{w,i}, x_{\text{bg},i}) \in \R^{d_s + d_w + d_{\text{bg}}}$.
+For condition $C \in \{\Bcond, \Wcond\}$, the parameter $\theta_C(\tau) \in \R^P$ evolves under full-batch gradient flow:
 \begin{equation}
-  L_C(\theta)=\frac1{n_C}\sum_{i=1}^{n_C}\log(1+e^{-r_i^C(\theta)}),
-  \qquad \dot\theta_C=-\nabla L_C(\theta_C).
-  \label{eq:gradient-flow}
+  L_C(\theta) = \frac{1}{n} \sum_{i=1}^n \log\left(1 + e^{-y_i f_C(x_i; \theta)}\right), \qquad \frac{\dd \theta_C}{\dd \tau} = -\nabla L_C(\theta_C),
+  \label{eq:app-flow}
 \end{equation}
-The two conditions share initialization and all data except that the strong channel
-is zeroed under $\Wcond$.  This matched weak-only path tests whether the weak signal
-can meet the specified target without the strong cue; it is the causal
-identification premise that distinguishes suppression from an unsupported weak-
-learning label.  Let $M_s^C,M_w^C$ be common differentiable strong and weak
-response functionals.  Shared initialization gives
-\begin{equation}
-  \Delta(0)=0,\qquad
-  \Delta(\tau)=M_w^{\Bcond}(\tau)-M_w^{\Wcond}(\tau).
-  \label{eq:gap}
-\end{equation}
-Optimization time $\tau$ is distinct from sequence index $k$.
+where $f_{\Bcond}(x; \theta) = f(x; \theta)$ and $f_{\Wcond}(x; \theta) = f((0, x_w, x_{\text{bg}}); \theta)$. Both systems share initialization $\theta_{\Bcond}(0) = \theta_{\Wcond}(0) = \theta_0$.
 
-The controlled dense linear RNN is
+\subsection{Hitting time metrics and weak-AUC deficit}
+For any response functional $M(\tau)$ and target threshold $\beta > 0$:
 \begin{equation}
- h_{k+1}=Wh_k+Bx_k,\qquad f(x)=c^\top h_T,
- \label{eq:linear-rnn}
+  \tau(\beta; H) = \inf\{\tau \in [0, H] : M(\tau) \ge \beta\}, \qquad (\inf \varnothing = \infty).
+  \label{eq:app-hitting}
 \end{equation}
-with $W_{ij}(0)\sim\mathcal N(0,g^2/N)$,
-$B_{ia}(0)\sim\mathcal N(0,1/N)$, and
-$c_i(0)\sim\mathcal N(0,1/N)$.  The width scaling of $B$ is essential for a
-non-divergent projected metric.  We additionally study tanh RNNs and GRUs.  For
-nonlinear models the two responses are common odd symmetric unit-probe contrasts,
-$[f(x_a^+)-f(x_a^-)]/2$, not assumed additive coordinates of every data logit.
-
-\subsection{Weak learning failure, causal labels, and metrics}
-Let
+The paired weak-AUC deficit over horizon $H$ is defined as:
 \begin{equation}
- d(\tau)=\Delta'(\tau)=F_w^{\Bcond}(\tau)-F_w^{\Wcond}(\tau).
- \label{eq:equal-time-drift}
+  \mathcal{A}_w = \int_0^H \left(M_w^{\Wcond}(\tau) - M_w^{\Bcond}(\tau)\right) \dd \tau = -\int_0^H \Delta(\tau) \dd \tau.
+  \label{eq:app-auc}
 \end{equation}
-We call $d>0$ relative transfer and $d<0$ relative rate suppression.  We call
-$\Delta<0$ \emph{outcome suppression}, whether it follows a positive excursion or
-is present from the start of optimization.  A response crossing is the special case
-in which $\Delta$ returns to zero after a positive excursion and then becomes
-negative.  Weak-only nonlearnability under the specified gate means that the
-weak-only trajectory does not first hit the prespecified target $\beta$ within
-horizon $H$.  We reserve \emph{causal starvation} for outcome suppression when that
-weak-only trajectory does reach the target at a nondegenerate positive time.  Thus
-weak learning failure alone is not gradient starvation.  If the weak-only model
-does not reach $\beta$, an outcome crossing is descriptive but not a causal-
-starvation certificate; the failed gate also is not evidence that starvation is
-absent.  Causal status is indeterminate under the specified target and horizon.
 
-We report first-hitting-time delay when both hits are observed.  Formally,
-$\tau_W(\beta;H)=\inf\{\tau\in[0,H]:M_w^{\Wcond}(\tau)\ge\beta\}$, with
-$\inf\varnothing=\infty$; the learnability gate requires
-$\tau_W(\beta;H)\in(0,H]$, excluding targets met at initialization.  The
-horizon-wide weak AUC gap is
+\section{Additional theoretical results}
+\label{app:theory}
+\setcounter{equation}{0}
+\setcounter{theorem}{0}
+\setcounter{table}{0}
+\setcounter{figure}{0}
+
+\subsection{Closed projected flow under exact realization}
+\begin{proposition}[Closed projected flow]
+\label{prop:app-projected}
+If signed sample logits satisfy $r_i^C(\theta) = \sum_b z_{ib}^C M_b^C(\theta) + r_i^\perp(\theta)$, then:
 \begin{equation}
-  \mathcal A_w=\int_0^H
-  \left(M_w^{\Wcond}(\tau)-M_w^{\Bcond}(\tau)\right)\dd\tau,
-  \label{eq:auc-gap}
+  \dot M_a^C = \sum_b G_{ab}^C g_b^C + R_a^C,
+  \label{eq:app-projected-flow}
 \end{equation}
-computed by the logged-grid trapezoid rule.  To expose rather than hide sensitivity
-to the single prespecified $\beta$, Section~\ref{sec:results} also reports the
-threshold-free terminal response $B_W(H)=M_w^{\Wcond}(H)$ across seeds and its
-post-hoc threshold profile.  Terminal thresholding is not generally equivalent to
-the prespecified first-hit event on a nonmonotone trajectory, so the profile is a
-sensitivity diagnostic rather than a replacement gate.  GSI-5 remains a margin-
-weight diagnostic, not a definition of starvation.
-
-\section{Exact finite-width dynamics for the paired diagnosis}
-The mechanism-level decomposition is exact before any width limit: with
-$q_i(r)=\sigm(-r_i)$ and response-specific geometry $c_w=J\nabla M_w$, the weak
-response obeys $\dot M_w=c_w^\top q(r)/n$.  The vector $q(r)$ records
-cross-entropy weighting across signed sample logits, while $c_w$ records how the
-chosen weak response couples to those logits through parameter space.  No DMFT or
-two-response closure is needed for this identity; such closures arise only in
-stronger predictive approximations.
-
-\begin{proposition}[Universal response--logit cross-kernel flow]
-\label{prop:cross-kernel}
-At every finite width and every optimization time at which $M_a^C$ is
-differentiable,
-\begin{equation}
- \dot M_a^C=\frac1{n_C}\sum_i K_{ai}^C\sigm(-r_i^C),
- \qquad K_{ai}^C=\ip{\nabla M_a^C}{\nabla r_i^C}.
- \label{eq:cross-kernel}
-\end{equation}
-No width limit or two-mode realization is required.  We label this elementary
-chain-rule identity as a proposition: its importance here is the exact finite-width
-scope and the causal separation it enables, not proof difficulty.
+where $G_{ab}^C = \ip{\nabla M_a^C}{\nabla M_b^C}$, $g_b^C = \frac1n \sum_i z_{ib}^C \sigm(-r_i^C)$, and $R_a^C = \frac1n \sum_i \sigm(-r_i^C) \ip{\nabla M_a^C}{\nabla r_i^\perp}$.
+When realization is exact ($r_i^\perp \equiv 0$), $R_a^C \equiv 0$ and the response dynamics close autonomously.
 \end{proposition}
 
-\begin{corollary}[Closed projected flow under exact realization]
-\label{cor:projected}
-If the signed logits admit the exact parameter-independent representation
-$r_i^C=\sum_b z_{ib}^C M_b^C$, then
-\begin{equation}
- \dot M_a^C=\sum_bG_{ab}^C g_b^C,\quad
- G_{ab}^C=\ip{\nabla M_a^C}{\nabla M_b^C},\quad
- g_b^C=\frac1{n_C}\sum_i z_{ib}^C\sigm(-z_i^C\!\cdot M^C).
- \label{eq:Gg}
-\end{equation}
-If $r_i^C=z_i^C\cdot M^C+r_i^\perp$, the exact equation instead contains
-\begin{equation}
- R_a^C=\frac1{n_C}\sum_i\sigm(-r_i^C)
-       \ip{\nabla M_a^C}{\nabla r_i^\perp},
- \qquad \dot M_a^C=(G^Cg^C)_a+R_a^C.
- \label{eq:projection-residual}
-\end{equation}
-\end{corollary}
-
-\begin{corollary}[Exact full empirical-NTK dynamics]
-\label{cor:full-empirical-ntk}
-Let $J^C(\tau)\in\R^{n_C\times P}$ have row
-$\nabla r_i^C(\theta_C(\tau))^\top$, and define
-\begin{equation}
- \Theta^C(\tau)=J^C(\tau)J^C(\tau)^\top,
- \qquad c_a^C(\tau)=J^C(\tau)\nabla M_a^C(\theta_C(\tau)).
-\end{equation}
-Writing $q(r)=\sigm(-r)$ componentwise, the exact finite-width flow is
-\begin{equation}
- \dot r^C=\frac1{n_C}\Theta^C(\tau)q(r^C),
- \qquad
- \dot M_a^C=\frac1{n_C}c_a^C(\tau)^\top q(r^C).
- \label{eq:full-ntk-flow}
-\end{equation}
-No width limit or response-coordinate realization is required.
-\end{corollary}
-
-\begin{definition}[Initialization-frozen nonlinear logistic surrogate]
-\label{def:frozen-surrogate}
-For one condition, let $\Theta_0=\Theta(0)$ and $c_0=c_a(0)$.  Define
-\begin{equation}
- \dot{\bar r}=\frac1n\Theta_0q(\bar r),\qquad
- \dot{\bar M}=\frac1n c_0^\top q(\bar r),\qquad
- (\bar r(0),\bar M(0))=(r(0),M(0)).
- \label{eq:frozen-surrogate}
-\end{equation}
-The gate remains nonlinear.  This system is exact for the initialization-linearized
-tangent model, not for the trained nonlinear network.
-\end{definition}
-
-\begin{theorem}[Conditional continuous and secant-SGD comparison]
-\label{thm:frozen-comparison}
-Use Euclidean and induced operator norms.  Suppose on $[0,t]$ that
-$\norm{\Theta(u)-\Theta_0}\le B_\Theta$,
-$\norm{c(u)-c_0}\le B_c$, and both logistic weight vectors have norm at most $V$.
-Set $a=\norm{\Theta_0}/(4n)$,
-\begin{equation}
- \phi_a(t)=\frac{e^{at}-1}{a},\qquad
- \psi_a(t)=\frac{e^{at}-1-at}{a^2},
-\end{equation}
-with $\phi_0(t)=t$ and $\psi_0(t)=t^2/2$.  Then
-\begin{align}
- \norm{r(t)-\bar r(t)}
- &\le \frac{B_\Theta V}{n}\phi_a(t),\label{eq:frozen-logit-bound}\\
- |M(t)-\bar M(t)|
- &\le \frac{B_cV}{n}t
- +\frac{\norm{c_0}B_\Theta V}{4n^2}\psi_a(t).
- \label{eq:frozen-response-bound}
-\end{align}
-
-For explicit full-batch SGD, let $\delta\theta_k=\theta_{k+1}-\theta_k$ and define
-exact segment kernels
-\begin{align}
- \widetilde J_k&=\int_0^1J(\theta_k+s\delta\theta_k)\dd s,&
- \widetilde\Theta_k&=\widetilde J_kJ(\theta_k)^\top,\\
- \widetilde m_k&=\int_0^1\nabla M(\theta_k+s\delta\theta_k)\dd s,&
- \widetilde c_k&=J(\theta_k)\widetilde m_k.
-\end{align}
-The true increments are exactly
-$r_{k+1}-r_k=\eta\widetilde\Theta_kq(r_k)/n$ and
-$M_{k+1}-M_k=\eta\widetilde c_k^\top q(r_k)/n$.  If $\eta>0$ and, for every
-$0\le j<k$,
-$\norm{\widetilde\Theta_j-\Theta_0}\le D_\Theta$,
-$\norm{\widetilde c_j-c_0}\le D_c$, and
-$\norm{q(r_j)},\norm{q(\bar r_j)}\le V$, then the explicit-Euler
-version of Eq.~\eqref{eq:frozen-surrogate} obeys
-\begin{align}
- \norm{r_k-\bar r_k}&\le\frac{D_\Theta V}{n}\Phi_k,\\
- |M_k-\bar M_k|&\le\frac{k\eta D_cV}{n}
- +\frac{\eta\norm{c_0}D_\Theta V}{4n^2}\Psi_k,
- \label{eq:frozen-discrete-bound}
-\end{align}
-where
-\begin{equation}
- \Phi_k=\frac{(1+\eta a)^k-1}{a},\qquad
- \Psi_k=\frac{(1+\eta a)^k-1}{\eta a^2}-\frac{k}{a},
-\end{equation}
-with limits $\Phi_k=k\eta$ and $\Psi_k=\eta k(k-1)/2$ at $a=0$.
-Apply the bounds separately to $\Bcond,\Wcond$ and add them to bound the paired
-response gap.  Frozen signs or brackets transfer only when their strict margins
-exceed the corresponding summed errors; first hitting times additionally require
-Corollary~\ref{cor:hitting}'s prehistory, transversality, radius, and mesh
-hypotheses.
-\end{theorem}
-
-Theorem~\ref{thm:frozen-comparison} is conditional: this paper does not prove the
-required instantaneous or secant-kernel movement bounds for tanh or GRU.  A held-
-out event-classification result cannot substitute for that premise.  In particular,
-the theorem is finite-width and is not a DMFT closure.
-
-For channel-localized modes of the dense linear RNN, differentiation across the
-disjoint $(c,B,W)$ blocks gives the exact finite-width geometry
-\begin{equation}
- G_{ab}=p_a^\top p_b+
- \ind\{\operatorname{ch}(a)=\operatorname{ch}(b)\}q_a^\top q_b+
- \ip{S_a}{S_b}_F,
- \label{eq:dense-geometry}
-\end{equation}
-where $p_a=W^{\ell_a}b_a$, $q_a=(W^{\ell_a})^\top c$, and
-\begin{equation}
- S_a=\sum_{j=0}^{\ell_a-1}(W^j)^\top c
-                 (W^{\ell_a-1-j}b_a)^\top.
-\end{equation}
-\begin{theorem}[Exact realized-initialization rate-gap criterion]
-\label{thm:initial-gap}
-In the noiseless positive rank-one dense-linear pair, let the strong cue have
-strength $\rho>0$ at lag zero, the unit weak cue have lag $\ell$, and define
-\begin{align}
- K&=G_{ws}(0)=b_s^\top W^\ell b_w,\\
- A&=G_{ww}(0)=\norm{W^\ell b_w}^2+\norm{(W^\ell)^\top c}^2+\norm{S_w}_F^2,\\
- S_w&=\sum_{j=0}^{\ell-1}(W^j)^\top c
-       (W^{\ell-1-j}b_w)^\top,\\
- s_B&=\sigm[-(\rho M_s(0)+M_w(0))],\qquad
- s_W=\sigm[-M_w(0)].
-\end{align}
-(The recurrent sum is zero for $\ell=0$.)  The exact initial equal-time weak-rate
-gap is
-\begin{equation}
- d_0=s_B(\rho K+A)-s_WA.
- \label{eq:initial-gap-certificate}
-\end{equation}
-Consequently, initial transfer, suppression, and the boundary occur respectively
-when
-\begin{equation}
- K\gtrless\frac{A}{\rho}\left(\frac{s_W}{s_B}-1\right)
- \quad\text{or equality holds.}
- \label{eq:initial-gap-threshold}
-\end{equation}
-This is an exact pre-trajectory criterion from the realized initialization.  Since
-shared initialization gives $\Delta(0)=0$ and $\Delta'(0)=d_0$, it also implies
-\begin{equation}
- d_0<0\Longrightarrow \Delta(t)<0,
- \qquad
- d_0>0\Longrightarrow \Delta(t)>0
- \quad\text{for all sufficiently small }t>0.
- \label{eq:initial-gap-local-outcome}
-\end{equation}
-These strict local outcome signs are existential and provide no quantitative
-horizon.  At the boundary $d_0=0$, first order is silent and licenses neither
-sign.  The criterion is
-not a distribution-only positive-lag phase boundary: under the stated iid scaling,
-$K$ and $M_s(0)$ contribute a seed-dependent leading sign.
-\end{theorem}
-
-Theorem~\ref{thm:initial-gap} is a partial predictor: realized $d(0)$ gives an
-exact local sign in its stated dense-linear scope, not a global trajectory or a
-parameter-only law in $\rho$ and lag.  Where a higher local jet is proved---as in
-the zero-lag result with $d(0)=0$ and $d'(0)<0$---it likewise supplies a rigorous
-local sign only in that stated scope.  Stronger positive-lag trajectory prediction
-requires independently established product-ball or kernel-movement control, for
-which this paper supplies no nonvacuous general constants.
-
-The proofs are in Appendix~\ref{app:finite-proofs}.  Equation~\eqref{eq:Gg} is
-exact for the zero-background-noise linear synthetic model.  For tanh/GRU probes,
-we use Proposition~\ref{prop:cross-kernel}'s direct autograd drift for inference
-and report $R$; projected and matched-state decompositions are diagnostics only.
-
-\section{Separating rate suppression, outcome suppression, and causal starvation}
-\begin{proposition}[Cumulative drift balance]
-\label{prop:drift-balance}
-Let $\Delta$ be absolutely continuous on $[0,H]$, with $\Delta(0)=0$ and
-$d=\Delta'$ almost everywhere.  Write
-\begin{equation}
- d_+(t)=[d(t)]_+,
- \qquad d_-(t)=[-d(t)]_+,
- \qquad
- P(t)=\int_0^t d_+(u)\dd u,
- \qquad N(t)=\int_0^t d_-(u)\dd u.
-\end{equation}
-Then $\Delta(t)=P(t)-N(t)$ for every $t\in[0,H]$.  Thus strict outcome
-suppression occurs by $H$ if and only if $N(t)>P(t)$ for some $t\in(0,H]$;
-this statement permits arbitrary sign changes and suppression from initialization.
-This is deliberately a bookkeeping proposition: its contribution is the causal
-separation it enforces, not proof difficulty.
-\end{proposition}
-
-\begin{corollary}[Single-crossing tail-area criterion]
-\label{cor:tail-area}
-Suppose additionally that there is $\tau_d\in(0,H)$ such that $d>0$ almost
-everywhere on $(0,\tau_d)$ and $d<0$ almost everywhere on $(\tau_d,H)$.  Define
-\begin{equation}
- A_+=P(\tau_d)=\Delta(\tau_d)>0.
-\end{equation}
-Then $P(t)=A_+$ and $\Delta(t)=A_+-N(t)$ for $t\ge\tau_d$.  Hence a later
-equality is reached by $H$ if and only if $N(H)\ge A_+$, and strict outcome
-suppression occurs by $H$ if and only if $N(H)>A_+$.  If $d<0$ on each
-nontrivial post-crossing interval, the later equality is unique whenever it exists.
-\end{corollary}
-
-A $+\to-$ drift crossing therefore locates a local maximum of $\Delta$; it does
-not force $\Delta$ to return to zero.  Pathwise attribution requires the negative
-area to repay all positive area already accumulated: outcome suppression begins
-only when accumulated suppression overtakes accumulated help.  Causal
-\emph{starvation} further requires the independent weak-only learnability gate.  A
-failed gate blocks that certificate but does not establish that starvation is
-absent.
-
-\begin{corollary}[Response-crossing bounds]
-\label{cor:crossing-bounds}
-Under Corollary~\ref{cor:tail-area}, if $d(t)\le-\kappa<0$ on $[t_0,H]$ with
-$t_0>\tau_d$, then, when the right side lies within the horizon,
-\begin{equation}
- \tau_{\mathrm{response}}\le
- t_0+\frac{[A_+-N(t_0)]_+}{\kappa}
- \le t_0+\frac{A_+}{\kappa}.
-\end{equation}
-If $d(\tau_d)=0$ and $d'(t)\le-\lambda<0$ on
-$[\tau_d,\tau_d+r]$, then
-$N(t)\ge\lambda(t-\tau_d)^2/2$; when
-$A_+\le\lambda r^2/2$,
-\begin{equation}
- \tau_{\mathrm{response}}\le\tau_d+\sqrt{2A_+/\lambda}.
-\end{equation}
-\end{corollary}
-
-\begin{theorem}[Conditional parameter-tube certificate]
-\label{thm:parameter-tube}
-Let $X=(\theta_B,\theta_W)$, let $V$ be the joint paired gradient-flow field,
-and define $d=L_V\Delta$ and $j=L_Vd$.  On the radius-$R$ product-norm ball
-$U_R$ about the shared initialization, suppose uniformly that
-\begin{equation}
- \norm{V(X)}\le S_R,\qquad
- -\Lambda\le j(X)\le-\lambda<0,
- \quad 0<\lambda\le\Lambda,
- \label{eq:parameter-tube-premises}
-\end{equation}
-with $S_R>0$, and set $h_R=R/S_R$.  If $d_0>0$ and
-$h_R>d_0/\lambda$, there is exactly one transfer-to-rate-suppression crossing
-before ball exit and
-\begin{equation}
- \frac{d_0}{\Lambda}\le\tau_d\le\frac{d_0}{\lambda}.
- \label{eq:parameter-tube-crossing}
-\end{equation}
-If $h_R>2d_0/\lambda$, then $\Delta(t)<0$ for every
-$2d_0/\lambda<t\le h_R$.  If also the weak-only drift obeys
-$\dot M_w^{\Wcond}\ge\nu>0$ uniformly, the target is nondegenerate, and
-\begin{equation}
- \beta>M_w^{\Wcond}(0),\qquad
- \frac{\beta-M_w^{\Wcond}(0)}{\nu}<h_R,
- \label{eq:parameter-tube-learnability}
-\end{equation}
-then the weak-only member learns by reaching $\beta$ at a strictly positive time
-within the same certified horizon, so the outcome suppression is causally gated
-starvation rather than suppression alone.  If
-$\beta\le M_w^{\Wcond}(0)$, the target was met at initialization; this is
-degenerate attainment, not learnability, and cannot certify causal starvation.
-\end{theorem}
-
-\begin{corollary}[Certified finite-horizon safe transfer]
-\label{cor:parameter-safe}
-On the same ball, if instead $|j(X)|\le J$ and $d_0-Jh_R>0$, then for
-$0<t\le h_R$,
-\begin{equation}
- d(t)\ge d_0-Jt>0,
- \qquad
- \Delta(t)\ge d_0t-\frac{Jt^2}{2}>0.
- \label{eq:parameter-safe}
-\end{equation}
-Thus suppression is excluded on this certified finite horizon, not for all future
-optimization time.  The constants $S_R,\lambda,\Lambda,\nu$, and $J$ must be
-established independently rather than inferred from sampled trajectories.  No
-general nonvacuous positive-lag construction is known.
-\end{corollary}
-
-\subsection{An ordering-invariant rank-one criterion}
-Assume deterministic positive cues $z^{\Bcond}=(\rho,1)$,
-$z^{\Wcond}=(0,1)$, $\rho>0$, and exact two-mode realization.  Define
-\begin{align}
- u_B&=\rho M_s^{\Bcond}+M_w^{\Bcond},& s_B&=\sigm(-u_B),\\
- u_W&=M_w^{\Wcond},&s_W&=\sigm(-u_W),\\
- H_B&=\rho G_{ws}^{\Bcond}+G_{ww}^{\Bcond},&
- H_W&=G_{ww}^{\Wcond},\\
- Q_B&=\rho^2G_{ss}^{\Bcond}+2\rho G_{sw}^{\Bcond}+G_{ww}^{\Bcond}\ge0.
-\end{align}
-
+\subsection{Log drift-ratio identity}
 \begin{theorem}[Log drift-ratio identity]
-\label{thm:log-ratio}
-The weak drifts factor as $F_w^{\Bcond}=s_BH_B$ and
-$F_w^{\Wcond}=s_WH_W$.  Where $H_B,H_W>0$, define
+\label{thm:app-log-ratio}
+For rank-one positive cues $z^{\Bcond} = (\rho, 1)$, $z^{\Wcond} = (0, 1)$, write $F_w^{\Bcond} = s_{\Bcond} H_{\Bcond}$ and $F_w^{\Wcond} = s_{\Wcond} H_{\Wcond}$ where $H_{\Bcond} = \rho G_{ws}^{\Bcond} + G_{ww}^{\Bcond}$ and $H_{\Wcond} = G_{ww}^{\Wcond}$. Define $\Psi = \log(F_w^{\Bcond} / F_w^{\Wcond})$. Then $\operatorname{sign}(d) = \operatorname{sign}(\Psi)$, and:
 \begin{equation}
- \Psi=\log\frac{F_w^{\Bcond}}{F_w^{\Wcond}}
- =\log\frac{s_B}{s_W}+\log\frac{H_B}{H_W}.
+  \dot{\Psi} = -s_{\Bcond}(1-s_{\Bcond}) Q_{\Bcond} + s_{\Wcond}(1-s_{\Wcond}) H_{\Wcond} + \frac{\dd}{\dd \tau} \log\left(\frac{H_{\Bcond}}{H_{\Wcond}}\right),
+  \label{eq:app-psi-dot}
 \end{equation}
-Then $\operatorname{sign}(d)=\operatorname{sign}(\Psi)$ and
+where $Q_{\Bcond} = \rho^2 G_{ss}^{\Bcond} + 2\rho G_{sw}^{\Bcond} + G_{ww}^{\Bcond} \ge 0$.
+\end{theorem}
+
+\subsection{Every-width six-scalar solvable zero-lag limit}
+\begin{theorem}[Every-width six-scalar closure at zero lag]
+\label{thm:app-six-scalar}
+At zero temporal lag and zero background noise in the dense linear RNN, the recurrent weight matrix $W$ is loss-invisible ($\nabla_W L = 0$). With $u_{ab} = b_a \cdot b_b$ and $w = c \cdot c$, the dynamics close at every width $N$:
 \begin{equation}
- \Psi'=-s_B(1-s_B)Q_B+s_W(1-s_W)H_W
-       +\left(\log\frac{H_B}{H_W}\right)'.
- \label{eq:Psi-prime}
+  \dot M_a = g_a w + \sum_b g_b u_{ab}, \qquad \dot u_{ab} = g_a M_b + g_b M_a, \qquad \dot w = 2\sum_b g_b M_b.
+  \label{eq:app-six-scalar-eqs}
 \end{equation}
 \end{theorem}
 
-\begin{corollary}[Unique rate crossing]
-\label{cor:unique-rate-crossing}
-Suppose on $[t_0,H]$ that $H_B,H_W>0$, $\Psi(t_0)>0$,
-$\Psi'(t)\le-\kappa<0$, and $H-t_0\ge\Psi(t_0)/\kappa$.  Then exactly one
-rate crossing occurs in $(t_0,H]$ and
-\begin{equation}
- \tau_d\le t_0+\Psi(t_0)/\kappa.
-\end{equation}
-A sufficient primitive condition is
-\begin{equation}
- s_B(1-s_B)Q_B\ge a,\quad s_W(1-s_W)H_W\le b,\quad
- (\log(H_B/H_W))'\le c,\quad a-b-c\ge\kappa>0.
-\end{equation}
-\end{corollary}
+\section{Proofs}
+\label{app:proofs}
+\setcounter{equation}{0}
+\setcounter{theorem}{0}
+\setcounter{table}{0}
+\setcounter{figure}{0}
 
-The bounds must be established independently to be predictive.  Evaluating
-$\Psi$ on a completed trajectory is certification, not prediction.  Noisy cues
-generally break the rank-one factorization, and even a rate crossing still requires
-Corollary~\ref{cor:tail-area} for an outcome crossing.
+\subsection{Proof of Proposition 1}
+\label{app:proof-prop-exact}
+Under full-batch logistic gradient flow, $\dot{\theta} = -\nabla L(\theta) = \frac1n \sum_{i=1}^n \sigm(-r_i) \nabla r_i(\theta) = \frac1n J(\theta)^\top q(r)$.
+By chain rule, for any response $M_w(\theta)$:
+$\dot{M}_w = \ip{\nabla M_w}{\dot{\theta}} = \frac1n \ip{\nabla M_w}{J^\top q(r)} = \frac1n (J \nabla M_w)^\top q(r) = \frac1n c_w^\top q(r)$.
+Similarly, $\dot{r}_i = \ip{\nabla r_i}{\dot{\theta}} = \frac1n \sum_j \ip{\nabla r_i}{\nabla r_j} q_j = \frac1n (\Theta q(r))_i$. \qed
 
-\subsection{Hitting-time stability}
-\begin{corollary}[Transverse first-hit stability]
-\label{cor:hitting}
-Let continuous $x_N,x:[0,H]\to\R$ satisfy
-$\norm{x_N-x}_\infty\le\epsilon$, and define
-\begin{equation}
- \tau=\inf\{t\in[0,H]:x(t)\ge\beta\},\qquad
- \tau_N=\inf\{t\in[0,H]:x_N(t)\ge\beta\},
- \quad \inf\varnothing=\infty.
-\end{equation}
-Assume $x$ is absolutely continuous, $x(0)<\beta$, and
-$\tau\in(0,H)$.  Choose $0<r\le\min\{\tau,H-\tau\}$ such that
-$x'(t)\ge\kappa>0$ almost everywhere on $[\tau-r,\tau+r]$, and let
-\begin{equation}
- \eta=\beta-\max_{0\le t\le\tau-r}x(t)>0.
-\end{equation}
-If $\epsilon<\eta$ and $\epsilon/\kappa\le r$, then $\tau_N<\infty$ and
-\begin{equation}
- |\tau_N-\tau|\le\epsilon/\kappa.
- \label{eq:hitting-continuous}
-\end{equation}
-For an ordered grid $0=t_0<\cdots<t_m=H$ of maximum mesh
-$h=\max_j(t_j-t_{j-1})$, let $\tau_N^{\rm samp}$ be the first sampled time with
-$x_N(t_j)\ge\beta$, and let $\tau_N^{\rm int}$ be the first hit of the
-piecewise-linear interpolant through the samples.  If
-$\epsilon/\kappa+h\le r$, both are finite and
-\begin{equation}
- |\tau_N^{\rm samp}-\tau|\le\epsilon/\kappa+h,
- \qquad
- |\tau_N^{\rm int}-\tau|\le\epsilon/\kappa+h.
- \label{eq:hitting-grid}
-\end{equation}
-For a paired delay, if both reference hits are finite and each trajectory satisfies
-its own assumptions, then
-\begin{equation}
- |(\tau_{N,B}-\tau_{N,W})-(\tau_B-\tau_W)|
- \le \epsilon_B/\kappa_B+\epsilon_W/\kappa_W+h_B+h_W.
-\end{equation}
-If either hit is infinite, the delay is censored; a common mesh $h$ gives the
-special case with $2h$.
-\end{corollary}
-Descending crossings follow by sign reversal and localization after a strict
-excursion.  Since the response gap has $\Delta(0)=0$, its later downward outcome
-crossover must be localized to $[a,H]$ with $\Delta(a)>0$ and treated using
-$x=-\Delta$ and target zero; the hit at time zero is not that later crossover.
-This corollary transfers an independently proved uniform trajectory limit.  It
-does not prove that limit, first-entry semantics, the prehistory margin, or the
-derivative bound.  Thus Theorem~\ref{thm:frozen-comparison}'s summed paired
-response bound licenses a crossing-time statement only after all of these separate
-guards hold; an error formula or empirical event match alone is not a hitting-time
-certificate.
+\subsection{Proof of Proposition 2}
+\label{app:proof-prop-drift}
+Since $\Delta(0) = 0$ and $\Delta(\tau)$ is absolutely continuous, $\Delta(t) = \int_0^t \dot{\Delta}(u) \dd u = \int_0^t d(u) \dd u$.
+Writing $d(u) = [d(u)]_+ - [-d(u)]_+$ gives $\Delta(t) = \int_0^t [d(u)]_+ \dd u - \int_0^t [-d(u)]_+ \dd u = P(t) - N(t)$.
+Thus $\Delta(t) < 0 \iff P(t) - N(t) < 0 \iff N(t) > P(t)$. \qed
 
-\section{A solvable recurrence-invisible zero-lag wide limit}
-Set lag separation zero and background input/noise zero in the dense linear model;
-let the realized recurrent matrix $W$ be arbitrary and finite.  Both cues then
-arrive at the final step.  Starting from $h_0=0$, induction gives $h_t=0$ for every
-state entering the final update and hence
-$h_T=Wh_{T-1}+Bx_{T-1}=Bx_{T-1}$.  Thus $W$ is loss-invisible,
-$\nabla_WL=0$, and it remains fixed.  Writing the input columns as $b_s,b_w$ gives
-$M_a=c\cdot b_a$.  Let $u_{ab}=b_a\cdot b_b$ and $w=c\cdot c$.
+\subsection{Proof of Theorem 1}
+\label{app:proof-thm-tangent}
+Let $e_r(t) = r(t) - \bar r(t)$ and $e_M(t) = M(t) - \bar M(t)$. Differentiating:
+$\dot e_r = \frac1n [\Theta(t) q(r(t)) - \Theta_0 q(\bar r(t))] = \frac1n [\Theta(t) - \Theta_0] q(r(t)) + \frac1n \Theta_0 [q(r(t)) - q(\bar r(t))]$.
+Since $\sigm'$ is bounded by $1/4$, $\|q(r) - q(\bar r)\| \le \frac14 \|e_r\|$.
+Applying Grönwall's inequality with $a = \|\Theta_0\| / (4n)$ yields the bounds in Eqs.~\eqref{eq:tangent-bound}. \qed
 
-\begin{theorem}[Every-width six-scalar closure]
-\label{thm:six-scalar}
-At every width,
-\begin{align}
- \dot M_a&=g_aw+\sum_b g_bu_{ab},&
- \dot u_{ab}&=g_aM_b+g_bM_a,\\
- \dot w&=2\sum_bg_bM_b,&
- G_{ab}&=u_{ab}+\delta_{ab}w.
- \label{eq:six-scalar}
-\end{align}
-\end{theorem}
+\subsection{Proof of Theorem 2}
+\label{app:proof-thm-initial}
+At $\tau=0$, $\theta_{\Bcond}(0) = \theta_{\Wcond}(0)$. Using the dense linear block gradients with $W(0), B(0), c(0)$, $G_{ws}(0) = b_s^\top W^\ell b_w = K$ and $G_{ww}(0) = A$.
+Evaluating the initial weak drift in each condition:
+$\dot M_w^{\Bcond}(0) = s_{\Bcond}(\rho K + A)$ and $\dot M_w^{\Wcond}(0) = s_{\Wcond} A$.
+Subtracting gives $d_0 = s_{\Bcond}(\rho K + A) - s_{\Wcond} A$. Setting $d_0 > 0$ yields Eq.~\eqref{eq:initial-gap-formula}. \qed
 
-\begin{theorem}[Finite-horizon deterministic wide limit]
-\label{thm:wide-limit}
-For any finite realized recurrent matrix $W$, let all coordinates of
-$b_s,b_w,c$ be mutually independent $\mathcal N(0,1/N)$ and
-\begin{equation}
- q_N=(M_s,M_w,u_{ss},u_{sw},u_{ww},w),\qquad
- q_0=(0,0,1,0,1,1).
-\end{equation}
-For every $\epsilon>0$,
-\begin{equation}
- \Prob\!\left(\norm{q_N(0)-q_0}_\infty>\epsilon\right)
- \le \min\left\{1,\frac{9}{N\epsilon^2}\right\}.
- \label{eq:init-concentration}
-\end{equation}
-Fix a cue law with bounded second moments and define
-\begin{equation}
- g_a(M)=\E[z_a\sigm(-z\cdot M)],\quad
- A=\max_a\E|z_a|,\quad
- C=\frac14\max_a\sum_b\E|z_az_b|.
-\end{equation}
-Then $\norm{g(M)}_\infty\le A$ and
-\begin{equation}
- \norm{g(M)-g(\widetilde M)}_\infty
- \le C\norm{M-\widetilde M}_\infty.
- \label{eq:g-lipschitz}
-\end{equation}
-Let $q(t)$ be the deterministic solution from $q_0$, let
-$c_\star=W(e^{-1})=\sup_x x\sigm(-x)$, where $W$ is Lambert's function, and set
-\begin{equation}
- R_H=3+4c_\star H,\qquad B_{H,r}=R_H+r,\qquad
- L_{H,r}=4(A+B_{H,r}C)
- \label{eq:deterministic-tube-constants}
-\end{equation}
-for a fixed deterministic radius $r>0$.  The reference Gram energy
-$R=w+u_{ss}+u_{ww}$ obeys $R(0)=3$, $R'\le4c_\star$, and therefore
-$\norm{q(t)}_\infty\le R_H$ on $[0,H]$.  The vector field is
-$L_{H,r}$-Lipschitz in infinity norm on the radius-$r$ tube about this path.
-If
-\begin{equation}
- \norm{q_N(0)-q_0}_\infty
- \le e^{-L_{H,r}H}\min\{r,\delta\},
- \label{eq:tube-bootstrap-event}
-\end{equation}
-then $q_N$ does not leave the tube before $H$ and
-\begin{equation}
- \sup_{t\le H}\norm{q_N(t)-q(t)}_\infty\le\delta.
- \label{eq:gronwall}
-\end{equation}
-Consequently,
-\begin{equation}
- \Prob\!\left(\sup_{t\le H}\norm{q_N(t)-q(t)}_\infty>\delta\right)
- \le\min\left\{1,
- \frac{9e^{2L_{H,r}H}}{N\min\{r,\delta\}^2}\right\}.
- \label{eq:trajectory-concentration}
-\end{equation}
-For $r=1$ and $0<\delta\le1$, the denominator reduces to $N\delta^2$ with
-the deterministic constant $L_{H,1}$.  Thus $q_N\to q$ uniformly on fixed
-horizons in probability, with initialization scale $O_{\Prob}(N^{-1/2})$.
-For the paired both/weak-only result, use a common $r$ and the maximum of the two
-deterministic $L_{H,r}$ constants for the two fixed cue laws.
-\end{theorem}
+\subsection{Proof of Theorem 3}
+\label{app:proof-thm-cdc}
+For (1): $a \cdot v' = a \cdot (v + \alpha q) = a \cdot v + \alpha (a \cdot q) = a \cdot v$, since $a \cdot q = a \cdot (p - \frac{p \cdot a}{\|a\|^2} a) = 0$.
+For (2): The optimization problem is $\min_d \frac12 \|d\|^2$ subject to $a \cdot d = 0$ and $p \cdot (v + d) \ge F_w^{\Wcond}$. Forming the Lagrangian $L(d, \lambda_1, \lambda_2) = \frac12 \|d\|^2 - \lambda_1 (a \cdot d) - \lambda_2 (p \cdot d - \delta)$, stationarity gives $d^* = \lambda_1 a + \lambda_2 p$. Orthogonality $a \cdot d^* = 0$ forces $\lambda_1 = -\lambda_2 \frac{a \cdot p}{\|a\|^2}$, so $d^* = \lambda_2 q$. Enforcing $p \cdot d^* = \delta$ yields $\lambda_2 = \delta / \|q\|^2 = \alpha$, proving uniqueness.
+For (3): By Taylor expansion with Lipschitz gradient $\nabla m_s$, $|m_s(\theta + \eta v') - m_s(\theta + \eta v)| \le \eta |a \cdot (v' - v)| + \frac{L}{2} \eta^2 (\|v'\|^2 + \|v\|^2) = \frac{L}{2} \eta^2 (\|v'\|^2 + \|v\|^2)$. \qed
 
-This theorem is a genuine large-width result at recurrence-invisible zero lag for
-any finite realized recurrent gain.  It is not a positive-lag recurrent DMFT.
+\section{Experimental details and complete hyperparameters}
+\label{app:experimental-details}
+\setcounter{equation}{0}
+\setcounter{theorem}{0}
+\setcounter{table}{0}
+\setcounter{figure}{0}
 
-\begin{corollary}[Zero-lag suppression and weak-only learnability]
-\label{cor:zero-disorder-suppression}
-For the noiseless positive rank-one cue law (zero cue noise), zero lag, zero
-background noise, and any finite
-realized recurrent matrix, use the deterministic symmetric initial state
-$(M_s,M_w,u_{ss},u_{sw},u_{ww},w)=(0,0,1,0,1,1)$.  For every $\rho>0$, the
-both-minus-weak gap and rate satisfy
-\begin{equation}
- \bar\Delta(0)=0,\qquad \bar d(0)=0,\qquad
- \bar d'(0)=-\rho^2/2<0.
- \label{eq:zero-disorder-initial-suppression}
-\end{equation}
-Hence $\bar\Delta(t)<0$ for all sufficiently small $t>0$: suppression begins at
-initialization and is not transfer-then-suppression.  In the weak-only subsystem,
-\begin{equation}
- u_{ww}=w=\sqrt{1+M_w^2},\qquad
- \dot M_w=2\sigm(-M_w)\sqrt{1+M_w^2}>0,
-\end{equation}
-so every finite $\beta>0$ is reached and
-\begin{equation}
- \tau_\beta\le\frac{\beta}{2\sigm(-\beta)}.
- \label{eq:zero-disorder-target-time}
-\end{equation}
-These identities and the target bound are independent of the arbitrary finite
-realized $W$.  The finite-width outcome-suppression/learnability conclusion
-follows from
-Theorem~\ref{thm:wide-limit} only after deterministic witness margins and its
-common tube event are established; ordinary floating-point integration is not
-silently promoted to such a proof.
-\end{corollary}
-
-\section{Local mechanism-level control with Counterfactual Drift Correction}
-CDC uses the paired weak-only drift target to intervene on the diagnosed local
-mechanism; it is not presented as a general optimizer or robustness method.
-Flatten the trainable tensors into one fixed parameter chart with the
-standard product Euclidean/Frobenius inner product.  Every gradient, dot product,
-norm, projection, Lipschitz ball, and straight segment in this section uses that
-chart and metric; no reparameterization-invariance or natural-gradient claim is
-made.
-
-At a both-feature state $\theta$, let
-\begin{equation}
- a=\nabla m_s(\theta),\quad p=\nabla m_w(\theta),\quad
- v=-\nabla L(\theta),\quad F_s=a\cdot v,\quad F_w=p\cdot v.
-\end{equation}
-A same-initialization weak-only shadow supplies $F_w^{\Wcond}$.  Define
-\begin{equation}
- q=\begin{cases}
- p-\dfrac{p\cdot a}{\norm a^2}a,&a\ne0,\\
- p,&a=0,
- \end{cases}
- \quad
- \delta=[F_w^{\Wcond}-F_w]_+,
- \quad
- \alpha=\begin{cases}\delta/\norm q^2,&\delta>0,\ q\ne0,\\0,&\delta=0.
- \end{cases}
- \label{eq:cdc}
-\end{equation}
-The corrected velocity is $v'=v+\alpha q$.  A positive deficit with $q=0$ is
-infeasible.  The theorems assume full-batch gradients, plain SGD, zero weight
-decay, and no clipping.  A nonbinding coefficient cap leaves the uncapped result
-unchanged; a binding cap preserves orthogonality but generally loses target
-attainment, so no target-attaining optimality claim then applies.  In the fixed
-parameter chart, feasible uncapped target-attaining CDC is the unique minimum-
-Euclidean-norm correction satisfying zero instantaneous strong-drift change and
-the weak-drift lower bound.  Its finite-step guarantee is local and one-step.
-
-\begin{theorem}[CDC local guarantees]
-\label{thm:cdc}
-The construction in Eq.~\eqref{eq:cdc} has the following fixed-coordinate
-properties.
-\begin{enumerate}[leftmargin=*]
-  \item \textbf{Instantaneous preservation:} $a\cdot v'=a\cdot v$ exactly,
-  including when $\alpha$ is capped.
-  \item \textbf{Minimum Euclidean norm:} for the feasible uncapped problem,
-  $d^*=\alpha q$ is the unique minimum-norm, lower-bound-attaining correction
-  satisfying $a\cdot d=0$ and
-  $p\cdot(v+d)\ge F_w^{\Wcond}$.
-  \item \textbf{Local finite-step bound:} if $\nabla m_s$ is $L$-Lipschitz in
-  the same norm on a convex neighborhood containing both straight coordinate step
-  segments, then
-  \begin{equation}
-  |m_s(\theta+\eta v')-m_s(\theta+\eta v)|
-  \le\frac L2\eta^2(\norm{v'}^2+\norm v^2).
-  \label{eq:cdc-step}
-  \end{equation}
-  For the active uncapped correction, if $\norm v\le V$, $\delta\le D$, and
-  $\norm q\ge q_{\min}>0$, the right side is at most
-  \begin{equation}
-  \frac L2\eta^2\left[V^2+(V+D/q_{\min})^2\right].
-  \end{equation}
-  This explicit norm bound also remains valid under a nonnegative upper cap,
-  which can only reduce $\alpha$.
-\end{enumerate}
-\end{theorem}
-For a positive raw deficit, exact feasibility can be stated intrinsically only as
-$dm_w$ having a nonzero restriction to $\ker(dm_s)$; in this metric it is
-equivalent to $q\ne0$.  The represented $q$, its norm, and the selected
-minimum-norm correction are metric- and parameter-scale-dependent.  The finite-step
-result is one-step and local in the same chart.  It is not a trajectory guarantee
-and does not imply final strong-response retention.
-
-\section{Experimental protocol}
-\subsection{Synthetic task and pairing}
-Sequences have two input channels.  A strong cue of scale $\rho$ and a unit weak
-cue appear at controlled positions separated by a lag.  Positive tasks align both
-cues with the label; the negative control reverses the strong cue.  Data and
-initialization are paired across both-feature and weak-only conditions.  Training
-uses deterministic full-batch cross-entropy with zero weight decay.  The nonlinear
-fixed-cell study trains the pair in lockstep so both direct response drifts are
-available at every logged time; deterministic conditions can otherwise be run
-sequentially without changing either trajectory.
-
-\subsection{Study designs}
-Table~\ref{tab:protocol} summarizes model, task, seed, and compute settings.  The
-controlled linear grid uses width 96, gain $0.5$, four strengths, lags
-$\{0,2,4,8\}$, and seed IDs 4--11.  Each lag therefore has 32 strength--seed cells
-but only eight independent seed IDs.  Its gate is $\beta=0.25$ by $H=5$; the
-negative control has eight seeds at $(\rho,\mathrm{lag})=(4,4)$.  The finite-width
-reference study uses widths 32--256, gain $0.5$, and disjoint seeds for its
-empirical reference.
-
-The nonlinear fixed-cell study uses width 32, $(\rho,\mathrm{lag})=(4,2)$, eight
-seeds per architecture, gain $0.8$, cue-noise standard deviation $0.1$, zero
-background noise, and first-hit target $\beta=0.5$.  Tanh RNNs and GRUs use direct
-automatic-differentiation response drift.  The broad tangent pilot uses the same
-cell on 16 architecture--seed records and evaluates five outputs.  The held-out
-event test uses a fresh crossed design with four data seeds and eight model seeds
-per architecture and evaluates drift- and response-crossing labels.
-
-The semi-real generated-cue study contains a $4\times8$ crossed design for each of
-MNIST 3-vs-8 and FashionMNIST 0-vs-6.  It retains real core pixels and ablates only
-an exactly removable generated cue, so it is a semi-real intervention rather than
-a natural-spurious-correlation benchmark.  The threshold-robust extension contains
-192 nonlinear records across tanh and GRU, three fixed cells, and the first-hit grid
-$\beta\in\{0.25,0.5,1,2\}$.  The mechanism-control comparison contains 256
-method-records across ERM, CDC, and adapted Bloop-style and PCGrad-style
-shadow-target variants.  These variants use response-gradient shadow targets and
-are not claimed to reproduce the original algorithms.  All shadow methods use a
-second weak-only model and therefore require roughly twice the model work.
-
-\subsection{Statistics and censoring}
-Independent seed pairs are the unit of replication only when neither seed axis is
-reused.  The controlled linear grid reuses eight seed IDs across four strengths;
-the nonlinear 3/8, 5/8, and 0/8 proportions describe only the eight observed seeds
-per architecture.  Neither design estimates universal event prevalence.  For the
-held-out event test, two-way percentile intervals resample the observed data- and
-model-seed axes independently with 10,000 replicates.  These intervals are
-conditional on the observed levels: an all-correct table necessarily yields
-$[1,1]$ and does not quantify unseen failure modes.
-
-Hitting times beyond the horizon are right-censored and never converted to finite
-delays.  Conditional crossing-time means are reported with their crossing-record
-denominator.  The exploratory nonlinear $5\times5$ grid uses seeds 0--3 and is
-reported only as a post-hoc search.  The semi-real study uses dataset-specific
-two-way crossed-seed intervals; absent weak-only first hits censor causal
-interpretation in both directions.  The threshold-robust extension uses a shared
-5,000-replicate two-way bootstrap, equal-weights its three cells, and Holm-adjusts
-the two architecture tests; the resulting estimates are not used to rank
-architectures.  The mechanism-control comparison uses the same bootstrap draws and
-equal-weights two cells.  Its weak-rescue contrast is CDC minus comparator for
-$-\lvert\text{weak AUC gap}\rvert$ (positive favors CDC); trajectory and final
-contrasts are comparator minus CDC absolute deviation from paired ERM (positive
-favors CDC).
-
-\section{Results}
-\label{sec:results}
-\subsection{Paired weak-AUC deficits and weak-only learnability}
-At lags 0, 2, and 4, all 32 $\rho$--seed cells per lag (four strengths by
-eight seed IDs) have positive paired weak-AUC deficits and learnable weak-only
-controls under the specified gate.  Averaged across $\rho$, the lag-wise deficits
-are 5.76, 8.93, and 6.11, respectively; the measured effect peaks at lag 2 rather
-than decreasing monotonically with lag.  At every fixed lag, the mean deficit
-increases monotonically over the measured $\rho$ grid.  The negative-control cell
-is transfer in 8/8 seeds, with mean gap $-4.038$ and 95\% CI
-$[-4.498,-3.578]$.  Every lag-8 cell fails the weak-only gate: all 32 are weak-only
-nonlearnable and causally indeterminate under $\beta=0.25,H=5$.  They supply
-neither causal-starvation certificates nor evidence that starvation is absent.
-Final accuracy is 1.0 throughout, and no row meets the target at initialization.
-
-\artifactfigure{../paper/artifacts/historical/e1_dense_rerun-20260823-085142/e1_causal_regions.pdf}
-{Controlled dense-linear paired weak-AUC deficits and weak-only gate status.  The
-specified learnability gate makes all lag-8 points causally indeterminate rather
-than positive or negative starvation evidence.}{fig:linear-grid}
-
-\subsection{Empirical width trends and exact zero-lag checks}
-The finite-width reference study compares finite networks with a disjoint-seed
-empirical \emph{closure reference}; it is not an independently derived theory.
-At widths 32, 64, 128, and 256, overall both-condition trajectory NRMSE is
-$0.09084$, $0.04761$, $0.05149$, and $0.02958$, respectively; weak-only NRMSE is
-$1.56931$, $0.38792$, $0.40201$, and $0.20024$.  Both improve end-to-end but are
-non-monotone at $N=128$.  All 32 point--condition--diagnostic combinations improve
-end-to-end; large normalized weak-only values at difficult points have near-zero
-denominators.  The exact finite-width geometry check has zero recorded relative
-error and the maximum projected-identity error is $2.86\times10^{-6}$.
-
-In the exact zero-lag discretization check, the time-discretization residual scales
-as $O(\eta)$ with fitted slope 1.0115.  A frozen-geometry integrator agrees with
-the projected-flow integrator to $1.91\times10^{-15}$.  These checks concern the
-proved zero-lag special case and do not validate a general recurrent mean-field
-closure.
-
-\artifactfigure{../paper/artifacts/historical/e2_corrected_validation-20260821-224630/e2_field_agreement.pdf}
-{Finite-width agreement with a held-out empirical finite-network closure reference.
-This is not DMFT validation.}{fig:width-reference}
-
-\subsection{Tanh certificates versus ungated GRU crossings}
-Table~\ref{tab:nonlinear-fixed-cell} is the authoritative nonlinear result at the fixed
-$(\rho,\mathrm{lag})=(4,2)$ cell.  Tanh has a complete exact-drift/response/tail-
-area transfer-to-starvation certificate in 3/8 observed seeds; the other five have
-negative exact relative drift from initialization and therefore do not exhibit the
-transfer-to-starvation path type.  GRU has exact drift and response crossings in
-5/8 seeds, but every weak-only trajectory fails to reach $\beta=0.5$; its causal
-count is therefore 0/8 and causal status is indeterminate under that gate.  This
-separates rate/outcome suppression from causal starvation; it does not rank
-architectures or estimate prevalence.  The nonzero direct-versus-projected
-residuals empirically confirm that $Gg$ cannot be silently treated as the exact
-nonlinear probe derivative.
-
-\begin{table}[t]
+\begin{table}[ht]
 \centering
-\caption{Final nonlinear fixed-cell study result at $\rho=4$, lag 2, eight seeds.  Crossing times and
-confidence intervals are conditional on crossing and must not be read as
-eight-seed estimates.}
-\label{tab:nonlinear-fixed-cell}
-\small
-\begin{tabular}{lcccccc}
-\toprule
-Model & exact drift & response & causal & mean $\tau_d$ & mean $\tau_r$ & max $|R_w^B-R_w^W|$ \\
-\midrule
-tanh & 3/8 & 3/8 & 3/8 & 0.194 & 0.389 & 0.02197 \\
-GRU  & 5/8 & 5/8 & 0/8 & 3.846 & 7.200 & 0.002986 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The prespecified gate is the first hit at $\beta=0.5$, but a single binary
-operating point can hide whether failures are marginal.  We therefore add a post-
-hoc terminal analysis using $B_{W,s}(H)=M_{w,s}^{\Wcond}(H)$ and the empirical
-fraction
-of seeds with $B_{W,s}(H)\ge\beta$ over candidate thresholds.  No model was
-retrained: Figure~\ref{fig:nonlinear-learnability-profile} is derived from the
-recorded per-seed nonlinear summary.  Tanh terminal responses range from $4.413$
-to $4.676$ (mean $4.497$), with 8/8 above $\beta=0.5$; GRU responses range from
-$0.0828$ to $0.187$ (mean $0.130$), with 0/8 above $0.5$.  Thus the GRU weak-only
-gate failure is not marginal at that operating point, but it still provides
-neither a causal-starvation certificate nor evidence that starvation is absent.  Terminal reach is not generally interchangeable with
-the prespecified first-hit event on a nonmonotone trajectory, and this post-hoc
-diagnostic supports neither a new endpoint nor an architecture
-ranking.
-
-\artifactfigure{../paper/artifacts/enl_tanh_crossover-20260824-141207/enl_learnability_profile.pdf}
-{Post-hoc weak-only terminal-response analysis.  Points are terminal responses for
-all eight seeds; horizontal segments mark medians and the dashed line marks the
-prespecified $\beta=0.5$.  The right panel sweeps candidate thresholds without
-rerunning training.  Terminal reach is not generally interchangeable with a
-first-hit gate for nonmonotone trajectories.}{fig:nonlinear-learnability-profile}
-
-The post-hoc tanh search over $\rho\in\{1.5,2,3,4,6\}$ and
-lags $\{0,1,2,4,8\}$ found no cell with 4/4 causal certificates; the best cells
-reached 3/4.  This negative exploratory result is not used to select the reported
-fixed cell.
-
-\artifactfigure{../paper/artifacts/enl_tanh_crossover-20260824-141207/enl_crossover.pdf}
-{Paired nonlinear diagnostic trajectories.  Direct-autograd drift defines the
-reported events; projected and matched-state quantities are separately styled
-diagnostics.}{fig:nonlinear-trajectories}
-
-\subsection{Broad tangent pilot and held-out event test}
-The initialization-frozen tangent surrogate was first evaluated on one data seed
-and eight model seeds per architecture.  It correctly classified phase, drift
-crossing, response crossing, causal certificate, and weak-only learnability in
-$12/16,14/16,14/16,14/16,$ and $12/16$ records.  The five-output criterion
-nevertheless failed because tanh weak-only learnability was $4/8$, below the
-prespecified $5/8$ floor.
-
-A fresh factorial then crossed four data seeds with eight model seeds for each
-architecture and restricted evaluation to crossing events.  Table~\ref{tab:ntk-heldout}
-reports classification correctness rather than observed crossing prevalence.
-Response-crossing labels were correct in 64/64 records and drift-crossing labels
-in 60/64; their two-way-bootstrap intervals were $[1,1]$ and $[0.8125,1]$.
-
-\begin{table}[t]
-\centering
-\caption{Tangent-surrogate evaluations.  The broad five-output pilot failed; the
-fresh crossed-seed test supports only drift- and response-crossing event
-classification.  Intervals resample data- and model-seed axes.}
-\label{tab:ntk-heldout}
-\small
-\begin{tabular}{llcccc}
-\toprule
-Protocol & Endpoint & Overall & tanh & GRU & 95\% CI \\
-\midrule
-Broad pilot & phase & 12/16 & 6/8 & 6/8 & diagnostic \\
-Broad pilot & weak learnability & 12/16 & 4/8 & 8/8 & \textbf{failed} \\
-Held-out $4\times8$ & drift event & 60/64 & 32/32 & 28/32 & $[0.8125,1]$ \\
-Held-out $4\times8$ & response event & 64/64 & 32/32 & 32/32 & $[1,1]$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The restriction is substantive.  In the factorial, phase, causal-certificate, and
-learnability correctness were only 52/64, 56/64, and 49/64, including tanh
-learnability of 17/32.  Crossing times were systematically early (overall
-drift/response bias $-0.822/-1.189$), while tanh response-gap, weak-response, and
-drift RMSE were 2.455, 2.489, and 0.490.  The result is therefore an uncalibrated
-event classifier at one width/task cell.  It neither proves
-Theorem~\ref{thm:frozen-comparison}'s kernel premise nor validates phase, causal
-status, learnability, trajectory magnitude, calibrated time, or prevalence.
-
-\subsection{Dense mechanism-control comparison}
-All five shadow-based methods reduce the weak AUC gap from ERM's 10.5155 to
-approximately zero and attain their shared weak-drift target at every logged step.
-Their weak outcomes are numerically similar to roughly four decimal places, though
-9/10 direct paired comparisons are significant at 0.05; these differences are
-small relative to the approximately 10.5 change from ERM.  CDC alone preserves
-instantaneous strong drift to $4.77\times10^{-7}$, versus
-$1.48\times10^{-1}$ to $3.75\times10^{-1}$ for the alternative shadow constraints.
-This local property does not yield the best final strong response: unconstrained
-rescue and the adapted PCGrad-style shadow-target method end at 1.295, compared
-with CDC's 1.042 and ERM's 1.364.
-
-\begin{table}[t]
-\centering
-\caption{Dense CDC ablation, eight paired seeds.  Shadow-based arms have access to
-a matched weak-only model; the other arms do not.  ``Strong change'' is the maximum
-absolute instantaneous strong-drift perturbation.}
-\label{tab:cdc}
+\caption{Complete experimental hyperparameters across all study designs.}
+\label{tab:app-hyperparams}
 \small
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{lcccc}
 \toprule
-Method & Shadow & Weak AUC gap & Strong change & Final $m_s$ \\
+Hyperparameter & Linear Grid (§7.1) & Nonlinear Fixed-Cell (§7.2) & Tangent Held-Out (§7.3) & CDC Ablation (§7.4) \\
 \midrule
-ERM & no & 10.5155 & --- & 1.364 \\
-Spectral Decoupling & no & 9.0229 & --- & 0.829 \\
-Interaction & no & 10.5145 & --- & 1.365 \\
-CDC & yes & $-0.0005$ & $4.77\times10^{-7}$ & 1.042 \\
-Loss-gradient projection & yes & $-0.0002$ & $3.75\times10^{-1}$ & 0.371 \\
-Unconstrained rescue & yes & $-0.0007$ & $1.48\times10^{-1}$ & 1.295 \\
-Adapted Bloop-style shadow-target variant & yes & $0.0002$ & $3.75\times10^{-1}$ & 0.370 \\
-Adapted PCGrad-style shadow-target variant & yes & $-0.0007$ & $1.48\times10^{-1}$ & 1.295 \\
+Architecture & Dense Linear RNN & Tanh RNN / GRU & Tanh RNN / GRU & Dense Linear RNN \\
+Hidden width $N$ & 96 & 32 & 32 & 96 \\
+Recurrent Gain $g$ & 0.5 & 0.8 & 0.8 & 0.5 \\
+Input scaling $\sigma_B$ & $1/\sqrt{N}$ & $1/\sqrt{N}$ & $1/\sqrt{N}$ & $1/\sqrt{N}$ \\
+Sequence length $T$ & 10 & 10 & 10 & 10 \\
+Optimizer & Full-batch GD & Full-batch GD & Full-batch GD & Full-batch GD \\
+Learning rate $\eta$ & 0.1 & 0.05 & 0.05 & 0.1 \\
+Horizon $H$ & 5.0 (50 steps) & 5.0 (100 steps) & 5.0 (100 steps) & 5.0 (50 steps) \\
+Target threshold $\beta$ & 0.25 & 0.5 & 0.5 & 0.25 \\
+Replication & 8 seeds $\times$ 16 cells & 8 seeds $\times$ 2 archs & 4 data $\times$ 8 model seeds & 8 paired seeds \\
+Hardware & Apple M-series / CUDA & Apple M-series / CUDA & Apple M-series / CUDA & Apple M-series / CUDA \\
 \bottomrule
 \end{tabular}}
 \end{table}
 
-\artifactfigure{../paper/artifacts/historical/e3_cdc_dense_ablation-20260823-090702/e3_mitigation.pdf}
-{Eight-method dense-linear mitigation ablation.  CDC's established distinction is
-instantaneous first-order preservation, not superior weak rescue or final strong
-retention.}{fig:dense-control}
+\subsection{Frozen CIFAR-10 confirmation details}
+The confirmatory source commit is \texttt{0726aea12947a30eb60ae32fc9c1eb0a7a122660}; the frozen configuration and DGX environment have SHA-256 digests \texttt{8f662f9982f8445b} and \texttt{1c1e2d126093f449}, respectively (prefixes shown). Runs use CIFAR-10 archive SHA-256 \texttt{6d958be074577803}. The split contains 40,000 training, 5,000 validation, 2,500 probe-fit, and 2,500 diagnostic-evaluation images. Full hashes, raw traces, and the independent audit are included in the supplementary artifacts.
 
-\subsection{Semi-real, threshold-robust, and mechanism-control extensions}
-The semi-real generated-cue study contains 64 records.  MNIST 3-vs-8 and
-FashionMNIST 0-vs-6 each have 0/32 weak-only-learnable records and therefore 0/32
-causal certificates under the specified gate.  The mean weak-AUC gap is
-$-1.2362842136667493\times10^{-3}$ (95\% CI
-$[-3.4405428466004646,\allowbreak 1.0159591371180453]\times10^{-3}$) for
-MNIST and $-1.0921728159018996\times10^{-4}$ (95\% CI
-$[-4.129384520886106,\allowbreak 3.182670049955049]\times10^{-3}$) for
-FashionMNIST.  Positive values would mean that weak-only core gain exceeds
-both-feature core gain.  Because every weak-only first-hit gate fails, the zero
-causal counts are negative/indeterminate: they are not evidence that starvation is
-absent and do not show that either dataset is intrinsically unlearnable.
-
-The threshold-robust extension contains 192 nonlinear records.  Its equal-weight
-three-cell all-$\beta$ causal-certificate macro estimate is $0.292$ for tanh
-(95\% CI $[0.167,0.417]$) and $0$ for GRU (95\% CI $[0,0]$).  The exact values
-appear in Table~\ref{tab:threshold-complete}.  The Holm-adjusted one-sided
-$p$-value is $1.0$ for each.  The threshold-robust endpoint is negative and
-supports no architecture ranking.
-
-The mechanism-control comparison contains 256 method-records.  Weak rescue is
-$-\lvert\text{weak AUC gap}\rvert$, so CDC minus comparator is higher-better.
-Trajectory and final deviations are absolute deviations from paired ERM, so
-comparator minus CDC is positive when CDC preserves the strong response better.
-Table~\ref{tab:control-tradeoff} reports the equal-weight two-cell contrasts.  The
-joint weak-rescue/strong-preservation criterion is true only against the adapted
-Bloop-style shadow-target variant and false against the adapted PCGrad-style
-shadow-target variant.  CDC therefore does not beat the latter under the joint
-criterion.  Because both are adapted response-gradient shadow-target variants,
-these results establish neither parity with the original methods nor broad CDC
-superiority.
-
-\begin{table}[t]
-\centering
-\caption{Equal-weight two-cell mechanism-control contrasts over 256 method-records.
-Both comparators are adapted shadow-target variants.  Brackets are 95\% bootstrap
-intervals.}
-\label{tab:control-tradeoff}
-\small
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{lllll}
-\toprule
-Comparator & CDC$-$comparator weak rescue & Comparator$-$CDC trajectory dev. & Comparator$-$CDC final dev. & Joint \\
-\midrule
-Adapted Bloop-style variant & $0.002198259399210656$ $[0.0009779187294930126,0.003277366267916477]$ & $3.4651361294978416$ $[3.3443827215131754,3.5849715262780952]$ & $0.6422362388111651$ $[0.6288088704226539,0.6563168084365315]$ & true \\
-Adapted PCGrad-style variant & $-0.00015351238407674823$ $[-0.00047909348592838785,0.00013248012419808214]$ & $-0.48709889128076556$ $[-0.6897378944428417,-0.27379327373499074]$ & $-0.2565436437726021$ $[-0.3016841153614223,-0.2087651835754514]$ & false \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-\section{Discussion and limitations}
-\paragraph{Causal diagnosis and empirical scope.}
-The empirical findings are deliberately regime-specific.  The controlled linear
-grid shows positive paired weak-AUC deficits with learnable weak-only controls in
-all 32 strength--seed cells per lag at lags 0, 2, and 4, but those cells reuse eight
-seed IDs.  All 32 lag-8 cells fail the gate under $\beta=0.25,H=5$ and are causally
-indeterminate.  At the nonlinear fixed cell, tanh has 3/8 complete certificates;
-GRU has 5/8 drift and response crossings but 0/8 causal certificates because every
-weak-only path fails $\beta=0.5$.  The terminal-threshold profile shows that this
-GRU failure is not marginal at that operating point, but it neither replaces the
-first-hit gate nor ranks architectures.  The semi-real and threshold-robust
-extensions are negative or indeterminate.  None of these fixed-grid counts
-estimates universal prevalence or an architecture ordering.
-
-\paragraph{Exact dynamics and pathwise attribution.}
-The finite-width identity $\dot M_w=c_w^\top q(r)/n$ separates cross-entropy sample
-weighting $q(r)$ from response-specific geometry $c_w$ without a mean-field
-assumption.  Together with exact sample-logit dynamics and the matched
-intervention, it identifies the sources of weak-response motion without silently
-imposing a two-response closure.  The balance $\Delta=P-N$ then shows that outcome
-suppression occurs only when accumulated suppression overtakes accumulated help.
-Neither rate nor outcome suppression is by itself causal starvation; weak-only
-learnability remains an independent requirement.
-
-\paragraph{Prediction limits.}
-The realized-initialization $d(0)$ criterion gives an exact local sign only in its
-stated dense-linear setting.  The conditional parameter-tube and rank-one criteria,
-transverse hitting-time bound, and recurrence-invisible zero-lag wide limit require
-their explicit assumptions.  The zero-lag result permits any finite realized
-recurrent matrix but requires zero lag and zero background input.  Stronger
-positive-lag parameter-level prediction from $\rho$, lag, and recurrent geometry
-remains unresolved because no nonvacuous general product-ball or kernel-movement
-constants are constructed.
-
-The initialization-frozen tangent surrogate retains nonlinear cross-entropy but is
-exact only for its own tangent model.  Its use for trained tanh RNNs or GRUs assumes
-instantaneous or secant-kernel movement control that is not proved here.  The broad
-pilot fails its five-output criterion, while the held-out test supports only
-crossing-event classification at one cell.  Its timing predictions are early and
-its tanh trajectory magnitudes are poor.  Event accuracy therefore does not prove
-kernel stability, calibrated dynamics, or causal prediction.
-
-\paragraph{Intervention and external-validity limits.}
-In a fixed Euclidean/Frobenius parameter chart, feasible uncapped target-attaining
-CDC is the unique minimum-norm correction that preserves instantaneous strong
-drift and meets the weak-drift lower bound.  The finite-step result is local and
-one-step.  The dense comparison exhibits this instantaneous distinction, but CDC
-does not have the best final strong response.  The broader joint criterion passes
-only against the adapted Bloop-style variant and fails against the adapted
-PCGrad-style variant.  All shadow methods require a constructible ablation, a
-second model, and full-batch gradients; no parity with the original comparator
-algorithms or broad CDC superiority follows.
-
-The experiments cover controlled synthetic families and one semi-real generated-
-cue intervention over fixed cells and seed grids.  The image study is not an
-unmodified natural-spurious-correlation benchmark.  No Waterbirds or natural-
-spurious-correlation claim is made.  General recurrent causal prediction,
-calibrated nonlinear crossing times, architecture rankings, and broad intervention
-performance remain open.
-
-\section{Conclusion}
-Weak learning failure alone is not gradient starvation.  A small weak response can
-reflect weak-only gate failure, altered cross-entropy weighting, response-specific
-geometry, suppression too brief to reverse earlier help, or causally gated outcome
-suppression.  The matched same-initialization intervention separates these cases.
-Exact finite-width dynamics give $\dot M_w=c_w^\top q(r)/n$, and the pathwise
-identity $\Delta=P-N$ states exactly when accumulated suppression exceeds earlier
-transfer.  Causal starvation additionally requires an independently learnable
-weak-only counterfactual; gate failure establishes neither starvation nor its
-absence.
-
-Prediction remains local or conditional.  Realized $d(0)$ and proved local jets
-give assumption-scoped signs, while global positive-lag parameter-level prediction
-remains unresolved.  The frozen tangent surrogate supplies an empirical crossing-
-event heuristic absent kernel-movement bounds, not calibrated or causal dynamics.
-CDC supplies a unique fixed-chart local correction, not a trajectory-level or
-broadly superior optimizer.
-
-The experiments support the diagnostic separation rather than a universal law:
-controlled linear regimes can yield consistent causal deficits, while long-lag,
-nonlinear, and semi-real regimes may fail the weak-only gate or show only
-uncertified crossings.  The strongest supported chain is exact dynamics
-$\to$ matched causal intervention $\to$ pathwise attribution $\to$ local
-mechanism-level control.
-
-\ifdefined\ICLRSubmission\else
-\appendix
-\fi
-\section{Proofs for exact dynamics and causal-separation results}
-\label{app:finite-proofs}
-
-\subsection{Proof of Proposition~\ref{prop:cross-kernel} and
-Corollary~\ref{cor:projected}}
-For $\ell(r)=\log(1+e^{-r})$, $\ell'(r)=-\sigm(-r)$.  Therefore
-\begin{equation}
- \dot\theta_C=-\nabla L_C
- =\frac1{n_C}\sum_i\sigm(-r_i^C)\nabla r_i^C.
-\end{equation}
-The chain rule gives
-\begin{equation}
- \dot M_a^C=\ip{\nabla M_a^C}{\dot\theta_C}
- =\frac1{n_C}\sum_i\ip{\nabla M_a^C}{\nabla r_i^C}\sigm(-r_i^C),
-\end{equation}
-which proves Proposition~\ref{prop:cross-kernel}.  Under exact realization,
-$\nabla r_i^C=\sum_bz_{ib}^C\nabla M_b^C$.  Substitution and exchange of finite
-sums yield Eq.~\eqref{eq:Gg}.  If an orthogonal residual logit term is present,
-substitution of
-$\nabla r_i^C=\sum_bz_{ib}^C\nabla M_b^C+\nabla r_i^\perp$ instead yields
-Eq.~\eqref{eq:projection-residual}.  \qed
-
-\subsection{Proof of Corollary~\ref{cor:full-empirical-ntk} and
-Theorem~\ref{thm:frozen-comparison}}
-The parameter flow above can be written
-$\dot\theta=J^\top q(r)/n$.  Therefore the chain rule gives
-$\dot r=J\dot\theta=JJ^\top q(r)/n$ and
-$\dot M=\ip{\nabla M}{\dot\theta}=c^\top q(r)/n$, proving
-Corollary~\ref{cor:full-empirical-ntk}.
-
-For the comparison, $q$ is $1/4$-Lipschitz componentwise and hence in Euclidean
-norm.  Subtracting Eq.~\eqref{eq:frozen-surrogate} from
-Eq.~\eqref{eq:full-ntk-flow}, adding and subtracting
-$\Theta_0q(r)$, and writing $e_r=\norm{r-\bar r}$ gives
-\begin{equation}
- e_r'(u)\le \frac{\norm{\Theta_0}}{4n}e_r(u)+\frac{B_\Theta V}{n}
- =ae_r(u)+\frac{B_\Theta V}{n}.
-\end{equation}
-Gr\"onwall with $e_r(0)=0$ proves Eq.~\eqref{eq:frozen-logit-bound}.  The same
-add--subtract step gives
-\begin{equation}
- |\dot M-\dot{\bar M}|\le \frac{B_cV}{n}
- +\frac{\norm{c_0}}{4n}e_r.
-\end{equation}
-Integrating and using $\int_0^t\phi_a(u)\dd u=\psi_a(t)$ proves
-Eq.~\eqref{eq:frozen-response-bound}.
-
-For SGD, the fundamental theorem of calculus along the straight update segment
-gives
-\begin{align}
- r_{j+1}-r_j&=\widetilde J_j\delta\theta_j
- =\frac{\eta}{n}\widetilde\Theta_jq(r_j),\\
- M_{j+1}-M_j&=\ip{\widetilde m_j}{\delta\theta_j}
- =\frac{\eta}{n}\widetilde c_j^\top q(r_j).
-\end{align}
-Subtracting the frozen Euler recursion yields scalar recurrences
-\begin{align}
- e_{j+1}&\le(1+\eta a)e_j+\frac{\eta D_\Theta V}{n},\\
- E_{j+1}&\le E_j+\frac{\eta D_cV}{n}
- +\frac{\eta\norm{c_0}}{4n}e_j.
-\end{align}
-Solving the first geometric recurrence and summing it in the second gives
-Eq.~\eqref{eq:frozen-discrete-bound}, including the stated $a=0$ limits.  Paired
-bounds are the triangle inequality.  Error-separated sign transfer follows
-immediately; first-hit transfer requires the additional assumptions of
-Corollary~\ref{cor:hitting}.  \qed
-
-\subsection{Proof of the dense-linear geometry}
-For a unit response mode in channel $a$ at lag $\ell_a$, write $b_a$ for the
-corresponding input column.  Direct differentiation of
-$c^\top W^{\ell_a}b_a$ gives gradient $p_a=W^{\ell_a}b_a$ with respect to $c$,
-gradient $q_a=(W^{\ell_a})^\top c$ with respect to column $b_a$, and recurrent
-gradient
-\begin{equation}
- S_a=\sum_{j=0}^{\ell_a-1}(W^j)^\top c
-       (W^{\ell_a-1-j}b_a)^\top.
-\end{equation}
-The parameter blocks are disjoint, so their gradient inner products add.  Input
-columns contribute only when the channels coincide, giving
-Eq.~\eqref{eq:dense-geometry}.  \qed
-
-\subsection{Proof of Theorem~\ref{thm:initial-gap}}
-For the positive rank-one cue laws,
-$g^{\Bcond}=s_B(\rho,1)$ and $g^{\Wcond}=s_W(0,1)$ at the shared
-initialization.  Corollary~\ref{cor:projected} and the exact dense geometry give
-\begin{equation}
- \dot M_w^{\Bcond}(0)=s_B(\rho G_{ws}+G_{ww}),\qquad
- \dot M_w^{\Wcond}(0)=s_WG_{ww}.
-\end{equation}
-Subtraction, with $K=G_{ws}$ and $A=G_{ww}$, proves
-Eq.~\eqref{eq:initial-gap-certificate}.  Since $\rho s_B>0$, rearrangement gives
-Eq.~\eqref{eq:initial-gap-threshold}.  The displayed $K,A,S_w$ formulas are
-Eq.~\eqref{eq:dense-geometry} specialized to a zero-lag strong mode and an
-$\ell$-lag weak mode.  Under the iid width scaling at fixed positive $\ell$,
-expanding the gates at zero gives
-\begin{equation}
- d_0=\rho\left(\frac K2-\frac{AM_s(0)}4\right)+O_{\Prob}(N^{-1}),
-\end{equation}
-whose leading sign is centered and realization-dependent.  Shared initialization
-also gives $\Delta(0)=0$ and $\Delta'(0)=d_0$.  Therefore
-$\Delta(t)/t\to d_0$ as $t\downarrow0$: a strict negative (positive) $d_0$
-forces strict local outcome suppression (transfer) on some sufficiently small
-positive interval.  This limit establishes no quantitative endpoint, and when
-$d_0=0$ first order is silent.  This proves the exact criterion, its strongest
-unconditional local outcome implication, and the stated obstruction to a
-distribution-only positive-lag boundary.  \qed
-
-\subsection{Proof of Proposition~\ref{prop:drift-balance} and
-Corollaries~\ref{cor:tail-area}--\ref{cor:crossing-bounds}}
-The positive and negative parts satisfy $d=d_+-d_-$ almost everywhere.
-Absolute continuity and the fundamental theorem of calculus therefore give
-\begin{equation}
- \Delta(t)=\Delta(0)+\int_0^t d(u)\dd u=P(t)-N(t),
-\end{equation}
-proving Proposition~\ref{prop:drift-balance} and its pointwise sign equivalences.
-Under Corollary~\ref{cor:tail-area}'s sign pattern, $d_-=0$ before $\tau_d$
-and $d_+=0$ afterward.  Hence
-$P(t)=P(\tau_d)=A_+$ and
-\begin{equation}
- \Delta(t)=A_+-N(t),\qquad t\ge\tau_d.
-\end{equation}
-The post-crossing sign assumption makes $N$ continuous and strictly increasing on
-every nontrivial post-crossing interval.  Later equality, strict negativity, and
-uniqueness are therefore respectively equivalent to $N(H)\ge A_+$,
-$N(H)>A_+$, and strict post-crossing growth of $N$.
-
-If $d\le-\kappa$ after $t_0$, then
-$N(t)-N(t_0)\ge\kappa(t-t_0)$; solve for the time needed to cover the remaining
-area.  If $d'(t)\le-\lambda$ and $d(\tau_d)=0$, integration gives
-$d(t)\le-\lambda(t-\tau_d)$ and then
-$N(t)-N(\tau_d)\ge\lambda(t-\tau_d)^2/2$.  Since
-$N(\tau_d)=0$ under the single-crossing hypotheses, applying
-Corollary~\ref{cor:tail-area} proves both stated bounds.  \qed
-
-\subsection{Proof of Theorem~\ref{thm:parameter-tube} and
-Corollary~\ref{cor:parameter-safe}}
-Before exit from $U_R$, path length is at most $S_Rt$, so exit cannot occur before
-$h_R=R/S_R$.  Along this interval, $d'=j$, and integration of
-Eq.~\eqref{eq:parameter-tube-premises} gives
-\begin{equation}
- d_0-\Lambda t\le d(t)\le d_0-\lambda t.
- \label{eq:parameter-tube-linear-bounds}
-\end{equation}
-The lower bound is positive before $d_0/\Lambda$, the upper bound is negative
-after $d_0/\lambda$, continuity gives a zero between them, and $d'<0$ makes it
-unique.  This proves Eq.~\eqref{eq:parameter-tube-crossing}.  Integrating the upper
-bound from $\Delta(0)=0$ gives
-\begin{equation}
- \Delta(t)\le d_0t-\frac{\lambda t^2}{2}<0
- \quad\text{for }t>2d_0/\lambda.
-\end{equation}
-For the required nondegenerate case $\beta>M_w^{\Wcond}(0)$, integrating the
-weak-only lower drift bound reaches $\beta$ by the positive time in
-Eq.~\eqref{eq:parameter-tube-learnability}, proving the causal conclusion.  If
-$\beta\le M_w^{\Wcond}(0)$, attainment occurred before optimization and supplies
-no learnability gate.
-
-For the safe case, $|j|\le J$ gives $d(t)\ge d_0-Jt$; one more integration gives
-Eq.~\eqref{eq:parameter-safe}.  The strict premise $d_0-Jh_R>0$ makes both
-quantities positive on the certified horizon.  \qed
-
-\subsection{Proof of Theorem~\ref{thm:log-ratio} and
-Corollary~\ref{cor:unique-rate-crossing}}
-The deterministic cue law gives
-$g^{\Bcond}=s_B(\rho,1)$ and $g^{\Wcond}=s_W(0,1)$.  Equation~\eqref{eq:Gg}
-therefore gives $F_w^{\Bcond}=s_BH_B$, $F_w^{\Wcond}=s_WH_W$,
-$u_B'=s_BQ_B$, and $u_W'=s_WH_W$.  Since
-\begin{equation}
- \frac{\dd}{\dd u}\log\sigm(-u)=-(1-\sigm(-u)),
-\end{equation}
-differentiating $\Psi$ yields Eq.~\eqref{eq:Psi-prime}.  When both drifts are
-positive, monotonicity of the logarithm gives
-$\operatorname{sign}(F_w^{\Bcond}-F_w^{\Wcond})=\operatorname{sign}(\Psi)$.
-
-Under $\Psi'\le-\kappa$, integration gives
-$\Psi(t)\le\Psi(t_0)-\kappa(t-t_0)$.  Continuity forces a zero by
-$t_0+\Psi(t_0)/\kappa\le H$, while strict decrease gives uniqueness.  The
-primitive inequalities imply the derivative bound term by term.  \qed
-
-\subsection{Proof of Corollary~\ref{cor:hitting}}
-Continuity and first-entry semantics imply $x(\tau)=\beta$.  Absolute continuity
-and $x'\ge\kappa$ almost everywhere give, by integration,
-\begin{equation}
- x(t)\le\beta-\kappa(\tau-t)\quad(\tau-r\le t\le\tau),
- \qquad
- x(t)\ge\beta+\kappa(t-\tau)\quad(\tau\le t\le\tau+r).
- \label{eq:hitting-cones}
-\end{equation}
-On $[0,\tau-r]$, the quantitative prehistory margin and $\epsilon<\eta$
-give $x_N<\beta$.  On
-$[\tau-r,\tau-\epsilon/\kappa)$, the left cone and the uniform error again give
-$x_N<\beta$.  Hence $\tau_N\ge\tau-\epsilon/\kappa$.  At
-$t=\tau+\epsilon/\kappa$, the right cone gives $x_N(t)\ge\beta$, so the hit is
-finite and $\tau_N\le\tau+\epsilon/\kappa$.  This proves
-Eq.~\eqref{eq:hitting-continuous}.
-
-For sampled data, the first grid point at or after
-$\tau+\epsilon/\kappa$ is at most $h$ later and, by the radius condition, remains
-inside the right cone; it is therefore at or above $\beta$.  No sampled hit can
-precede the continuous lower bound.  If the piecewise-linear interpolant first
-crosses on $[t_{j-1},t_j]$, then $x_N(t_j)\ge\beta$, so
-$t_j\ge\tau-\epsilon/\kappa$ and
-$t_{j-1}\ge\tau-\epsilon/\kappa-h$; its upper bound is no later than the sampled
-hit.  This proves Eq.~\eqref{eq:hitting-grid}.  Applying the bound separately to
-two finite hits and using the triangle inequality proves the paired statement.
-\qed
-
-\subsection{Proof of Theorems~\ref{thm:six-scalar} and
-\ref{thm:wide-limit}}
-At zero lag and zero background input, every cue occurs at the final step.  From
-$h_0=0$, induction gives zero hidden state before that step, so for every finite
-realized $W$,
-\begin{equation}
- h_T=Wh_{T-1}+Bx_{T-1}=Bx_{T-1}.
-\end{equation}
-The loss is independent of $W$, each recurrent-gradient contribution contains a
-zero incoming state, and therefore $\nabla_WL=0$ throughout the unregularized
-flow.  No distributional or zero-gain premise on $W$ is needed.  Gradient flow for
-the remaining parameters gives $\dot b_a=g_ac$ and
-$\dot c=\sum_bg_bb_b$.  Differentiating $M_a=c\cdot b_a$,
-$u_{ab}=b_a\cdot b_b$, and $w=c\cdot c$ proves Eq.~\eqref{eq:six-scalar}.
-The mode gradient has one component in the $c$ block and one in its own $b_a$
-block, yielding $G_{ab}=u_{ab}+\delta_{ab}w$.
-
-At initialization, the variances of $M_s,M_w,u_{sw}$ are $1/N$ and those of
-$u_{ss}-1,u_{ww}-1,w-1$ are $2/N$.  Coordinatewise Chebyshev bounds and a union
-bound sum to $1+1+1+2+2+2=9$, proving
-Eq.~\eqref{eq:init-concentration}.
-
-The field bound $\norm{g(M)}_\infty\le A$ follows from
-$0\le\sigm\le1$.  Since $\sigm$ is $1/4$-Lipschitz,
-\begin{equation}
- |g_a(M)-g_a(\widetilde M)|
- \le\frac14\sum_b\E|z_az_b|\,\norm{M-\widetilde M}_\infty,
-\end{equation}
-which proves Eq.~\eqref{eq:g-lipschitz}.  Define the Gram energy
-$R=w+u_{ss}+u_{ww}$.  Along the deterministic flow,
-\begin{equation}
- R'=4g\cdot M=4\E[X\sigm(-X)],\qquad X=z\cdot M.
-\end{equation}
-Because $x\sigm(-x)\le c_\star=W(e^{-1})$ and $R(0)=3$,
-$R(t)\le R_H$.  Every coordinate of $q$ is a squared norm or inner product of
-$b_s,b_w,c$, so Cauchy--Schwarz gives $\norm{q(t)}_\infty\le R(t)\le R_H$.
-
-Consider two states in the cube $\norm q_\infty,\norm{\widetilde q}_\infty
-\le B_{H,r}$ and set $d=\norm{q-\widetilde q}_\infty$.  Every product in the
-$M$ and $u$ equations satisfies the direct estimate
-\begin{equation}
- |g_a(M)y-g_a(\widetilde M)\widetilde y|
- \le (A+B_{H,r}C)d.
- \label{eq:product-lipschitz}
-\end{equation}
-There are at most three such products in an $M$ equation and two in a $u$
-equation; the factor two and two cue indices give four in the $w$ equation.
-Thus the full vector field is $L_{H,r}=4(A+B_{H,r}C)$-Lipschitz on the cube and
-therefore on the radius-$r$ reference tube.
-
-Let $T_r$ be the first time before $H$ that
-$\norm{q_N(t)-q(t)}_\infty$ reaches the tube boundary.  Up to $T_r$, Gronwall's
-inequality and Eq.~\eqref{eq:tube-bootstrap-event} give
-\begin{equation}
- \norm{q_N(t)-q(t)}_\infty
- \le e^{L_{H,r}t}\norm{q_N(0)-q_0}_\infty.
-\end{equation}
-If $L_{H,r}>0$, the initialization event makes this bound strictly less than $r$
-for every $t<H$, so the boundary cannot be reached before $H$.  If $L_{H,r}=0$,
-then $A=C=0$, the cue law is zero almost surely, and the six-scalar vector field
-vanishes; the initial discrepancy is constant and cannot exit the closed tube.
-The endpoint may lie on the boundary.  In either case the same estimate is at most
-$\delta$ throughout $[0,H]$, proving Eq.~\eqref{eq:gronwall}.  Applying
-Eq.~\eqref{eq:init-concentration} with
-$\epsilon=e^{-L_{H,r}H}\min\{r,\delta\}$ proves
-Eq.~\eqref{eq:trajectory-concentration}.  For the shared-initialization pair, use
-a common $r$ and the maximum deterministic constant from the two fixed cue laws;
-the same concentrating initial six scalars control both paths.  \qed
-
-\subsection{Proof of Corollary~\ref{cor:zero-disorder-suppression}}
-Under the stated noiseless positive rank-one cue law, the recurrence-invisible
-six-scalar equations give equal initial weak drifts in the two conditions for every
-finite realized $W$.  Differentiating those drifts once at the symmetric state gives
-\begin{equation}
- (\dot M_w^{\Bcond})'(0)=-\frac{\rho^2+1}{2},\qquad
- (\dot M_w^{\Wcond})'(0)=-\frac12,
-\end{equation}
-so $\bar d'(0)=-\rho^2/2$.  Taylor's theorem and continuity then make
-$\bar\Delta(t)<0$ for all sufficiently small positive $t$.
-
-The weak-only symmetric subsystem preserves $u_{ww}=w$.  Direct differentiation
-shows $u_{ww}^2-M_w^2=1$, yielding
-$u_{ww}=w=\sqrt{1+M_w^2}$ and the displayed positive drift.  While
-$0\le M_w\le\beta$, it obeys $\dot M_w\ge2\sigm(-\beta)$; integration proves
-Eq.~\eqref{eq:zero-disorder-target-time}.  The finite-width statement is then
-exactly Theorem~\ref{thm:wide-limit} applied at deterministic suppression and
-target-attainment witness times with margins smaller than both strict witness
-margins.  \qed
-
-\section{Proofs for local Counterfactual Drift Correction}
-\label{app:cdc-proofs}
-\subsection{Instantaneous preservation}
-If $a=0$, both strong drifts vanish.  Otherwise,
-\begin{equation}
- a\cdot q=a\cdot p-\frac{p\cdot a}{\norm a^2}(a\cdot a)=a\cdot p-p\cdot a=0,
-\end{equation}
-so $a\cdot v'=a\cdot v+\alpha a\cdot q=a\cdot v$.  This argument is independent
-of $\alpha$, hence survives a cap.  \qed
-
-\subsection{Unique minimum-norm correction}
-Let $\bar\delta=F_w^{\Wcond}-F_w$ be the raw deficit and
-$\delta=[\bar\delta]_+$.  If $\bar\delta\le0$, $d=0$ is feasible and uniquely
-norm-minimal.  Suppose $\bar\delta>0$, so $\delta=\bar\delta$.  Any feasible $d$
-obeys $a\cdot d=0$ and $p\cdot d\ge\delta$.  Because
-$p=q+(p\cdot a/\norm a^2)a$ when $a\ne0$ (and $q=p$ when $a=0$),
-$p\cdot d=q\cdot d$.  Cauchy--Schwarz in the fixed Euclidean subspace orthogonal
-to $a$ gives
-\begin{equation}
- \delta\le q\cdot d\le\norm q\norm d,
- \qquad \norm d\ge\delta/\norm q.
-\end{equation}
-Equality requires a nonnegative multiple of $q$.
-The correction $d^*=(\delta/\norm q^2)q$ is feasible and attains this lower
-bound, so it is the unique minimum-norm, lower-bound-attaining feasible correction.
-Larger positive multiples can also attain the target but have larger norm.  A
-positive deficit is feasible exactly when $q\ne0$ in this representation.  A
-nonbinding cap leaves $d^*$ unchanged; a binding cap generally loses target
-attainment, so the target-attaining optimization claim no longer applies.  \qed
-
-\subsection{Local finite-step deviation}
-In the fixed chart and norm, $L$-Lipschitzness of the gradient on both straight
-segments gives the smoothness remainder
-\begin{equation}
- |m_s(\theta+h)-m_s(\theta)-\nabla m_s(\theta)\cdot h|
- \le\frac L2\norm h^2.
-\end{equation}
-Apply this at $h=\eta v$ and $h=\eta v'$.  Instantaneous preservation cancels the
-linear terms and the triangle inequality yields Eq.~\eqref{eq:cdc-step} for the
-actual velocities, capped or uncapped.  For active uncapped CDC,
-\begin{equation}
- \norm{v'}\le\norm v+\frac{\delta}{\norm q}\le V+D/q_{\min},
-\end{equation}
-which gives the explicit bound; a nonnegative upper cap can only decrease the
-added multiple of $q$.  If smoothness is known only on the fixed-coordinate ball
-$B(\theta,r)$, sufficient segment conditions are
-$\eta V\le r$ and $\eta(V+D/q_{\min})\le r$.  These quantities and $L$ are
-chart- and metric-dependent.  \qed
-
-\section{Discrete observation}
-\label{app:discrete-observation}
-For logged values $\Delta_k$, increments telescope exactly:
-\begin{equation}
- \Delta_K-\Delta_0=\sum_{k=0}^{K-1}(\Delta_{k+1}-\Delta_k).
-\end{equation}
-For one strict block of positive increments followed by one strict block of
-negative increments, the peak-minus-initial value is the positive discrete area
-and the peak-minus-final value is the negative tail area.  A discrete causal
-certificate requires the final gap to lie strictly below its initial value and the
-weak-only trajectory to have a nondegenerate first hit.  Gate failure blocks the
-causal certificate but does not establish absence of starvation.  Because these
-statements concern logged increments, they make no assertion between observation
-times; continuous crossing-time claims require the hypotheses of
-Corollary~\ref{cor:hitting}.
-
-\section{Protocol details}
 \begin{table}[ht]
 \centering
-\caption{Experimental settings.  Shadow methods train a second weak-only model
-and therefore use roughly twice the model memory and per-step compute.}
-\label{tab:protocol}
+\caption{Per-seed frozen CIFAR-10 outcomes. Duration is the longest material core-response deficit as a fraction of the 4,710-update horizon. Accuracy gaps are B$-$W on neutral inputs in percentage points.}
+\label{tab:app-cifar-seeds}
 \small
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{lllllll}
+\begin{tabular}{rrrrrr}
 \toprule
-Study & Model / width & Task grid & Samples & Steps / LR & Seeds / records & Purpose \\
+Seed & W first hit & Signed deficit AUC & Duration & Original-head gap & Fresh-head gap \\
 \midrule
-Controlled linear grid & dense linear / 96 & $\rho\in\{1,2,4,8\}$, lag $\in\{0,2,4,8\}$ & 256 & 500 / .01 & 4--11 & paired deficit and gate \\
-Finite-width reference & dense linear / 32--256 & $(1,0),(2,2),(4,4),(8,8)$ & 1024 & 400 / .01 & 0--7 & empirical reference \\
-Nonlinear fixed cell & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & 20--27 & direct-drift certificate \\
-Broad tangent pilot & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & $1\times8$ & five-output test \\
-Held-out event test & tanh, GRU / 32 & $\rho=4$, lag 2 & 256 & 1000 / .01 & $4\times8$ / model & crossing events \\
-Dense mechanism control & dense linear / 96 & $\rho=4$, lag 2 & 256 & 500 / .01 & 40--47 & local CDC comparison \\
-Generated-cue images & semi-real CNN & MNIST 3-vs-8; FashionMNIST 0-vs-6 & 512/256/256 per dataset & 500 / .01 & $4\times8$ / dataset; 64 & generated-cue intervention \\
-Threshold robustness & tanh, GRU / 32 & three cells; $\beta\in\{.25,.5,1,2\}$ & 256 & 1000 / .01 & $4\times8$; 192 & all-$\beta$ endpoint \\
-Mechanism control & tanh / 64 & two cells; ERM, CDC, adapted Bloop/PCGrad variants & 256 & 1000 / .01 & $4\times8$; 256 method-records & joint tradeoff \\
+33001 & 942  & 0.351 & 0.986 & $-16.44$ & $-10.04$ \\
+33002 & 1256 & 0.573 & 0.990 & $-23.84$ & $-11.28$ \\
+33003 & 785  & 0.495 & 0.974 & $-18.80$ & $-10.60$ \\
+33004 & 1099 & 0.616 & 0.989 & $-24.48$ & $-10.72$ \\
+33005 & 942  & 0.442 & 0.968 & $-18.48$ & $-11.48$ \\
+33006 & 942  & 0.495 & 0.986 & $-21.00$ & $-10.40$ \\
+33007 & 1256 & 0.543 & 0.978 & $-20.64$ & $-10.76$ \\
+33008 & 1099 & 0.393 & 0.993 & $-15.48$ & $-10.76$ \\
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \end{table}
 
-\section{Additional negative and mixed results}
-\label{app:additional-results}
+\section{Supplementary experiments and ablations}
+\label{app:supplementary-experiments}
+\setcounter{equation}{0}
+\setcounter{theorem}{0}
+\setcounter{table}{0}
+\setcounter{figure}{0}
+
+\subsection{Width trends and finite-network closure validation}
+\begin{figure}[ht]
+  \centering
+  \IfFileExists{figures/fig2_e2_field_agreement.pdf}{\includegraphics[width=0.97\linewidth]{figures/fig2_e2_field_agreement.pdf}}{%
+    \IfFileExists{artifacts/historical/e2_corrected_validation-20260821-224630/e2_field_agreement.pdf}{\includegraphics[width=0.97\linewidth]{artifacts/historical/e2_corrected_validation-20260821-224630/e2_field_agreement.pdf}}{%
+      \fbox{\parbox{0.92\linewidth}{\centering Figure E.1 unavailable in this build.}}}}
+  \caption{Finite-width agreement with held-out empirical closure reference across widths $N \in \{32, 64, 128, 256\}$.}
+  \label{fig:app-width}
+\end{figure}
+
 \subsection{Semi-real generated-cue study}
-This study contains 64 crossed records: four data seeds by eight model seeds for
-MNIST 3-vs-8 and the same design for FashionMNIST 0-vs-6.  The core channel
-contains selected real benchmark pixels, and the intervention zeros only the
-generated cue.  Positive weak-AUC gap means that weak-only core gain exceeds
-both-feature core gain.
-
 \begin{table}[ht]
 \centering
-\caption{Complete semi-real generated-cue outcomes.  Intervals use the
-crossed-seed design separately for each dataset.}
-\label{tab:semi-real-complete}
+\caption{Semi-real generated-cue study on MNIST (3-vs-8) and FashionMNIST (0-vs-6) across 64 crossed records.}
+\label{tab:app-semi-real}
 \small
-\resizebox{\linewidth}{!}{%
 \begin{tabular}{lccc}
 \toprule
-Dataset & Weak-only learnable & Causal certificate & Mean weak AUC gap (95\% CI) \\
+Dataset & Weak-Only Learnable & Causal Certificate & Mean Weak-AUC Gap (95\% CI) \\
 \midrule
-MNIST 3-vs-8 & 0/32 & 0/32 & $-0.0012362842136667493$
-$[-0.0034405428466004646,0.0010159591371180453]$ \\
-FashionMNIST 0-vs-6 & 0/32 & 0/32 & $-0.00010921728159018996$
-$[-0.004129384520886106,0.003182670049955049]$ \\
+MNIST 3-vs-8 & 0/32 & 0/32 & $-0.00124$ $[-0.00344, 0.00102]$ \\
+FashionMNIST 0-vs-6 & 0/32 & 0/32 & $-0.00011$ $[-0.00413, 0.00318]$ \\
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \end{table}
 
-The weak-only first-hit gate fails in every record.  The zero causal counts are
-therefore negative or indeterminate: they cannot be interpreted as evidence that
-starvation is absent or that either dataset is intrinsically unlearnable.
+\subsection{\texorpdfstring{Threshold sensitivity and $\beta$-sweeps}{Threshold sensitivity and beta-sweeps}}
+\begin{figure}[ht]
+  \centering
+  \IfFileExists{figures/fig3_enl_learnability_profile.pdf}{\includegraphics[width=0.97\linewidth]{figures/fig3_enl_learnability_profile.pdf}}{%
+    \IfFileExists{artifacts/enl_tanh_crossover-20260824-141207/enl_learnability_profile.pdf}{\includegraphics[width=0.97\linewidth]{artifacts/enl_tanh_crossover-20260824-141207/enl_learnability_profile.pdf}}{%
+      \fbox{\parbox{0.92\linewidth}{\centering Figure E.3 unavailable in this build.}}}}
+  \caption{Post-hoc weak-only terminal response distributions and threshold sensitivity profiles across seeds.}
+  \label{fig:app-threshold}
+\end{figure}
 
-\subsection{Threshold-robust extension}
-This extension contains 192 records: tanh and GRU across three fixed task cells and
-a crossed $4\times8$ seed design.  Each record evaluates the first-hit grid
-$\beta\in\{0.25,0.5,1,2\}$.  The architecture estimand equally weights the three
-cell estimates.  A 5,000-replicate two-way bootstrap supplies percentile intervals,
-and the two one-sided architecture tests form one Holm family.
-
+\subsection{Full 8-method mitigation ablation}
 \begin{table}[ht]
 \centering
-\caption{Complete all-$\beta$ architecture endpoints.}
-\label{tab:threshold-complete}
+\caption{Dense CDC ablation across 8 paired seeds. Shadow methods access a matched weak-only control.}
+\label{tab:cdc-results}
 \small
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-Architecture & Macro estimate & 95\% CI & Holm-adjusted $p$ \\
+Method & Shadow & Weak AUC Gap & Strong Drift Perturbation & Final $M_s$ \\
 \midrule
-tanh & $0.2916666666666667$ & $[0.16666666666666666,0.4166666666666667]$ & $1.0$ \\
-GRU & $0$ & $[0,0]$ & $1.0$ \\
+ERM & No & $10.516$ & --- & $1.364$ \\
+Spectral Decoupling & No & $9.023$ & --- & $0.829$ \\
+CDC (Ours) & Yes & $\mathbf{-0.0005}$ & $\mathbf{4.77 \times 10^{-7}}$ & $1.042$ \\
+Unconstrained Rescue & Yes & $-0.0007$ & $1.48 \times 10^{-1}$ & $1.295$ \\
+Adapted Bloop-style & Yes & $0.0002$ & $3.75 \times 10^{-1}$ & $0.370$ \\
+Adapted PCGrad-style & Yes & $-0.0007$ & $1.48 \times 10^{-1}$ & $1.295$ \\
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \end{table}
 
-The all-$\beta$ endpoint is negative for both architectures and supports no
-architecture ranking.
-
-\subsection{Mechanism-control comparison}
-This comparison contains 256 method-records for ERM, CDC, and adapted Bloop-style
-and PCGrad-style shadow-target variants over two fixed cells and crossed seeds.
-Weak rescue is $-\lvert\text{weak AUC gap}\rvert$ and is higher-better.  Trajectory
-and final deviations are absolute strong-response deviations from paired ERM and
-are lower-better.
-
-\begin{table}[ht]
-\centering
-\caption{Complete equal-weight two-cell mechanism-control contrasts.  Brackets are
-95\% two-way-bootstrap intervals.}
-\label{tab:control-complete}
-\small
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{lllll}
-\toprule
-Comparator & CDC$-$comparator weak rescue & Comparator$-$CDC trajectory deviation & Comparator$-$CDC final deviation & Joint tradeoff \\
-\midrule
-Adapted Bloop-style variant & $0.002198259399210656$ $[0.0009779187294930126,0.003277366267916477]$ & $3.4651361294978416$ $[3.3443827215131754,3.5849715262780952]$ & $0.6422362388111651$ $[0.6288088704226539,0.6563168084365315]$ & true \\
-Adapted PCGrad-style variant & $-0.00015351238407674823$ $[-0.00047909348592838785,0.00013248012419808214]$ & $-0.48709889128076556$ $[-0.6897378944428417,-0.27379327373499074]$ & $-0.2565436437726021$ $[-0.3016841153614223,-0.2087651835754514]$ & false \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-The joint weak-rescue/strong-preservation criterion is true only against the
-adapted Bloop-style variant and false against the adapted PCGrad-style variant.
-Thus CDC does not beat the latter under the joint criterion.  Because both
-comparators are adapted response-gradient shadow-target variants, the comparison
-supports neither parity with the original methods nor broad CDC superiority.
-
-\section{Additional tangent-surrogate results}
-\label{app:tangent-additional}
-The broad tangent pilot evaluates five outputs on 16 architecture--seed records.
-Correct classifications are phase 12/16, drift crossing 14/16, response crossing
-14/16, causal certificate 14/16, and weak-only learnability 12/16.  The joint
-criterion fails because tanh learnability is 4/8, below the prespecified 5/8 floor;
-GRU learnability is 8/8.  Magnitude calibration also differs sharply by
-architecture: tanh response-gap, weak-response, and drift RMSE are 2.367, 2.394,
-and 0.486, versus 0.0163, 0.0281, and 0.0107 for GRU.
-
-The held-out event test uses separate fresh crossed seeds.  Response-crossing
-classification is correct in 64/64 records and drift-crossing classification in
-60/64 (32/32 tanh, 28/32 GRU), with two-way-bootstrap intervals $[1,1]$ and
-$[0.8125,1]$.  Other outputs are substantially weaker: phase 52/64, causal
-certificate 56/64, and learnability 49/64, including tanh learnability 17/32.
-Predictions are systematically early (overall drift/response bias
-$-0.822/-1.189$), while tanh response-gap, weak-response, and drift RMSE are 2.455,
-2.489, and 0.490.  The result is therefore an uncalibrated crossing-event
-classifier at one controlled cell, not phase, causal, learnability, time,
-magnitude, prevalence, or kernel-stability validation.
-
-\ifdefined\ICLRSubmission\else
-\bibliographystyle{plainnat}
-\bibliography{references}
-\fi
+\begin{figure}[ht]
+  \centering
+  \IfFileExists{figures/fig5_e3_mitigation.pdf}{\includegraphics[width=0.97\linewidth]{figures/fig5_e3_mitigation.pdf}}{%
+    \IfFileExists{artifacts/historical/e3_cdc_dense_ablation-20260823-090702/e3_mitigation.pdf}{\includegraphics[width=0.97\linewidth]{artifacts/historical/e3_cdc_dense_ablation-20260823-090702/e3_mitigation.pdf}}{%
+      \fbox{\parbox{0.92\linewidth}{\centering Figure E.4 unavailable in this build.}}}}
+  \caption{Full eight-method dense-linear mitigation ablation comparing CDC with ERM, Spectral Decoupling, PCGrad, Bloop, and unconstrained rescue.}
+  \label{fig:app-mitigation}
+\end{figure}
 
 \end{document}

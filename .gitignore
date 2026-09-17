@@ -14,3 +14,17 @@ tmp/
 # ``src/gradient_starvation/data`` package.  Git applies the last matching rule,
 # so this must follow the negations above.
 **/__pycache__/
+
+# Local LaTeX build products and ad-hoc Overleaf bundles. Canonical PDFs are
+# already tracked explicitly and remain tracked despite these rules.
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+/overleaf_paper.zip
+/paper/overleaf_paper.zip
+/paper/submission.pdf
