@@ -17,6 +17,77 @@ def _save_all(fig: plt.Figure, base: Path) -> None:
     plt.close(fig)
 
 
+def _final_causal_grid_tables(records: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Aggregate the audited final certificate and stricter at-hit subtype."""
+    required = {
+        "source", "regime", "rho", "lag_separation", "weak_gate",
+        "any_time_certificate", "at_hit_certificate",
+    }
+    missing = required - set(records)
+    if missing:
+        raise ValueError(f"Final causal grid is missing columns: {sorted(missing)}")
+    positive = records[(records.source == "dense_e1") & (records.regime == "positive")]
+    if positive.empty:
+        raise ValueError("Final causal grid has no positive dense-E1 records.")
+    lags = sorted(positive.lag_separation.unique(), reverse=True)
+    strengths = sorted(positive.rho.unique())
+    codes = pd.DataFrame(index=lags, columns=strengths, dtype=float)
+    labels = pd.DataFrame(index=lags, columns=strengths, dtype=object)
+    for lag in lags:
+        for rho in strengths:
+            cell = positive[
+                (positive.lag_separation == lag) & (positive.rho == rho)
+            ]
+            if cell.empty:
+                raise ValueError(f"Missing audited cell lag={lag}, rho={rho}.")
+            count = len(cell)
+            gate = int(cell.weak_gate.eq(True).sum())  # noqa: E712
+            causal = int(cell.any_time_certificate.eq(True).sum())  # noqa: E712
+            at_hit = int(cell.at_hit_certificate.eq(True).sum())  # noqa: E712
+            if gate == 0:
+                code = 0  # indeterminate
+            elif causal == 0:
+                code = 1  # gate passed, no causal certificate
+            elif causal < count:
+                code = 2  # mixed across seeds
+            else:
+                code = 3  # all seeds certified
+            codes.loc[lag, rho] = code
+            labels.loc[lag, rho] = f"C {causal}/{count}\nAH {at_hit}/{count}"
+    return codes, labels
+
+
+def plot_final_causal_grid(records: pd.DataFrame, output_base: Path) -> None:
+    """Plot the final causal definition rather than historical delay categories."""
+    codes, labels = _final_causal_grid_tables(records)
+    fig, ax = plt.subplots(figsize=(8.5, 5.3), constrained_layout=True)
+    cmap = matplotlib.colors.ListedColormap(
+        ["#d9d9d9", "#d6604d", "#92c5de", "#2166ac"]
+    )
+    sns.heatmap(
+        codes, annot=labels, fmt="", cmap=cmap, vmin=-0.5, vmax=3.5,
+        linewidths=0.8, linecolor="white", ax=ax,
+        annot_kws={"fontsize": 9, "fontweight": "bold"},
+        cbar_kws={"label": "Final causal status", "ticks": [0, 1, 2, 3]},
+    )
+    ax.collections[0].colorbar.set_ticklabels(
+        ["indeterminate", "not certified", "mixed", "certified"]
+    )
+    ax.set(
+        xlabel="Feature-strength ratio rho",
+        ylabel="Temporal separation",
+        title="Learnability-gated causal starvation and at-hit robustness",
+    )
+    fig.text(
+        0.5, -0.015,
+        "C = causal certificate (negative gap at some positive time); "
+        "AH = stricter negative gap at the weak-only first hit.",
+        ha="center", fontsize=8.5,
+    )
+    output_base.parent.mkdir(parents=True, exist_ok=True)
+    _save_all(fig, output_base)
+
+
 def _e1_plot_tables(
     summary: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:

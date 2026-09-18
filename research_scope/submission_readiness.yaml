@@ -48,7 +48,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "Main text is at most 9 pages in the official submission style.",
-      "evidence": "The rebuilt 16-page paper/iclr2027/submission.pdf ends main text on page 9; references begin on page 10, followed by disclosures and the scientific appendix."
+      "evidence": "The rebuilt 18-page paper/iclr2027/submission.pdf records the main-text boundary on page 9; references and disclosures follow, with the scientific appendix beginning on page 13."
     },
     {
       "id": "double_blind_anonymity_audit",
@@ -56,7 +56,7 @@
       "status": "pass",
       "required_for_submission": true,
       "criterion": "Main paper, appendix, supplementary material, metadata, links, code, and artifacts reveal no author identity.",
-      "evidence": "The rebuilt 16-page paper/iclr2027/submission.pdf passes title-block, source-text, and PDF-metadata identity checks. The repository is still not safe to upload wholesale because historical records contain local paths, but paper/artifacts/cifar-confirmation-anonymous-v1.zip (SHA-256 da4acec99abdfc4994c81fb27cca140a3937120dbf56eb14eacaf00e6b0464b8) is a curated deterministic supplement that excludes identifying Slurm stdout and model payloads, retains only empty stderr sentinels, and passes the fail-closed identifying-token scan."
+      "evidence": "The rebuilt 18-page paper/iclr2027/submission.pdf passes title-block, source-text, and PDF-metadata identity checks. The repository is still not safe to upload wholesale because historical records contain local paths, but paper/artifacts/cifar-confirmation-anonymous-v1.zip (SHA-256 da4acec99abdfc4994c81fb27cca140a3937120dbf56eb14eacaf00e6b0464b8) is a curated deterministic supplement that excludes identifying Slurm stdout and model payloads, retains only empty stderr sentinels, and passes the fail-closed identifying-token scan."
     },
     {
       "id": "mandatory_ai_use_statement",

@@ -56,8 +56,7 @@
   \label{#3}
 \end{figure}}
 
-\title{Weak Learning Failure Alone Is Not Gradient Starvation:\\
-Matched Counterfactuals and Exact Finite-Width Dynamics}
+\title{Weak Learning Failure Alone Is Not Gradient Starvation}
 \ifdefined\ICLRSubmission
   \author{}
 \else
@@ -69,7 +68,7 @@ Matched Counterfactuals and Exact Finite-Width Dynamics}
 \maketitle
 
 \begin{abstract}
-A weak predictive feature can remain poorly learned because its isolated learning is inherently slow, a stronger cue suppresses cross-entropy sample weights, or coupled parameter geometry actively penalizes its update. These explanations are not causally equivalent. We introduce a matched weak-only counterfactual: the paired models share initialization, data sequence, weak coordinates, and noise; only the strong cue is ablated. Causal starvation requires both outcome suppression and a nondegenerate weak-only first hit; gate failure leaves causal status indeterminate. For full-batch logistic gradient flow, we derive exact finite-width dynamics, $\dot M_w=c_w^\top q(r)/n$ and $\dot r=\Theta q(r)/n$, and the pathwise identity $\Delta=P-N$. In a frozen matched CIFAR-10 study, all 8/8 fresh seed blocks pass the causal certificate; the cue-trained model loses 19.9 percentage points on neutral inputs and 31.9 points under cue conflict. A common fresh linear head recovers part, but not all, of the neutral gap. Controlled recurrent studies further show that starvation is regime-dependent. Finally, Counterfactual Drift Correction (CDC) provides a unique minimum-norm instantaneous intervention in a fixed parameter chart, but operates as a local mechanism control rather than a globally superior optimizer.
+A weak predictive feature can remain poorly learned because its isolated learning is inherently slow, a stronger cue suppresses cross-entropy sample weights, or coupled parameter geometry penalizes its update. These explanations are not causally equivalent. We introduce a matched weak-only counterfactual: paired models share initialization, data sequence, weak coordinates, and noise; only the strong cue is ablated. Causal starvation requires both outcome suppression and a nondegenerate weak-only first hit; gate failure leaves causal status indeterminate. For full-batch logistic gradient flow, we derive exact finite-width dynamics, $\dot M_w=c_w^\top q(r)/n$ and $\dot r=\Theta q(r)/n$, and the pathwise identity $\Delta=P-N$. A general prospective theorem converts certified parameter-region bounds for any smooth finite network into finite-horizon predictions; a fully trained five-parameter tanh CNN supplies a certified nonlinear existence and no-suppression control pair. In a frozen matched CIFAR-10 study, all 8/8 fresh seed blocks pass both the causal certificate and its stricter at-hit subtype; the cue-trained model loses 19.9 percentage points on neutral inputs and 31.9 points under cue conflict. A common fresh linear head recovers part, but not all, of the neutral gap.
 \end{abstract}
 
 \section{Introduction}
@@ -77,12 +76,11 @@ When a deep neural network learns one dominant feature while neglecting another 
 
 To isolate the causal effect of a strong cue, we introduce a matched counterfactual intervention grounded in formal causal inference \citep{pearl2009causality,peters2017elements}. A both-feature model $\mathcal{M}_{\Bcond}$ is paired with a weak-only model $\mathcal{M}_{\Wcond}$ that shares identical weight initialization, sample sequence, weak inputs, and optimizer state; only the strong input channel is zeroed out. Tracking the paired weak-feature response gap $\Delta(\tau) = M_w^{\Bcond}(\tau) - M_w^{\Wcond}(\tau)$ and its time derivative $d(\tau) = \dot{\Delta}(\tau)$, positive $d$ indicates \emph{relative transfer}, negative $d$ indicates \emph{rate suppression}, and negative $\Delta$ indicates \emph{outcome suppression}. We reserve the term \emph{causal starvation} strictly for settings where outcome suppression occurs alongside a successful weak-only first hit of a prespecified target $\beta$ within horizon $H$. When the weak-only gate fails, causal status is indeterminate: neither starvation nor its absence is established.
 
-\paragraph{Four core contributions.}
+\paragraph{Three core contributions.}
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{Matched causal diagnosis.} We formalize the matched weak-only counterfactual and establish a two-condition causal certificate, proving that weak learning failure alone is insufficient to diagnose starvation.
-  \item \textbf{Exact finite-width dynamics.} We derive exact response--logit flow equations for full-batch logistic gradient flow, $\dot M_w = \frac1n c_w^\top q(r)$ and $\dot r = \frac1n \Theta q(r)$, separating cross-entropy weighting from parameter geometry. The pathwise identity $\Delta(t) = P(t) - N(t)$ establishes that rate suppression yields outcome suppression if and only if accumulated suppression exceeds accumulated transfer.
-  \item \textbf{Regime-dependent empirical evidence.} A frozen one-architecture CIFAR-10 confirmation yields causal certificates in 8/8 fresh paired seeds, persistent core-response deficits, and large neutral/conflict accuracy harm. In the audited recurrent results, tanh passes the at-hit certificate in 8/8 seeds (3/8 transfer then suppress; 5/8 suppress throughout), whereas GRU remains indeterminate because its weak-only gate fails in 8/8 seeds.
-  \item \textbf{Prediction limits and local mechanism control.} We characterize the scope of frozen-tangent models and prove that Counterfactual Drift Correction (CDC) is the unique minimum-norm instantaneous target-attaining intervention in a fixed parameter chart, providing localized mechanism control without asserting global optimizer superiority.
+  \item \textbf{Causal diagnosis.} We formalize the matched weak-only counterfactual and a learnability-gated causal certificate, proving that weak learning failure alone is insufficient to diagnose starvation. The stricter at-hit endpoint is retained as an empirical robustness subtype.
+  \item \textbf{Finite-width mechanism and prospective prediction.} Exact response--logit flow and the pathwise identity $\Delta=P-N$ separate sample weighting, parameter geometry, rate suppression, and outcome suppression. A general smooth-network theorem turns independently certified parameter-region bounds into prospective finite-horizon predictions, with a certified fully trained tanh-CNN existence and control pair; no universal positive-lag phase boundary is claimed.
+  \item \textbf{Controlled evidence.} A frozen CIFAR-10 confirmation yields both certificates in 8/8 paired seeds, persistent core-response deficits, large neutral/conflict harm, and partial fresh-head recovery. Recurrent experiments show why the learnability gate matters. CDC supplies a supporting local mechanism-control result, not a broad optimizer-superiority claim.
 \end{enumerate}
 
 \section{Related work}
@@ -157,12 +155,12 @@ Fix a target response threshold $\beta > 0$ and optimization horizon $H > 0$. Le
 A training run exhibits a \textbf{causal starvation certificate} if and only if:
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Nondegenerate weak-only learnability:} $\tau_W^*(\beta) \in (0, H]$ with $\beta > M_w^{\Wcond}(0)$; and
-  \item \textbf{Outcome suppression at target:} $\Delta(\tau_W^*(\beta)) < 0$.
+  \item \textbf{Outcome suppression:} there exists $t_s\in(0,H]$ such that $\Delta(t_s)<0$.
 \end{enumerate}
-If $\tau_W^*(\beta) > H$, the weak-only gate fails and the causal status is \textbf{indeterminate}. If $\beta \le M_w^{\Wcond}(0)$, the target is met at initialization (degenerate) and licenses no causal claim.
+The run also satisfies the stricter \textbf{at-hit starvation} subtype when $\Delta(\tau_W^*(\beta))<0$. If $\tau_W^*(\beta) > H$, the weak-only gate fails and the causal status is \textbf{indeterminate}. If $\beta \le M_w^{\Wcond}(0)$, the target is met at initialization (degenerate) and licenses no causal claim.
 \end{definition}
 
-\section{Exact dynamics and pathwise attribution}
+\section{Exact finite-width dynamics and pathwise attribution}
 \subsection{Exact finite-width response--logit dynamics}
 We establish that the coupling between sample weighting and parameter geometry is an exact finite-width chain-rule identity rather than an asymptotic mean-field closure.
 
@@ -221,22 +219,49 @@ A negative relative rate ($d(t) < 0$) does \emph{not} imply outcome suppression 
 Suppose there exists $\tau_d \in (0, H)$ such that $d > 0$ almost everywhere on $(0, \tau_d)$ and $d < 0$ on $(\tau_d, H)$. Let $A_+ = P(\tau_d) = \Delta(\tau_d) > 0$. Then for $t \ge \tau_d$, $\Delta(t) = A_+ - N(t)$. Strict outcome suppression occurs by horizon $H$ if and only if $N(H) > A_+$.
 \end{corollary}
 
-\subsection{Scope of tangent prediction and movement bounds}
-Freezing $\Theta$ and $c_w$ at initialization defines a nonlinear logistic tangent model: $\dot{\bar r} = \frac1n \Theta_0 q(\bar r)$, $\dot{\bar M}_w = \frac1n c_{w,0}^\top q(\bar r)$.
+\section{General prospective finite-horizon prediction}
+Let $\theta_C\in\R^P$ contain all trainable parameters of condition $C$, with $L_C,M_w\in C^2$, $V_C=-\nabla L_C$, and $X=(\theta_{\Bcond},\theta_{\Wcond})$. Define $V=(V_{\Bcond},V_{\Wcond})$, $\Delta(X)=M_w(\theta_{\Bcond})-M_w(\theta_{\Wcond})$, $d=\mathcal L_V\Delta$, and $j=\mathcal L_Vd$. These are exact full-parameter quantities; no tangent freezing or response decomposition is assumed.
 
-\begin{theorem}[Conditional tangent comparison]
-\label{thm:tangent-bound}
-Suppose on $[0, t]$ that $\|\Theta(u) - \Theta_0\| \le B_\Theta$, $\|c_w(u) - c_{w,0}\| \le B_c$, and $\|q(r)\| \le V$. Let $a = \|\Theta_0\| / (4n)$, $\phi_a(t) = (e^{at}-1)/a$, and $\psi_a(t) = (e^{at}-1-at)/a^2$. Then:
+\begin{theorem}[Prospective smooth-network certificate]
+\label{thm:parameter-tube}
+Fix $0\le t_w<H$, $h=H-t_w$, and a validated enclosure of $X(t_w)$ whose points lie within $r_w$ of midpoint $\bar X_w$. On $U_R=\{X:\norm{X-\bar X_w}\le R\}$ suppose uniformly that
 \begin{equation}
-  |M_w(t) - \bar M_w(t)| \le \frac{B_c V}{n} t + \frac{\|c_{w,0}\| B_\Theta V}{4n^2} \psi_a(t).
-  \label{eq:tangent-bound}
+ \norm{V(X)}\le S,\qquad j(X)\le-\lambda<0,\qquad \dot M_w^{\Wcond}(X)\ge\nu>0,
+ \qquad r_w+Sh\le R.
+ \label{eq:prospective-premises}
 \end{equation}
+If the enclosure certifies $\Delta(t_w)\in[D_-,D_+]$, $d(t_w)\in[d_-,d_+]$, and $M_w^{\Wcond}(t_w)\ge m$, then for $0\le u\le h$,
+\begin{equation}
+ \Delta(t_w+u)\le Q(u):=D_++d_+u-\frac{\lambda u^2}{2},
+ \qquad M_w^{\Wcond}(t_w+u)\ge m+\nu u.
+ \label{eq:prospective-envelope}
+\end{equation}
+If some prespecified $u_a\in(0,h)$ satisfies $Q(u_a)<0$ and $d_+-\lambda u_a\le0$, then suppression persists on $[t_w+u_a,H]$. If also $\beta>\max\{0,M_w^{\Wcond}(0)\}$ and $m+\nu h\ge\beta$, the weak-only gate passes and the run satisfies Definition~\ref{def:causal-starvation}. If the weak-only first hit is independently certified to lie in $[t_w+u_a,H]$, the conclusion strengthens to the at-hit subtype. Conversely, under the same containment, $|j|\le J$, $D_-\ge0$, and $d_--Jh>0$ exclude suppression after $t_w$.
 \end{theorem}
-Theorem~\ref{thm:tangent-bound} is strictly conditional: establishing non-vacuous bounds $B_\Theta, B_c$ for nonlinear recurrent networks (tanh/GRU) remains an open challenge. Thus, tangent predictions operate as empirical event heuristics rather than calibrated trajectory guarantees.
+The result applies to any finite smooth computational graph for which the uniform premises are certified before observing the future trajectory. It does not assert that those premises hold for typical networks or initializations. The full proof is in Appendix~\ref{app:proof-thm-parameter-tube}.
 
-\section{Prediction and Counterfactual Drift Correction}
-\subsection{Realized-initialization rate-gap criterion}
-For the noiseless rank-one dense linear RNN ($h_{k+1} = Wh_k + Bx_k$, $f(x) = c^\top h_T$), we compute the exact equal-time initial gap.
+\begin{corollary}[Certified nonlinear tanh-CNN existence and control]
+\label{cor:nonlinear-cnn}
+Consider the fully trained one-dimensional, two-input-channel shared-kernel network
+\begin{equation}
+ f_\theta(x_s,x_w)=\frac c2\sum_{p=0}^{1}\tanh\!\left(s_0x_{s,p}+s_1x_{s,p+1}+w_0x_{w,p}+w_1x_{w,p+1}\right),
+ \label{eq:tanh-cnn}
+\end{equation}
+with $\theta=(s_0,s_1,w_0,w_1,c)$. For $y\in\{-1,1\}$, B uses $x_s=(y,y,0)$ and $x_w=(0,y,y)$, while W sets $x_s=0$ and retains $x_w$. Let the common weak probe be the odd contrast at $x_s=0$ and $x_w=\pm(0,1,1)$. Under mean-logistic gradient flow from $\theta_0=(-10^{-4},-5\times10^{-5},0,0,1)$, with $H=1/250$ and $\beta=3/2000$, an outward interval certificate proves
+\begin{equation}
+ \begin{aligned}
+  \Delta(t)&>0 &&(0<t\le10^{-4}),\\
+  \Delta(t)&\le-10^{-7} &&(3/1000\le t\le1/250),\\
+  0<\tau_W^*(\beta)&\le149/50000.&&
+ \end{aligned}
+ \label{eq:tanh-cnn-certificate}
+\end{equation}
+Thus this exact nonlinear network exhibits transfer followed by a broad causal-starvation certificate. Exact-real full-batch gradient descent with step size $10^{-4}$ likewise certifies $\Delta_k\le-10^{-7}$ for updates 30--40 and the W gate by update 40. For the same architecture initialized at $(-3/20,-3/40,0,0,1)$, a separate certificate proves $\Delta(t)>0$ after warm-up through $H=1/500$, giving a matched no-suppression control.
+\end{corollary}
+The construction proves nonvacuity for a smooth nonlinear trained network, not prevalence under random initialization, practical-scale harm, or the stricter at-hit subtype. Exact logits, interval bounds, and certificate arithmetic are in Appendix~\ref{app:proof-cor-nonlinear-cnn}.
+
+\subsection{Exact dense-RNN initialization special case}
+For the noiseless rank-one dense linear RNN ($h_{k+1} = Wh_k + Bx_k$, $f(x) = c^\top h_T$), the initial drift needed by the general theorem is available exactly.
 
 \begin{theorem}[Realized-initialization rate-gap criterion]
 \label{thm:initial-gap}
@@ -247,9 +272,10 @@ Let the strong cue have strength $\rho > 0$ at lag 0, and the weak cue have lag 
 \end{equation}
 Since $\Delta(0) = 0$, $d_0 < 0 \implies \Delta(t) < 0$ for sufficiently small $t > 0$.
 \end{theorem}
-This criterion is exact at $t=0$ but local: it does not constitute a positive-lag global phase predictor.
+This criterion is exact at $t=0$ but local. It supplies a realized-parameter input to Theorem~\ref{thm:parameter-tube}, not a distribution-only positive-lag phase boundary.
 
-\subsection{Counterfactual Drift Correction (CDC)}
+\section{Counterfactual Drift Correction}
+\label{sec:cdc}
 To evaluate whether the diagnosed mechanism can be controlled locally, we introduce Counterfactual Drift Correction (CDC). In a fixed Euclidean parameter chart, let $a = \nabla m_s(\theta)$, $p = \nabla m_w(\theta)$, and $v = -\nabla L(\theta)$.
 Project $p$ onto the orthogonal complement of $a$:
 \begin{equation}
@@ -269,56 +295,52 @@ In the fixed parameter chart:
 \end{theorem}
 CDC provides first-order instantaneous mechanism control; it is not a claim of global optimization superiority.
 
-\section{Experimental setup}
-\subsection{Controlled linear study}
-We evaluate linear RNNs (width 96, spectral gain $g=0.5$, full-batch gradient descent) across a grid of strength ratios $\rho \in \{1, 2, 4, 8\}$ and temporal lags $\ell \in \{0, 2, 4, 8\}$, with 8 paired seeds per cell (seed IDs 4--11). The learnability gate is set to $\beta = 0.25$ with horizon $H = 5.0$. A sign-reversal intervention reverses the strong cue at $(\rho, \text{lag}) = (4, 4)$; it is an equivariance check, not a no-cue negative control.
+\section{Empirical evidence}
+\paragraph{Protocols.}
+Our primary confirmation is a frozen matched CIFAR-10 study with one CNN4-GN architecture, eight fresh paired seeds, a 4,710-update schedule, and all endpoints fixed before inspecting B. B appends a removable label-correlated ribbon while W receives the identical core with a zero ribbon. Controlled scope checks use a width-96 dense linear RNN grid ($\rho\in\{1,2,4,8\}$, $\ell\in\{0,2,4,8\}$, 8 seeds per cell) and width-32 tanh/GRU pairs at $(\rho,\ell)=(4,2)$ (8 seeds). CDC is compared with ERM, Spectral Decoupling, and adapted shadow-target controls. Complete protocols and hyperparameters are in Appendix~\ref{app:experimental-details}.
 
-\subsection{Nonlinear recurrent study}
-We evaluate tanh RNNs and GRUs at width 32, gain $g=0.8$, cue noise $\sigma_{\text{noise}} = 0.1$, $(\rho, \text{lag}) = (4, 2)$, and target $\beta = 0.5$ over 8 paired seeds. We evaluate instantaneous drift via direct automatic differentiation ($F_w = \nabla M_w \cdot \dot{\theta}$).
+\subsection{A removable image cue causally suppresses core learning}
+All eight frozen CIFAR-10 pairs pass the causal certificate and its preregistered stricter at-hit subtype. Mean normalized signed deficit AUC is $0.489$ (95\% CI $[0.413,0.564]$), compared with the frozen target $0.10$, and the material deficit persists for 98.3\% of training ($[97.6\%,99.0\%]$). At the final checkpoint, B trails W by 19.9 percentage points on neutral inputs ($[-22.6,-17.2]$), 27.6 points under random cues ($[-28.7,-26.4]$), and 31.9 points under cue conflict ($[-33.0,-30.8]$), while gaining 16.8 points when the cue is label-consistent ($[15.8,17.9]$).
 
-\subsection{Frozen matched CIFAR-10 confirmation}
-Before inspecting the cue-present outcomes, we froze one CNN4-GN architecture, eight fresh paired seeds, SGD with momentum, a 4,710-update cosine schedule, and all endpoints. B appends a removable label-correlated ribbon (reliability 0.9, amplitude 0.5) outside the $32\times32$ core; W receives the identical core and a neutral zero-valued ribbon after preprocessing. Within each seed block, B and W share initialization, source-image split, minibatch order, augmentation randomness, and optimizer configuration. The primary response is balanced Brier skill on a fixed neutral diagnostic set, with $\beta=0.5$ and scale $S=0.75$. Final behavior uses neutral, random, consistent, and nine within-image conflict cues. E4-lite freezes each final encoder and fits the same balanced linear-head protocol on common neutral inputs. This discrete minibatch experiment tests the matched causal certificate, not the continuous-time tail-area identity.
-
-\subsection{Tangent and intervention evaluations}
-\begin{itemize}[leftmargin=*]
-  \item \textbf{Held-out tangent event test:} 64 crossed records (4 data seeds $\times$ 8 model seeds) evaluating drift and response crossing classifications.
-  \item \textbf{CDC mechanism control:} Comparison of ERM, Spectral Decoupling, CDC, and adapted shadow-target variants (Bloop-style, PCGrad-style) across 256 method runs.
-  \item \textbf{Semi-real image study:} Controlled cue intervention on MNIST (3-vs-8) and FashionMNIST (0-vs-6) over 64 crossed records.
-\end{itemize}
-
-\section{Results}
-\subsection{Regime-dependent causal diagnosis}
-Figure~\ref{fig:linear-grid} and Table~\ref{tab:linear-results} present the audited controlled linear grid. At lags 0, 2, and 4, all 32 cells have positive paired weak-AUC deficits and pass the weak-only gate. The stricter at-hit certificate passes in 31/32 lag-0 cells and 32/32 cells at lags 2 and 4; the lag-0 exception later becomes negative and passes the broader any-time endpoint. At lag 8, all 32 cells fail the learnability gate and are causally indeterminate, even though 27/32 have positive signed AUC. The mean deficit peaks at lag 2 (8.93) rather than decaying monotonically.
+With the original heads, the neutral B--W gap is $-19.9$ points. Equal fresh balanced linear heads reduce it to $-10.8$ points ($[-11.1,-10.4]$), a 9.1-point recovery ($[6.5,11.8]$). Thus, part of the harm is readout underuse, while a substantial remainder is reduced linear accessibility under this probe; this is not evidence of information destruction.
 
 \begin{figure}[t]
   \centering
-  \IfFileExists{figures/fig1_e1_causal_regions.pdf}{\includegraphics[width=0.97\linewidth]{figures/fig1_e1_causal_regions.pdf}}{%
-    \IfFileExists{artifacts/historical/e1_dense_rerun-20260823-085142/e1_causal_regions.pdf}{\includegraphics[width=0.97\linewidth]{artifacts/historical/e1_dense_rerun-20260823-085142/e1_causal_regions.pdf}}{%
-      \fbox{\parbox{0.92\linewidth}{\centering Figure 2 unavailable in this build.}}}}
-  \caption{Controlled dense-linear weak-AUC deficits and gate status across $\rho\in\{1,2,4,8\}$ and lag. The plotted historical regime labels are threshold-delay categories, not the at-hit certificate. The audited at-hit counts are 31/32, 32/32, 32/32, and 0/32 for lags 0, 2, 4, and 8.}
+  \includegraphics[width=\linewidth]{figures/fig_cifar_matched_confirmation.pdf}
+  \caption{Frozen matched CIFAR-10 confirmation across eight paired seed blocks. Lines and points are seed means with two-sided 95\% $t$ intervals. B contains the removable cue; W contains the identical core with a neutral cue channel. Every seed passes both the causal certificate and at-hit subtype. The fresh-head test recovers part, but not all, of the neutral gap.}
+  \label{fig:cifar-confirmation}
+\end{figure}
+
+\subsection{Controlled recurrent regimes}
+Figure~\ref{fig:linear-grid} and Table~\ref{tab:linear-results} present the audited dense-linear grid. At lags 0, 2, and 4, all 96 runs pass the causal certificate; the stricter at-hit subtype passes in 95/96 because one lag-0 run becomes negative only later. At lag 8, all 32 runs fail the learnability gate and remain indeterminate even though 27/32 have positive signed AUC. The mean deficit peaks at lag 2 (8.93) rather than decaying monotonically.
+
+\begin{figure}[t]
+  \centering
+  \IfFileExists{figures/fig_e0_final_causal_grid.pdf}{\includegraphics[width=0.97\linewidth]{figures/fig_e0_final_causal_grid.pdf}}{%
+      \fbox{\parbox{0.92\linewidth}{\centering Figure 2 unavailable in this build.}}}
+  \caption{Final audited dense-linear causal grid. Cell color uses Definition~\ref{def:causal-starvation}; labels report causal-certificate (C) and stricter at-hit (AH) counts out of eight seeds. Lag-8 cells are indeterminate because the weak-only gate fails. Historical threshold-delay labels are not used.}
   \label{fig:linear-grid}
 \end{figure}
 
 \begin{table}[t]
 \centering
-\caption{Linear grid paired weak-AUC deficits $\mathcal{A}_w$, weak-only hitting times $\tau_W^*$, and causal status.}
+\caption{Audited linear-grid outcomes. The sign-reversal row is an equivariance check, not a no-cue negative control.}
 \label{tab:linear-results}
 \small
 \begin{tabular}{ccccc}
 \toprule
-Lag & Strength $\rho$ & Mean $\mathcal{A}_w$ (95\% CI) & Weak Gate ($\tau_W^* \le 5$) & Causal Certificate \\
+Lag / intervention & Mean $\mathcal{A}_w$ (95\% CI) & W gate & Causal & At-hit \\
 \midrule
-0 & 1--8 & $5.76$ $[5.01, 6.51]$ & 32/32 Passed & 31/32 Certified \\
-2 & 1--8 & $8.93$ $[8.29, 9.57]$ & 32/32 Passed & 32/32 Certified \\
-4 & 1--8 & $6.11$ $[5.31, 6.91]$ & 32/32 Passed & 32/32 Certified \\
-8 & 1--8 & $0.0015$ $[0.0010, 0.0020]$ & 0/32 Passed & 0/32 (\textbf{Indeterminate}) \\
+0, $\rho=1$--8 & $5.76$ $[5.01,6.51]$ & 32/32 & 32/32 & 31/32 \\
+2, $\rho=1$--8 & $8.93$ $[8.29,9.57]$ & 32/32 & 32/32 & 32/32 \\
+4, $\rho=1$--8 & $6.11$ $[5.31,6.91]$ & 32/32 & 32/32 & 32/32 \\
+8, $\rho=1$--8 & $0.0015$ $[0.0010,0.0020]$ & 0/32 & Indeterminate & Indeterminate \\
 \midrule
-Neg. Control & 4.0 (Lag 4) & $-4.04$ $[-4.50, -3.58]$ & 8/8 Passed & 0/8 (\textbf{Transfer}) \\
+Sign reversal, $(4,4)$ & $-4.04$ $[-4.50,-3.58]$ & 8/8 & 2/8 & 0/8 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Nonlinear crossings versus causal certificates}
 Figure~\ref{fig:nonlinear-trajectories} illustrates dynamic trajectories at the fixed nonlinear cell $(\rho, \text{lag}) = (4, 2)$.
 \begin{itemize}[leftmargin=*]
   \item \textbf{Tanh RNN:} Passes the weak-only gate and at-hit certificate in 8/8 seeds: 3/8 transfer before suppressing, while 5/8 suppress throughout without a crossing.
@@ -335,55 +357,25 @@ This establishes empirically that crossing subtype and causal certificate are di
   \label{fig:nonlinear-trajectories}
 \end{figure}
 
-\subsection{A removable image cue causally suppresses core learning}
-All eight frozen CIFAR-10 pairs pass the nondegenerate W gate and the primary at-hit certificate. Mean normalized signed deficit AUC is $0.489$ (95\% CI $[0.413,0.564]$), compared with the frozen target $0.10$, and the material deficit persists for 98.3\% of training ($[97.6\%,99.0\%]$). At the final checkpoint, B trails W by 19.9 percentage points on neutral inputs ($[-22.6,-17.2]$), 27.6 points under random cues ($[-28.7,-26.4]$), and 31.9 points under cue conflict ($[-33.0,-30.8]$), while gaining 16.8 points when the cue is label-consistent ($[15.8,17.9]$).
-
-With the original heads, the neutral B--W gap is $-19.9$ points. Equal fresh balanced linear heads reduce it to $-10.8$ points ($[-11.1,-10.4]$), a 9.1-point recovery ($[6.5,11.8]$). Thus, part of the harm is readout underuse, while a substantial remainder is reduced linear accessibility under this probe; this is not evidence of information destruction.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig_cifar_matched_confirmation.pdf}
-  \caption{Frozen matched CIFAR-10 confirmation across eight paired seed blocks. Lines and points are seed means with two-sided 95\% $t$ intervals. B contains the removable cue; W contains the identical core with a neutral cue channel. Every seed passes the W gate and at-hit certificate. The fresh-head test recovers part, but not all, of the neutral gap.}
-  \label{fig:cifar-confirmation}
-\end{figure}
-
-\subsection{Frozen tangent predicts crossing events, not causal status}
-Table~\ref{tab:tangent-results} reports the held-out performance of the frozen-tangent surrogate. The surrogate accurately classifies binary drift crossings (60/64, 93.8\%) and response crossings (64/64, 100.0\%). However, because weak-only learnability cannot be verified without trajectory integration, the tangent surrogate cannot predict causal starvation certificates.
-
-\begin{table}[t]
-\centering
-\caption{Held-out evaluation of the frozen-tangent surrogate (64 crossed records).}
-\label{tab:tangent-results}
-\small
-\begin{tabular}{lccc}
-\toprule
-Evaluation Target & Endpoint & Accuracy & 95\% Bootstrap CI \\
-\midrule
-Held-out Event Test & Drift crossing ($d(\tau) < 0$) & 60/64 (93.8\%) & $[87.5\%, 98.4\%]$ \\
-Held-out Event Test & Response crossing ($\Delta(\tau) < 0$) & 64/64 (100.0\%) & $[100.0\%, 100.0\%]$ \\
-Held-out Causal Gate & Causal certificate & 0/64 (0.0\%) & $[0.0\%, 0.0\%]$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
 \subsection{Local mechanism control with CDC}
 Table~\ref{tab:cdc-results} summarizes the dense-linear mechanism control comparison across 8 paired seeds. All shadow-based interventions eliminate the weak AUC gap from ERM's 10.52 to $\approx 0.00$. However, CDC uniquely preserves instantaneous strong drift (perturbation $4.77 \times 10^{-7}$, compared to $1.48 \times 10^{-1}$ -- $3.75 \times 10^{-1}$ for alternatives). As predicted by theory, this local one-step guarantee does not imply maximum final strong response (1.042 vs. 1.295 for unconstrained rescue).
 
 \section{Limitations and conclusion}
 \subsection{Scope and limitations}
-The empirical evidence is restricted to controlled synthetic grids and one preregistered CIFAR-10 intervention using an artificial ribbon cue and one architecture. It establishes a controlled existence result and diagnostic utility, not the prevalence of starvation under natural shortcuts or a universal architecture ranking. The CIFAR experiment uses minibatch SGD and therefore does not verify the continuous-time tail-area theorem. The tangent surrogate requires unproved movement bounds to supply calibrated trajectories, and CDC requires an exact matched shadow model under full-batch gradient flow in a fixed parameter chart.
+The empirical evidence is restricted to controlled synthetic grids and one preregistered CIFAR-10 intervention using an artificial ribbon cue and one architecture. It establishes a controlled existence result and diagnostic utility, not prevalence under natural shortcuts or a universal architecture ranking. The CIFAR experiment uses minibatch SGD and therefore does not verify the continuous-time tail-area theorem. The smooth-network theorem is conditional on certified uniform bounds, and its nonlinear tanh-CNN instance uses a constructed five-parameter initialization, a short dimensionless horizon, and a $10^{-7}$ response deficit; it does not certify the CIFAR CNN, nonlinear recurrent models, or typical random initializations. CDC requires an exact matched shadow model under full-batch gradient flow in a fixed parameter chart.
 
 \subsection{Conclusion}
-Weak learning failure alone is not gradient starvation. By introducing a matched weak-only counterfactual, deriving exact finite-width dynamics $\dot M_w = \frac1n c_w^\top q(r)$, and establishing cumulative drift balance $\Delta = P - N$, we establish a rigorous causal and dynamical framework for feature starvation. The resulting causal chain---exact dynamics $\to$ matched intervention $\to$ pathwise attribution $\to$ local mechanism control---disciplines the study of feature competition in deep networks.
+Weak learning failure alone is not gradient starvation. The matched intervention first establishes whether the weak signal is learnable without the strong cue; exact finite-width dynamics and pathwise attribution then explain the response gap; certified parameter-region bounds can predict finite-horizon suppression in smooth networks, as demonstrated by the constructed tanh-CNN certificate. The CIFAR confirmation shows that this distinction has consequential behavioral and representational effects in one controlled image setting, while CDC illustrates local mechanism control.
 
 \subsection*{Reproducibility statement}
 Complete source code, configurations, environment specifications, and content-addressed result manifests for the linear, recurrent, tangent, CDC, and frozen CIFAR-10 experiments are provided in the supplementary repository and documented in Appendix~\ref{app:experimental-details}.
 
+\label{page:main-end}
 \bibliographystyle{plainnat}
 \bibliography{references}
 
 \subsection*{AI use statement}
-Generative AI tools (OpenAI Codex/ChatGPT, Google Gemini, and Anthropic Claude) assisted with code refactoring, experiment infrastructure, mathematical formatting verification, and manuscript drafting and editing. The authors reviewed all AI-assisted material, independently checked the reported artifacts and mathematical proofs, and take full responsibility for the contents of the paper.
+Generative AI tools (OpenAI Codex/ChatGPT, Google Gemini, and Anthropic Claude) assisted with refining theoretical claims and proof arguments; designing experimental methodology; implementing, refactoring, and testing software; interpreting results; surveying and checking related-work candidates; and drafting, structuring, and editing the manuscript. The authors reviewed all AI-assisted work, independently checked the retained proofs, code, numerical artifacts, and citations, and take responsibility for the final text, claims, and artifacts.
 
 \newpage
 \appendix
@@ -443,6 +435,19 @@ The paired weak-AUC deficit over horizon $H$ is defined as:
 \setcounter{table}{0}
 \setcounter{figure}{0}
 
+\subsection{Conditional tangent comparison}
+Freezing $\Theta$ and $c_w$ at initialization defines $\dot{\bar r}=\Theta_0q(\bar r)/n$ and $\dot{\bar M}_w=c_{w,0}^\top q(\bar r)/n$.
+\begin{theorem}[Conditional tangent comparison]
+\label{thm:tangent-bound}
+Suppose on $[0,t]$ that $\norm{\Theta(u)-\Theta_0}\le B_\Theta$, $\norm{c_w(u)-c_{w,0}}\le B_c$, and $\norm{q(r)}\le V$. Let $a=\norm{\Theta_0}/(4n)$ and $\psi_a(t)=(e^{at}-1-at)/a^2$. Then
+\begin{equation}
+ |M_w(t)-\bar M_w(t)|\le\frac{B_cV}{n}t+
+ \frac{\norm{c_{w,0}}B_\Theta V}{4n^2}\psi_a(t).
+ \label{eq:tangent-bound}
+\end{equation}
+\end{theorem}
+The bound is an exact conditional comparison, but this work does not establish nonvacuous $B_\Theta,B_c$ for trained tanh RNNs or GRUs. The empirical frozen-tangent study is therefore retained only as an event heuristic in Appendix~\ref{app:supplementary-experiments}.
+
 \subsection{Closed projected flow under exact realization}
 \begin{proposition}[Closed projected flow]
 \label{prop:app-projected}
@@ -483,34 +488,96 @@ At zero temporal lag and zero background noise in the dense linear RNN, the recu
 \setcounter{table}{0}
 \setcounter{figure}{0}
 
-\subsection{Proof of Proposition 1}
+\subsection{Proof of the exact finite-width response--logit dynamics}
 \label{app:proof-prop-exact}
 Under full-batch logistic gradient flow, $\dot{\theta} = -\nabla L(\theta) = \frac1n \sum_{i=1}^n \sigm(-r_i) \nabla r_i(\theta) = \frac1n J(\theta)^\top q(r)$.
 By chain rule, for any response $M_w(\theta)$:
 $\dot{M}_w = \ip{\nabla M_w}{\dot{\theta}} = \frac1n \ip{\nabla M_w}{J^\top q(r)} = \frac1n (J \nabla M_w)^\top q(r) = \frac1n c_w^\top q(r)$.
 Similarly, $\dot{r}_i = \ip{\nabla r_i}{\dot{\theta}} = \frac1n \sum_j \ip{\nabla r_i}{\nabla r_j} q_j = \frac1n (\Theta q(r))_i$. \qed
 
-\subsection{Proof of Proposition 2}
+\subsection{Proof of cumulative drift balance}
 \label{app:proof-prop-drift}
 Since $\Delta(0) = 0$ and $\Delta(\tau)$ is absolutely continuous, $\Delta(t) = \int_0^t \dot{\Delta}(u) \dd u = \int_0^t d(u) \dd u$.
 Writing $d(u) = [d(u)]_+ - [-d(u)]_+$ gives $\Delta(t) = \int_0^t [d(u)]_+ \dd u - \int_0^t [-d(u)]_+ \dd u = P(t) - N(t)$.
 Thus $\Delta(t) < 0 \iff P(t) - N(t) < 0 \iff N(t) > P(t)$. \qed
 
-\subsection{Proof of Theorem 1}
+\subsection{Proof of the conditional tangent comparison}
 \label{app:proof-thm-tangent}
 Let $e_r(t) = r(t) - \bar r(t)$ and $e_M(t) = M(t) - \bar M(t)$. Differentiating:
 $\dot e_r = \frac1n [\Theta(t) q(r(t)) - \Theta_0 q(\bar r(t))] = \frac1n [\Theta(t) - \Theta_0] q(r(t)) + \frac1n \Theta_0 [q(r(t)) - q(\bar r(t))]$.
 Since $\sigm'$ is bounded by $1/4$, $\|q(r) - q(\bar r)\| \le \frac14 \|e_r\|$.
 Applying Grönwall's inequality with $a = \|\Theta_0\| / (4n)$ yields the bounds in Eqs.~\eqref{eq:tangent-bound}. \qed
 
-\subsection{Proof of Theorem 2}
+\subsection{Proof of the realized-initialization rate-gap criterion}
 \label{app:proof-thm-initial}
 At $\tau=0$, $\theta_{\Bcond}(0) = \theta_{\Wcond}(0)$. Using the dense linear block gradients with $W(0), B(0), c(0)$, $G_{ws}(0) = b_s^\top W^\ell b_w = K$ and $G_{ww}(0) = A$.
 Evaluating the initial weak drift in each condition:
 $\dot M_w^{\Bcond}(0) = s_{\Bcond}(\rho K + A)$ and $\dot M_w^{\Wcond}(0) = s_{\Wcond} A$.
-Subtracting gives $d_0 = s_{\Bcond}(\rho K + A) - s_{\Wcond} A$. Setting $d_0 > 0$ yields Eq.~\eqref{eq:initial-gap-formula}. \qed
+Subtracting gives $d_0 = s_{\Bcond}(\rho K + A) - s_{\Wcond} A$. Since $\rho s_{\Bcond}>0$, rearrangement yields Eq.~\eqref{eq:initial-gap-formula}. Shared initialization gives $\Delta(0)=0$ and differentiability gives $\Delta(t)/t\to\Delta'(0)=d_0$ as $t\downarrow0$. Therefore a strict negative (positive) $d_0$ implies strict local outcome suppression (transfer) on some sufficiently small positive interval. The argument is existential and supplies no numerical endpoint. \qed
 
-\subsection{Proof of Theorem 3}
+\subsection{Proof of the parameter-tube prediction theorem}
+\label{app:proof-thm-parameter-tube}
+Because $L_C,M_w\in C^2$, the paired field is locally Lipschitz, giving local existence and uniqueness. Before exit from $U_R$, for $0\le u\le h$,
+\begin{equation}
+ \norm{X(t_w+u)-\bar X_w}\le r_w+
+ \int_0^u\norm{V(X(t_w+s))}\dd s\le r_w+Su\le R.
+ \label{eq:app-parameter-tube-containment}
+\end{equation}
+Thus no first exit can occur before $H$; bounded velocity on the compact ball also prevents a finite maximal endpoint there. Along the contained trajectory, $d'=j\le-\lambda$, so $d(t_w+u)\le d_+-\lambda u$. Integrating $\Delta'=d$ and $\dot M_w^{\Wcond}\ge\nu$ gives
+\begin{equation}
+ \Delta(t_w+u)\le D_++d_+u-\frac{\lambda u^2}{2}=Q(u),
+ \qquad M_w^{\Wcond}(t_w+u)\ge m+\nu u.
+  \label{eq:app-parameter-tube-outcome}
+\end{equation}
+For $u\ge u_a$, $Q'(u)=d_+-\lambda u\le0$; hence $Q(u)\le Q(u_a)<0$ through $H$. The weak-response lower bound reaches $\beta$ by $H$ when $m+\nu h\ge\beta$; continuity and $M_w^{\Wcond}(0)<\beta$ make its first hit strictly positive. This proves the broad causal certificate without requiring suppression specifically at the hit. For the converse, $|d'|\le J$ gives $d(t_w+u)\ge d_--Ju>0$; integrating from $\Delta(t_w)\ge D_-\ge0$ excludes a later negative gap. \qed
+
+\subsection{Certificate for the nonlinear tanh-CNN construction}
+\label{app:proof-cor-nonlinear-cnn}
+For Eq.~\eqref{eq:tanh-cnn}, oddness of $\tanh$ makes the two signed training logits within each condition identical and gives
+\begin{equation}
+ \begin{aligned}
+  r_{\Bcond}(\theta)
+  &=\frac c2\!\left[\tanh(s_0+s_1+w_1)+\tanh(s_0+w_0+w_1)\right],\\
+  r_{\Wcond}(\theta)=M_w(\theta)
+  &=\frac c2\!\left[\tanh(w_1)+\tanh(w_0+w_1)\right].
+ \end{aligned}
+ \label{eq:app-tanh-cnn-logits}
+\end{equation}
+This is the exact nonlinear trained graph, not a tangent replacement. It is $C^\infty$ in all five trainable parameters. At $t_w=1/10000$, the supplied outward-rounded interval certificate encloses the warm-up state within $r_w\le1/10^6$ of its midpoint and verifies uniformly on the paired ball
+\begin{equation}
+ \begin{aligned}
+  R&=\frac1{200}, & S&\le\frac54, & r_w&\le\frac1{1{,}000{,}000},\\
+  -\frac3{10}&\le j\le-\frac3{32}, &
+  \dot M_w^{\Wcond}&\ge\frac12,\\
+  D_+&\le\frac3{50{,}000{,}000}, &
+  d_+&\le\frac1{50{,}000}, & m&\ge\frac3{50{,}000}.
+ \end{aligned}
+ \label{eq:app-tanh-cnn-bounds}
+\end{equation}
+With $h=39/10000$ and the prespecified $u_a=29/10000$, exact rational arithmetic yields
+\begin{align}
+ r_w+Sh&\le\frac1{10^6}+\frac54\frac{39}{10^4}=\frac{1219}{250000}<\frac1{200},\\
+ Q(u_a)&\le\frac3{50{,}000{,}000}+\frac1{50{,}000}\frac{29}{10^4}
+ -\frac3{64}\left(\frac{29}{10^4}\right)^2
+ =-\frac{8839}{32{,}000{,}000{,}000}<-10^{-7},\\
+ Q'(u_a)&\le\frac1{50{,}000}-\frac3{32}\frac{29}{10^4}
+ =-\frac{403}{1{,}600{,}000}<0,\\
+ m+\nu h&\ge\frac3{50{,}000}+\frac12\frac{39}{10^4}
+ =\frac{201}{100000}>\frac3{2000}.
+ \label{eq:app-tanh-cnn-arithmetic}
+\end{align}
+Theorem~\ref{thm:parameter-tube} therefore proves the future deficit and nondegenerate W gate, with
+$t_w+(\beta-m)/\nu\le149/50000$. A separate interval enclosure on the warm-up verifies $d(0)\ge3/100000$ and $j\ge-1/4$, hence
+\begin{equation}
+ \Delta(t)\ge\frac{3t}{100000}-\frac{t^2}{8}>0
+ \qquad(0<t\le1/10000),
+ \label{eq:app-tanh-cnn-warmup}
+\end{equation}
+establishing genuine transfer before suppression.
+
+For full-batch gradient descent, interval induction with $I_{k+1}=I_k+\eta V(I_k)$ encloses the exact update from each certified box. At $\eta=10^{-4}$, the certificate boxes through update 40 verify Eq.~\eqref{eq:tanh-cnn-certificate}'s discrete deficit and gate statements. For the control initialization, the corresponding ball verifies $|j|\le1$, a positive cutoff gap, and $d_--(H-t_w)>0$; the safe-transfer part of Theorem~\ref{thm:parameter-tube} excludes suppression through $H=1/500$. \qed
+
+\subsection{Proof of the CDC local guarantee}
 \label{app:proof-thm-cdc}
 For (1): $a \cdot v' = a \cdot (v + \alpha q) = a \cdot v + \alpha (a \cdot q) = a \cdot v$, since $a \cdot q = a \cdot (p - \frac{p \cdot a}{\|a\|^2} a) = 0$.
 For (2): The optimization problem is $\min_d \frac12 \|d\|^2$ subject to $a \cdot d = 0$ and $p \cdot (v + d) \ge F_w^{\Wcond}$. Forming the Lagrangian $L(d, \lambda_1, \lambda_2) = \frac12 \|d\|^2 - \lambda_1 (a \cdot d) - \lambda_2 (p \cdot d - \delta)$, stationarity gives $d^* = \lambda_1 a + \lambda_2 p$. Orthogonality $a \cdot d^* = 0$ forces $\lambda_1 = -\lambda_2 \frac{a \cdot p}{\|a\|^2}$, so $d^* = \lambda_2 q$. Enforcing $p \cdot d^* = \delta$ yields $\lambda_2 = \delta / \|q\|^2 = \alpha$, proving uniqueness.
@@ -531,7 +598,7 @@ For (3): By Taylor expansion with Lipschitz gradient $\nabla m_s$, $|m_s(\theta 
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{lcccc}
 \toprule
-Hyperparameter & Linear Grid (§7.1) & Nonlinear Fixed-Cell (§7.2) & Tangent Held-Out (§7.3) & CDC Ablation (§7.4) \\
+Hyperparameter & Linear Grid & Nonlinear Fixed-Cell & Tangent Held-Out & CDC Ablation \\
 \midrule
 Architecture & Dense Linear RNN & Tanh RNN / GRU & Tanh RNN / GRU & Dense Linear RNN \\
 Hidden width $N$ & 96 & 32 & 32 & 96 \\
@@ -550,6 +617,17 @@ Hardware & Apple M-series / CUDA & Apple M-series / CUDA & Apple M-series / CUDA
 
 \subsection{Frozen CIFAR-10 confirmation details}
 The confirmatory source commit is \texttt{0726aea12947a30eb60ae32fc9c1eb0a7a122660}; the frozen configuration and DGX environment have SHA-256 digests \texttt{8f662f9982f8445b} and \texttt{1c1e2d126093f449}, respectively (prefixes shown). Runs use CIFAR-10 archive SHA-256 \texttt{6d958be074577803}. The split contains 40,000 training, 5,000 validation, 2,500 probe-fit, and 2,500 diagnostic-evaluation images. Full hashes, raw traces, and the independent audit are included in the supplementary artifacts.
+
+\paragraph{Input construction and augmentation.}
+Each $32\times32$ RGB core is scaled to $[-1,1]$ and extended to a $3\times40\times32$ tensor by appending an eight-row ribbon. B receives one of ten $4\times4$ nonconstant Sylvester--Hadamard codes at a seed-fixed random location (row 0--4, column 0--28), with label-code reliability 0.9 and amplitude 0.5; unreliable examples receive a uniformly selected wrong code. W receives the identical augmented core and an exactly zero ribbon after normalization. Training augmentation is reflection padding by four pixels, a seeded random $32\times32$ crop, and a horizontal flip with probability $1/2$. B and W share source-image splits, crop/flip randomness, minibatch order, initialization, and optimizer settings.
+
+\paragraph{Architecture, optimization, and response.}
+CNN4-GN has four $3\times3$ convolution--GroupNorm(8)--ReLU--$2\times2$ max-pool blocks with channels $(32,64,128,128)$, adaptive average pooling, and a ten-class linear head. We use SGD with learning rate 0.05, momentum 0.9, weight decay $5\times10^{-4}$, batch size 256, and cosine decay over 4,710 updates, logging every 157 updates. On the fixed common neutral diagnostic set, class-balanced Brier skill is
+\begin{equation}
+  1-\frac{\frac1{10}\sum_{k=1}^{10}\mathbb E[\norm{p-e_k}^2\mid y=k]}{1-1/10},
+  \label{eq:app-balanced-brier}
+\end{equation}
+so uniform predictions score zero and perfect predictions score one. The frozen gate uses $\beta=0.5$. E4-lite freezes the final encoders and fits zero-initialized balanced linear softmax heads on the common probe-fit split, selecting $\ell_2\in\{0,10^{-3},10^{-2}\}$ by validation cross-entropy with at most 100 iterations before one held-out evaluation.
 
 \begin{table}[ht]
 \centering
@@ -588,6 +666,25 @@ Seed & W first hit & Signed deficit AUC & Duration & Original-head gap & Fresh-h
   \caption{Finite-width agreement with held-out empirical closure reference across widths $N \in \{32, 64, 128, 256\}$.}
   \label{fig:app-width}
 \end{figure}
+
+\subsection{Frozen-tangent event heuristic}
+The sealed held-out study contains 64 crossed records (four unseen data seeds by eight unseen model seeds for each architecture). The frozen surrogate classifies response-crossing events in 64/64 records and drift crossings in 60/64, but it does not integrate the weak-only trained trajectory and therefore has zero coverage for the learnability-gated causal endpoint. This is an event-classification result, not a calibrated dynamical predictor or evidence of tangent-kernel stability.
+
+\begin{table}[ht]
+\centering
+\caption{Restricted held-out frozen-tangent evaluation. ``Coverage'' denotes whether the surrogate can produce the endpoint, not predictive accuracy.}
+\label{tab:tangent-results}
+\small
+\begin{tabular}{lcc}
+\toprule
+Endpoint & Correct event classifications & Endpoint coverage \\
+\midrule
+Drift crossing & 60/64 & 64/64 \\
+Response crossing & 64/64 & 64/64 \\
+Causal starvation & --- & 0/64 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Semi-real generated-cue study}
 \begin{table}[ht]

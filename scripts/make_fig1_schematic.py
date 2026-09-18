@@ -1,8 +1,11 @@
-import os
+from pathlib import Path
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+
+ROOT = Path(__file__).resolve().parents[1]
 
 # Set up figure with publication typography
 plt.rcParams['font.family'] = 'sans-serif'
@@ -60,26 +63,20 @@ box_cert = patches.FancyBboxPatch((8.0, 1.05), 1.85, 2.9, boxstyle='round,pad=0.
 ax.add_patch(box_cert)
 ax.text(8.92, 3.65, '3. Causal Decision', ha='center', va='center', fontsize=9.5, fontweight='bold', color=c_gate)
 
-ax.text(8.92, 3.05, r'Gate 1: $\Delta(\tau^*) < 0$' + '\n(Outcome Suppr.)', ha='center', va='center', fontsize=7.6, color='#B71C1C', fontweight='bold')
+ax.text(8.92, 3.05, r'Gate 1: $\exists t_s:\Delta(t_s)<0$' + '\n(Outcome Suppr.)', ha='center', va='center', fontsize=7.2, color='#B71C1C', fontweight='bold')
 ax.text(8.92, 2.35, r'Gate 2: $\tau_W^* \in (0, H]$' + '\n(Weak Learnable)', ha='center', va='center', fontsize=7.6, color='#1B5E20', fontweight='bold')
 
 res_pass = patches.Rectangle((8.1, 1.5), 1.65, 0.45, fc='#E8F5E9', ec='#2E7D32', lw=1)
 ax.add_patch(res_pass)
-ax.text(8.92, 1.72, r'Both Met $\to$ Starvation', ha='center', va='center', fontsize=7.2, fontweight='bold', color='#1B5E20')
+ax.text(8.92, 1.72, 'Both Met $\\to$ Causal\nStarvation', ha='center', va='center', fontsize=6.7, fontweight='bold', color='#1B5E20', linespacing=1.0)
 
 res_fail = patches.Rectangle((8.1, 1.15), 1.65, 0.3, fc='#ECEFF1', ec='#78909C', lw=1)
 ax.add_patch(res_fail)
-ax.text(8.92, 1.3, r'Gate Fails $\to$ Indeterminate', ha='center', va='center', fontsize=6.8, color='#455A64')
+ax.text(8.92, 1.3, r'Gate Fails $\to$ Indeterminate', ha='center', va='center', fontsize=6.2, color='#455A64')
 
-# Save outputs
-for d in [
-    '/Users/prithvirajsangramsinhpatil/Documents/ChatGPT/Gradient-Starvation/overleaf_final_submission/figures',
-    '/Users/prithvirajsangramsinhpatil/Documents/ChatGPT/Gradient-Starvation/Gradient-Starvation-Research/paper/figures',
-    '/Users/prithvirajsangramsinhpatil/Documents/ChatGPT/Gradient-Starvation/overleaf_paper/figures'
-]:
-    os.makedirs(d, exist_ok=True)
-    outpath = os.path.join(d, 'fig1_causal_schematic.pdf')
-    fig.savefig(outpath, bbox_inches='tight')
-    print('Saved', outpath)
-
-print('Done!')
+output = ROOT / 'paper' / 'figures' / 'fig1_causal_schematic'
+output.parent.mkdir(parents=True, exist_ok=True)
+fig.savefig(output.with_suffix('.pdf'), bbox_inches='tight')
+fig.savefig(output.with_suffix('.png'), dpi=300, bbox_inches='tight')
+plt.close(fig)
+print(f'Saved {output.with_suffix(".pdf")}')

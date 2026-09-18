@@ -165,12 +165,14 @@ column names. A drift crossing alone is reported as rate suppression. Causal
 starvation additionally requires an outcome crossing and weak-only learnability.
 
 The authoritative completed run is
-`paper/artifacts/enl_tanh_crossover-20260824-141207`: tanh has 3/8 exact drift crossings,
-3/8 response crossings, and 3/8 causal certificates; its other 5/8 seeds are
-suppressed from initialization. GRU has 5/8 exact drift and response crossings, but
-weak-only never reaches `beta=0.5`, hence 0/8 causal certificates. The historical
-tanh 8/8 result and `tau*=1.6112` used a superseded response convention and must
-not be quoted.
+`paper/artifacts/enl_tanh_crossover-20260824-141207`. Under the final causal
+definition, tanh passes both the broad certificate and its stricter at-hit subtype
+in 8/8 seeds: 3/8 exhibit exact drift and response crossings, while the other 5/8
+are suppressed from initialization and therefore need no crossing. GRU has 5/8
+exact drift and response crossings, but weak-only never reaches `beta=0.5`, hence
+0/8 assessable causal certificates. A historical `tau*=1.6112` value used a
+superseded response convention and must not be quoted; the audited 8/8 tanh count
+uses the final common response and learnability-gated definition.
 
 A post-hoc threshold-sensitivity audit uses the tracked terminal weak-only response
 `B_W(H)=M_w^W(H)` for each of those seeds. Tanh terminal min/mean/max are

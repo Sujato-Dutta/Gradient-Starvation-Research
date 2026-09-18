@@ -23,7 +23,11 @@ from gradient_starvation.experiments import (
     run_enl_preflight,
 )
 from gradient_starvation.metrics import CAUSAL_REGIMES
-from gradient_starvation.plotting import _e1_plot_tables
+from gradient_starvation.plotting import (
+    _e1_plot_tables,
+    _final_causal_grid_tables,
+    plot_final_causal_grid,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -136,6 +140,37 @@ def test_e1_plot_tables_keep_censored_grid_cells_visible():
     assert auc.loc[4, 2.0] == 4.0
     assert np.isnan(delay.loc[4, 2.0])
     assert censored.loc[4, 2.0] == 1.0
+
+
+def test_final_causal_grid_uses_broad_definition_and_reports_at_hit(tmp_path):
+    rows = []
+    for lag in (0, 8):
+        for rho in (1.0, 2.0):
+            for seed in range(4):
+                gated = lag == 0
+                rows.append(
+                    {
+                        "source": "dense_e1",
+                        "regime": "positive",
+                        "rho": rho,
+                        "lag_separation": lag,
+                        "weak_gate": gated,
+                        "any_time_certificate": gated,
+                        "at_hit_certificate": gated and seed < 3,
+                    }
+                )
+    records = pd.DataFrame(rows)
+
+    codes, labels = _final_causal_grid_tables(records)
+
+    assert codes.loc[0, 1.0] == 3
+    assert labels.loc[0, 1.0] == "C 4/4\nAH 3/4"
+    assert codes.loc[8, 2.0] == 0
+    assert labels.loc[8, 2.0] == "C 0/4\nAH 0/4"
+    output = tmp_path / "final_causal_grid"
+    plot_final_causal_grid(records, output)
+    assert output.with_suffix(".pdf").stat().st_size > 0
+    assert output.with_suffix(".png").stat().st_size > 0
 
 
 def test_e2_smoke_run_writes_geometry_and_agreement_outputs(tmp_path):
